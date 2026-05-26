@@ -161,6 +161,7 @@ function App() {
   const [triggerRadius, setTriggerRadius] = useState(() => parseInt(LS.get("radius", "150")));
   const [permissionState, setPermissionState] = useState("unknown");
   const [showHelp, setShowHelp] = useState(false);
+  const [autoLegSwitch, setAutoLegSwitch] = useState(() => LS.get("autoleg", "0") === "1");
 
   // TTS
   const [voices, setVoices] = useState([]);
@@ -173,6 +174,7 @@ function App() {
   const announcedRef = useRef(new Set());
   const utterRef = useRef(null);
   const audioCtxRef = useRef(null);
+  const legSwitchArmedRef = useRef(false);
 
   // Persist on change
   useEffect(() => LS.set("mode", mode), [mode]);
@@ -181,6 +183,7 @@ function App() {
   useEffect(() => LS.set("radius", String(triggerRadius)), [triggerRadius]);
   useEffect(() => { if (selectedVoiceURI) LS.set("voice", selectedVoiceURI); }, [selectedVoiceURI]);
   useEffect(() => LS.set("chime", chimeEnabled ? "1" : "0"), [chimeEnabled]);
+  useEffect(() => LS.set("autoleg", autoLegSwitch ? "1" : "0"), [autoLegSwitch]);
 
   const route = ROUTES[direction];
   const stops = route.stops;
@@ -207,6 +210,7 @@ function App() {
 
   const goToNextLeg = () => {
     if (!nextLeg) return;
+    legSwitchArmedRef.current = false;
     setDirection(nextLeg.direction);
     setTripIdx(nextLeg.tripIdx);
     setCurrentIdx(0);
@@ -238,6 +242,7 @@ function App() {
   useEffect(() => {
     setCurrentIdx(0);
     announcedRef.current = new Set();
+    legSwitchArmedRef.current = false;
   }, [direction, tripIdx]);
 
   /* --- Cleanup on unmount --- */
@@ -432,10 +437,21 @@ function App() {
       announcedRef.current.add(nearestIdx);
       setCurrentIdx(nearestIdx);
       announceStop(nearestIdx);
+      // Arm auto leg-switch once the bus has actually arrived at the terminus
+      if (nearestIdx === stops.length - 1 && nextLeg) legSwitchArmedRef.current = true;
     }
   }, [userPos, autoMode, stops, triggerRadius, coords]);
 
-  useEffect(() => { if (!autoMode) announcedRef.current = new Set(); }, [autoMode]);
+  /* --- Auto leg-switch: after arriving at terminus, switch when the bus departs --- */
+  useEffect(() => {
+    if (!autoMode || !autoLegSwitch || !userPos) return;
+    if (!isAtTerminus || !nextLeg || !legSwitchArmedRef.current) return;
+    const tc = coords[coordKey(direction, stops[stops.length - 1].name)];
+    if (!tc) return;
+    if (distanceMeters(userPos, tc) > triggerRadius) goToNextLeg();
+  }, [userPos, autoMode, autoLegSwitch, isAtTerminus, nextLeg, triggerRadius, coords]);
+
+  useEffect(() => { if (!autoMode) { announcedRef.current = new Set(); legSwitchArmedRef.current = false; } }, [autoMode]);
 
   const curStop = stops[currentIdx];
   const nextStop = stops[currentIdx + 1];
@@ -1026,6 +1042,18 @@ function App() {
             <span className="text-xs text-emerald-400 w-12 text-right" style={{ fontFamily: "'IBM Plex Mono', monospace" }}>
               {triggerRadius}m
             </span>
+          </div>
+          <div className="flex items-center justify-between gap-3">
+            <div className="min-w-0">
+              <div className="text-xs text-slate-400">종점 출발 시 자동 전환</div>
+              <div className="text-[10px] text-slate-600">GPS 자동 모드에서 종점을 벗어나면 다음 회차로 자동 전환</div>
+            </div>
+            <button onClick={() => setAutoLegSwitch(!autoLegSwitch)}
+              className="relative w-12 h-7 rounded-full flex-shrink-0"
+              style={{ background: autoLegSwitch ? "#22d65f" : "#3a3f54" }}>
+              <div className="absolute top-0.5 w-6 h-6 rounded-full bg-white shadow"
+                style={{ transform: autoLegSwitch ? "translateX(22px)" : "translateX(2px)", transition: "transform 0.2s" }} />
+            </button>
           </div>
 
           <div className="pt-2 border-t" style={{ borderColor: "#3a3f54" }}>
