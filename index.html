@@ -1,0 +1,1034 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+<meta name="theme-color" content="#0a0b10" />
+<title>무등산 인문축제 셔틀</title>
+
+<script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<script src="https://cdn.tailwindcss.com"></script>
+<link href="https://fonts.googleapis.com/css2?family=Black+Han+Sans&family=Gowun+Dodum&family=Jua&family=IBM+Plex+Mono:wght@400;500;700&display=swap" rel="stylesheet" />
+
+<style>
+  html, body { margin: 0; padding: 0; background: #050608; -webkit-tap-highlight-color: transparent; }
+  body { font-family: 'Gowun Dodum', system-ui, sans-serif; }
+  .boot { min-height: 100vh; display: flex; align-items: center; justify-content: center;
+    color: #fbbf24; font-family: 'Black Han Sans', sans-serif; font-size: 1.25rem; letter-spacing: 0.1em; }
+  .boot::after { content: ""; width: 14px; height: 14px; border: 2px solid #fbbf24;
+    border-top-color: transparent; border-radius: 50%; margin-left: 12px; animation: spin 0.8s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+</style>
+</head>
+<body>
+<div id="root"><div class="boot">로딩 중</div></div>
+
+<script type="text/babel" data-presets="react">
+const { useState, useEffect, useRef, useMemo } = React;
+
+/* Icons */
+const Svg = ({ size = 16, children, ...rest }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor"
+    strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...rest}>{children}</svg>
+);
+const Pause = (p) => <Svg {...p}><rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/></Svg>;
+const SkipBack = (p) => <Svg {...p}><polygon points="19 20 9 12 19 4 19 20"/><line x1="5" y1="19" x2="5" y2="5"/></Svg>;
+const SkipForward = (p) => <Svg {...p}><polygon points="5 4 15 12 5 20 5 4"/><line x1="19" y1="5" x2="19" y2="19"/></Svg>;
+const Volume2 = (p) => <Svg {...p}><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></Svg>;
+const MapPin = (p) => <Svg {...p}><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></Svg>;
+const Navigation = (p) => <Svg {...p}><polygon points="3 11 22 2 13 21 11 13 3 11"/></Svg>;
+const Navigation2 = (p) => <Svg {...p}><polygon points="12 2 19 21 12 17 5 21 12 2"/></Svg>;
+const Crosshair = (p) => <Svg {...p}><circle cx="12" cy="12" r="10"/><line x1="22" y1="12" x2="18" y2="12"/><line x1="6" y1="12" x2="2" y2="12"/><line x1="12" y1="6" x2="12" y2="2"/><line x1="12" y1="22" x2="12" y2="18"/></Svg>;
+const AlertCircle = (p) => <Svg {...p}><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></Svg>;
+const ArrowLeftRight = (p) => <Svg {...p}><polyline points="17 11 21 7 17 3"/><line x1="21" y1="7" x2="9" y2="7"/><polyline points="7 21 3 17 7 13"/><line x1="15" y1="17" x2="3" y2="17"/></Svg>;
+const Clock = (p) => <Svg {...p}><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></Svg>;
+const Settings = (p) => <Svg {...p}><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></Svg>;
+const ChevronLeft = (p) => <Svg {...p}><polyline points="15 18 9 12 15 6"/></Svg>;
+
+/* Geo helper */
+function distanceMeters(a, b) {
+  const R = 6371000;
+  const toRad = (d) => (d * Math.PI) / 180;
+  const dLat = toRad(b.lat - a.lat);
+  const dLng = toRad(b.lng - a.lng);
+  const lat1 = toRad(a.lat); const lat2 = toRad(b.lat);
+  const h = Math.sin(dLat/2)**2 + Math.cos(lat1)*Math.cos(lat2)*Math.sin(dLng/2)**2;
+  return 2 * R * Math.asin(Math.sqrt(h));
+}
+
+/* Time helper: HH:MM → minutes since midnight */
+const toMin = (hm) => { const [h, m] = hm.split(":").map(Number); return h * 60 + m; };
+
+/* Route data — 제4회 동구 무등산 인문축제 셔틀 */
+const ROUTES = {
+  outbound: {
+    label: "축제장 방향",
+    full: "5·18민주광장 → 축제장",
+    stops: [
+      { name: "5·18민주광장", sub: "마한지맞은편", lat: 35.1466, lng: 126.9192 },
+      { name: "하늘마당", sub: "ACC브릿지입구", lat: 35.1454, lng: 126.9201 },
+      { name: "학동증심사역", lat: 35.1325, lng: 126.9286 },
+      { name: "홍림교", lat: 35.1294, lng: 126.9410 },
+      { name: "운림중학교", lat: 35.1240, lng: 126.9543 },
+      { name: "학운초등학교", lat: 35.1253, lng: 126.9525 },
+      { name: "축제장", terminus: true, lat: 35.1232, lng: 126.9605 },
+    ],
+    trips: [
+      ["09:00","09:05","09:15","09:20","09:23","09:26","09:30"],
+      ["10:10","10:15","10:25","10:30","10:33","10:36","10:40"],
+      ["13:00","13:05","13:15","13:20","13:23","13:26","13:30"],
+      ["14:10","14:15","14:25","14:30","14:33","14:36","14:40"],
+      ["15:20","15:25","15:35","15:40","15:43","15:46","15:50"],
+      ["16:30","16:35","16:45","16:50","16:53","16:56","17:00"],
+    ],
+  },
+  inbound: {
+    label: "민주광장 방향",
+    full: "축제장 → 5·18민주광장",
+    stops: [
+      { name: "축제장", lat: 35.1232, lng: 126.9605 },
+      { name: "학운초등학교", lat: 35.1253, lng: 126.9525 },
+      { name: "운림중학교", lat: 35.1240, lng: 126.9543 },
+      { name: "홍림교", lat: 35.1294, lng: 126.9410 },
+      { name: "학동증심사역", lat: 35.1325, lng: 126.9286 },
+      { name: "5·18민주광장", sub: "마한지맞은편", terminus: true, lat: 35.1466, lng: 126.9192 },
+    ],
+    trips: [
+      ["09:45","09:49","09:52","09:55","10:00","10:10"],
+      ["10:55","10:59","11:02","11:05","11:10","11:20"],
+      ["13:45","13:49","13:52","13:55","14:00","14:10"],
+      ["14:55","14:59","15:02","15:05","15:10","15:20"],
+      ["16:05","16:09","16:12","16:15","16:20","16:30"],
+      ["17:15","17:19","17:22","17:25","17:30","17:40"],
+    ],
+  },
+};
+
+/* localStorage helpers — survive across reloads */
+const LS = {
+  get: (k, d) => { try { const v = localStorage.getItem("shuttle:" + k); return v == null ? d : v; } catch (_) { return d; } },
+  getJSON: (k, d) => { try { const v = localStorage.getItem("shuttle:" + k); return v == null ? d : JSON.parse(v); } catch (_) { return d; } },
+  set: (k, v) => { try { localStorage.setItem("shuttle:" + k, v); } catch (_) {} },
+  setJSON: (k, v) => { try { localStorage.setItem("shuttle:" + k, JSON.stringify(v)); } catch (_) {} },
+};
+
+function App() {
+  const [mode, setMode] = useState(() => LS.get("mode", "simple"));
+  const [direction, setDirection] = useState("outbound");
+  const [tripIdx, setTripIdx] = useState(0);
+  const [currentIdx, setCurrentIdx] = useState(0);
+  const [isAnnouncing, setIsAnnouncing] = useState(false);
+  const [rate, setRate] = useState(() => parseFloat(LS.get("rate", "0.95")));
+
+  // Coordinates keyed by stop name (shared across directions) — defaults from ROUTES, overridden by localStorage
+  const [coords, setCoords] = useState(() => {
+    const base = {};
+    [...ROUTES.outbound.stops, ...ROUTES.inbound.stops].forEach(s => {
+      if (s.lat != null && s.lng != null) base[s.name] = { lat: s.lat, lng: s.lng };
+    });
+    const stored = LS.getJSON("coords", {});
+    return { ...base, ...stored };
+  });
+
+  // GPS / auto
+  const [autoMode, setAutoMode] = useState(false);
+  const [userPos, setUserPos] = useState(null);
+  const [gpsError, setGpsError] = useState(null);
+  const [triggerRadius, setTriggerRadius] = useState(() => parseInt(LS.get("radius", "150")));
+  const [permissionState, setPermissionState] = useState("unknown");
+  const [showHelp, setShowHelp] = useState(false);
+
+  // TTS
+  const [voices, setVoices] = useState([]);
+  const [selectedVoiceURI, setSelectedVoiceURI] = useState(() => LS.get("voice", null));
+  const [ttsStatus, setTtsStatus] = useState("unknown");
+  const [ttsPrimed, setTtsPrimed] = useState(false);
+
+  const watchIdRef = useRef(null);
+  const announcedRef = useRef(new Set());
+  const utterRef = useRef(null);
+
+  // Persist on change
+  useEffect(() => LS.set("mode", mode), [mode]);
+  useEffect(() => LS.setJSON("coords", coords), [coords]);
+  useEffect(() => LS.set("rate", String(rate)), [rate]);
+  useEffect(() => LS.set("radius", String(triggerRadius)), [triggerRadius]);
+  useEffect(() => { if (selectedVoiceURI) LS.set("voice", selectedVoiceURI); }, [selectedVoiceURI]);
+
+  const route = ROUTES[direction];
+  const stops = route.stops;
+  const trip = route.trips[tripIdx];
+
+  /* --- Circular route: next leg computation ---
+     outbound n → inbound n (15분 후, 축제장 휴식)
+     inbound n → outbound n+1 (즉시 환승, 같은 시각)
+     inbound 6 → 운행 종료 (or 다음 회차 운행 시작점) */
+  const nextLeg = useMemo(() => {
+    if (direction === "outbound") return { direction: "inbound", tripIdx };
+    if (tripIdx < ROUTES.outbound.trips.length - 1)
+      return { direction: "outbound", tripIdx: tripIdx + 1 };
+    return null; // last leg of the day
+  }, [direction, tripIdx]);
+
+  const nextLegInfo = nextLeg ? {
+    label: ROUTES[nextLeg.direction].label,
+    departTime: ROUTES[nextLeg.direction].trips[nextLeg.tripIdx][0],
+    tripNum: nextLeg.tripIdx + 1,
+  } : null;
+
+  const isAtTerminus = currentIdx === stops.length - 1;
+
+  const goToNextLeg = () => {
+    if (!nextLeg) return;
+    setDirection(nextLeg.direction);
+    setTripIdx(nextLeg.tripIdx);
+    setCurrentIdx(0);
+    announcedRef.current = new Set();
+  };
+
+  /* --- Mount-only: pick the active or next upcoming leg across all 12 legs --- */
+  useEffect(() => {
+    const now = new Date();
+    const nowMin = now.getHours() * 60 + now.getMinutes();
+    const all = [];
+    ["outbound", "inbound"].forEach(dir => {
+      ROUTES[dir].trips.forEach((t, i) => {
+        all.push({ dir, idx: i, dep: toMin(t[0]), arr: toMin(t[t.length - 1]) });
+      });
+    });
+    all.sort((a, b) => a.dep - b.dep);
+    // Currently active leg
+    let target = all.find(l => nowMin >= l.dep && nowMin <= l.arr + 5);
+    // Otherwise next upcoming
+    if (!target) target = all.find(l => l.dep > nowMin);
+    // Otherwise first leg of the day
+    if (!target) target = all[0];
+    setDirection(target.dir);
+    setTripIdx(target.idx);
+  }, []); // mount only
+
+  /* --- Reset position when leg (direction or trip) changes --- */
+  useEffect(() => {
+    setCurrentIdx(0);
+    announcedRef.current = new Set();
+  }, [direction, tripIdx]);
+
+  /* --- Cleanup on unmount --- */
+  useEffect(() => () => {
+    if (window.speechSynthesis) window.speechSynthesis.cancel();
+    if (watchIdRef.current !== null && navigator.geolocation) navigator.geolocation.clearWatch(watchIdRef.current);
+  }, []);
+
+  /* --- Permission state --- */
+  useEffect(() => {
+    if (!navigator.permissions?.query) return;
+    let permRef = null;
+    navigator.permissions.query({ name: "geolocation" })
+      .then((p) => { permRef = p; setPermissionState(p.state); p.onchange = () => setPermissionState(p.state); })
+      .catch(() => {});
+    return () => { if (permRef) permRef.onchange = null; };
+  }, []);
+
+  /* --- TTS voices --- */
+  useEffect(() => {
+    if (!window.speechSynthesis) { setTtsStatus("unsupported"); return; }
+    const load = () => {
+      const list = window.speechSynthesis.getVoices();
+      setVoices(list);
+      const ko = list.filter(v => v.lang === "ko-KR" || v.lang.startsWith("ko"));
+      if (list.length === 0) return;
+      if (ko.length === 0) setTtsStatus("no-korean");
+      else {
+        setTtsStatus("ready");
+        setSelectedVoiceURI((prev) => prev && ko.find(v => v.voiceURI === prev) ? prev :
+          (ko.find(v => v.localService) || ko[0]).voiceURI);
+      }
+    };
+    load();
+    window.speechSynthesis.onvoiceschanged = load;
+    return () => { if (window.speechSynthesis) window.speechSynthesis.onvoiceschanged = null; };
+  }, []);
+
+  const speak = (text) => {
+    if (!window.speechSynthesis) { setTtsStatus("unsupported"); return; }
+    if (window.speechSynthesis.paused) window.speechSynthesis.resume();
+    window.speechSynthesis.cancel();
+    const u = new SpeechSynthesisUtterance(text);
+    u.lang = "ko-KR"; u.rate = rate; u.pitch = 1.0;
+    const chosen = voices.find(v => v.voiceURI === selectedVoiceURI)
+      || voices.find(v => v.lang === "ko-KR" || v.lang.startsWith("ko"));
+    if (chosen) u.voice = chosen;
+    u.onstart = () => setIsAnnouncing(true);
+    u.onend = () => setIsAnnouncing(false);
+    u.onerror = (e) => {
+      setIsAnnouncing(false);
+      if (e.error && e.error !== "interrupted" && e.error !== "canceled") setTtsStatus("error");
+    };
+    utterRef.current = u;
+    setTimeout(() => window.speechSynthesis.speak(u), 50);
+  };
+
+  const primeTTS = () => {
+    if (!window.speechSynthesis || ttsPrimed) return;
+    const u = new SpeechSynthesisUtterance(" ");
+    u.volume = 0; u.rate = 1;
+    try { window.speechSynthesis.speak(u); setTtsPrimed(true); } catch (_) {}
+  };
+
+  const testVoice = () => { primeTTS(); speak("안녕하세요. 무등산 인문축제 셔틀버스 음성 안내 테스트입니다."); };
+
+  const announceStop = (idx) => {
+    const cur = stops[idx]; if (!cur) return;
+    const nxt = stops[idx + 1];
+    let text;
+    if (nxt) {
+      text = `이번 정류장은 ${cur.name}, ${cur.name}입니다. 다음 정류장은 ${nxt.name}입니다.`;
+    } else {
+      // Terminus — include circular connection info
+      const base = `이번 정류장은 ${cur.name}입니다. 이번 정류장이 종점입니다. 안전하게 내려주세요.`;
+      if (nextLegInfo) {
+        text = `${base} 잠시 후 ${nextLegInfo.departTime}에 ${nextLegInfo.label} ${nextLegInfo.tripNum}회차 셔틀버스가 출발합니다.`;
+      } else {
+        text = `${base} 오늘 운행이 종료되었습니다. 이용해 주셔서 감사합니다.`;
+      }
+    }
+    speak(text);
+  };
+
+  const announce = () => {
+    primeTTS();
+    if (isAnnouncing) { window.speechSynthesis.cancel(); setIsAnnouncing(false); return; }
+    announceStop(currentIdx);
+  };
+
+  const next = () => currentIdx < stops.length - 1 && setCurrentIdx(currentIdx + 1);
+  const prev = () => currentIdx > 0 && setCurrentIdx(currentIdx - 1);
+
+  const swapDirection = () => setDirection(direction === "outbound" ? "inbound" : "outbound");
+
+  const setStopCoordHere = (i) => {
+    if (!userPos) { setGpsError("먼저 자동 모드를 켜서 GPS를 활성화하세요"); return; }
+    setCoords(prev => ({ ...prev, [stops[i].name]: { lat: userPos.lat, lng: userPos.lng } }));
+  };
+
+  /* --- GPS watch --- */
+  useEffect(() => {
+    if (!autoMode) {
+      if (watchIdRef.current !== null && navigator.geolocation) { navigator.geolocation.clearWatch(watchIdRef.current); watchIdRef.current = null; }
+      setUserPos(null); return;
+    }
+    if (!navigator.geolocation) { setGpsError("이 기기는 GPS를 지원하지 않아요"); setAutoMode(false); return; }
+    if (permissionState === "denied") { setGpsError("위치 권한이 차단되어 있어요"); setAutoMode(false); return; }
+    setGpsError(null);
+    watchIdRef.current = navigator.geolocation.watchPosition(
+      (pos) => {
+        setUserPos({ lat: pos.coords.latitude, lng: pos.coords.longitude, accuracy: pos.coords.accuracy });
+        setGpsError(null);
+        if (permissionState !== "granted") setPermissionState("granted");
+      },
+      (err) => {
+        if (err.code === 1) { setPermissionState("denied"); setGpsError("위치 권한이 거부되었어요"); }
+        else if (err.code === 2) setGpsError("위치 신호를 가져올 수 없어요 (실외에서 다시 시도)");
+        else setGpsError("위치 요청 시간 초과");
+        setAutoMode(false);
+      },
+      { enableHighAccuracy: true, maximumAge: 2000, timeout: 10000 }
+    );
+    return () => { if (watchIdRef.current !== null) { navigator.geolocation.clearWatch(watchIdRef.current); watchIdRef.current = null; } };
+  }, [autoMode, permissionState]);
+
+  const retryPermission = () => {
+    setGpsError(null);
+    if (navigator.permissions?.query) {
+      navigator.permissions.query({ name: "geolocation" }).then((p) => {
+        setPermissionState(p.state);
+        if (p.state !== "denied") setAutoMode(true);
+        else setGpsError("아직 차단된 상태예요. 브라우저 설정을 확인해주세요.");
+      });
+    } else setAutoMode(true);
+  };
+
+  const ua = typeof navigator !== "undefined" ? navigator.userAgent : "";
+  const isIOS = /iPad|iPhone|iPod/.test(ua);
+  const isAndroid = /Android/.test(ua);
+
+  /* --- Auto announce when entering trigger radius --- */
+  useEffect(() => {
+    if (!autoMode || !userPos) return;
+    let nearestIdx = -1, nearestDist = Infinity;
+    for (let i = currentIdx; i < stops.length; i++) {
+      const c = coords[stops[i].name]; if (!c) continue;
+      const d = distanceMeters(userPos, c);
+      if (d < nearestDist) { nearestDist = d; nearestIdx = i; }
+    }
+    if (nearestIdx === -1) return;
+    if (nearestDist <= triggerRadius && !announcedRef.current.has(nearestIdx)) {
+      announcedRef.current.add(nearestIdx);
+      setCurrentIdx(nearestIdx);
+      announceStop(nearestIdx);
+    }
+  }, [userPos, autoMode, stops, triggerRadius, coords]);
+
+  useEffect(() => { if (!autoMode) announcedRef.current = new Set(); }, [autoMode]);
+
+  const curStop = stops[currentIdx];
+  const nextStop = stops[currentIdx + 1];
+  const curCoord = coords[curStop?.name];
+  const nextCoord = coords[nextStop?.name];
+  const distToNext = autoMode && userPos && nextCoord ? distanceMeters(userPos, nextCoord) : null;
+  const fmtDist = (m) => (m == null ? null : m < 1000 ? `${Math.round(m)}m` : `${(m / 1000).toFixed(2)}km`);
+
+  /* --- Trip status (출발 전/운행 중/종료) --- */
+  const tripStatus = useMemo(() => {
+    const now = new Date(); const nowMin = now.getHours() * 60 + now.getMinutes();
+    const start = toMin(trip[0]); const end = toMin(trip[trip.length - 1]);
+    if (nowMin < start) return { state: "upcoming", label: `${start - nowMin}분 후 출발`, color: "#22d65f" };
+    if (nowMin > end + 5) return { state: "done", label: "운행 종료", color: "#64748b" };
+    return { state: "active", label: "운행 중", color: "#fbbf24" };
+  }, [trip]);
+
+  /* ===== SIMPLE MODE — operator/driver view ===== */
+  if (mode === "simple") {
+    const arrivalDistText = distToNext != null ? fmtDist(distToNext) : null;
+    return (
+      <div className="min-h-screen w-full p-4 sm:p-6 flex items-center justify-center"
+        style={{ background: "radial-gradient(ellipse at top, #1a1d29 0%, #0a0b10 60%, #050608 100%)" }}>
+        <div className="w-full max-w-md">
+
+          {/* Compact header */}
+          <div className="rounded-t-3xl px-5 py-3 border-2 border-b-0 flex items-center justify-between"
+            style={{ background: "linear-gradient(180deg, #2d3142 0%, #1c1f2b 100%)", borderColor: "#3a3f54" }}>
+            <div>
+              <div className="text-[10px] text-amber-400/80 tracking-widest">제4회 무등산 인문축제</div>
+              <div className="text-base font-bold leading-tight"
+                style={{ color: "#fbbf24", fontFamily: "'Jua', sans-serif" }}>
+                {route.label} · {tripIdx + 1}회차
+              </div>
+              <div className="text-[10px] text-slate-400 mt-0.5"
+                style={{ fontFamily: "'IBM Plex Mono', monospace" }}>
+                {trip[0]} 출발 · {trip[trip.length - 1]} 도착 · <span style={{ color: tripStatus.color }}>{tripStatus.label}</span>
+              </div>
+            </div>
+            <div className="flex flex-col items-end gap-1">
+              <div className="flex items-center gap-1.5">
+                {autoMode && <Navigation2 size={11} className={userPos ? "" : "animate-pulse"}
+                  style={{ color: userPos ? "#22d65f" : "#fbbf24" }} />}
+                <div className={`w-2 h-2 rounded-full ${isAnnouncing ? "animate-pulse" : ""}`}
+                  style={{ background: isAnnouncing ? "#ef4444" : "#475569" }} />
+              </div>
+              <button onClick={() => setMode("advanced")}
+                title="고급 설정으로 전환"
+                className="text-slate-400 hover:text-amber-400 p-1">
+                <Settings size={16} />
+              </button>
+            </div>
+          </div>
+
+          {/* Current stop — BIG */}
+          <div className="px-5 py-8 border-x-2"
+            style={{ background: "#0a0b0f", borderColor: "#3a3f54",
+              backgroundImage: "repeating-linear-gradient(0deg, rgba(255,255,255,0.02) 0px, rgba(255,255,255,0.02) 1px, transparent 1px, transparent 3px)" }}>
+            <div className="text-center mb-3">
+              <span className="text-[11px] tracking-[0.3em] px-3 py-1 rounded-full"
+                style={{ color: "#fbbf24", background: "rgba(251, 191, 36, 0.1)",
+                  fontFamily: "'IBM Plex Mono', monospace" }}>
+                이번 정류장 · {trip[currentIdx]}
+              </span>
+            </div>
+            <div className="text-center">
+              <div style={{
+                color: "#fbbf24",
+                fontFamily: "'Black Han Sans', sans-serif",
+                fontSize: "clamp(2.5rem, 14vw, 4.5rem)",
+                lineHeight: 1,
+                textShadow: "0 0 24px rgba(251, 191, 36, 0.7), 0 0 48px rgba(251, 191, 36, 0.3)",
+                letterSpacing: "-0.02em",
+                wordBreak: "keep-all",
+              }}>
+                {curStop?.name || "—"}
+              </div>
+              {curStop?.sub && (
+                <div className="text-sm text-amber-500/70 mt-2">{curStop.sub}</div>
+              )}
+              {curStop?.terminus && (
+                <div className="mt-3 inline-block px-2 py-0.5 rounded text-[10px]"
+                  style={{ background: "rgba(239, 68, 68, 0.15)", color: "#fca5a5",
+                    border: "1px solid rgba(239, 68, 68, 0.3)" }}>
+                  종점
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Next stop — medium */}
+          <div className="px-5 py-4 border-x-2 flex items-center justify-between gap-3"
+            style={{ background: "#13151c", borderColor: "#3a3f54", borderBottom: "1px solid #3a3f54" }}>
+            <div className="flex-shrink-0 flex flex-col items-center px-2 py-1 rounded"
+              style={{ background: "rgba(34, 214, 95, 0.12)", minWidth: 56 }}>
+              <span className="text-[9px] tracking-widest text-emerald-400/80"
+                style={{ fontFamily: "'IBM Plex Mono', monospace" }}>NEXT</span>
+              <span className="text-sm font-black text-emerald-400"
+                style={{ fontFamily: "'IBM Plex Mono', monospace" }}>
+                {nextStop ? trip[currentIdx + 1] : "종점"}
+              </span>
+            </div>
+            <div className="flex-1 min-w-0 text-right">
+              <div className="text-2xl font-bold leading-tight break-keep"
+                style={{ color: nextStop ? "#e2e8f0" : "#64748b", fontFamily: "'Jua', sans-serif" }}>
+                {nextStop?.name || "운행 종료"}
+              </div>
+              {arrivalDistText && nextStop && (
+                <div className="text-[11px] mt-1"
+                  style={{ color: distToNext < triggerRadius ? "#ef4444" : "#22d65f",
+                    fontFamily: "'IBM Plex Mono', monospace" }}>
+                  ↓ {arrivalDistText}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Next leg connection (only at terminus or end) */}
+          {nextLegInfo ? (
+            isAtTerminus && (
+              <div className="px-5 py-3 border-x-2 flex items-center justify-between gap-3"
+                style={{ background: "rgba(34, 214, 95, 0.15)", borderColor: "#3a3f54",
+                  borderBottom: "1px solid #3a3f54" }}>
+                <div className="flex items-center gap-2 min-w-0">
+                  <div className="flex flex-col items-center px-2 py-1 rounded"
+                    style={{ background: "#22d65f" }}>
+                    <span className="text-[8px] tracking-widest"
+                      style={{ color: "#0a0b0f", fontFamily: "'IBM Plex Mono', monospace" }}>NEXT</span>
+                    <span className="text-xs font-black"
+                      style={{ color: "#0a0b0f", fontFamily: "'IBM Plex Mono', monospace" }}>
+                      {nextLegInfo.departTime}
+                    </span>
+                  </div>
+                  <div className="text-sm font-bold truncate"
+                    style={{ color: "#22d65f", fontFamily: "'Jua', sans-serif" }}>
+                    {nextLegInfo.label} {nextLegInfo.tripNum}회차
+                  </div>
+                </div>
+                <button onClick={goToNextLeg}
+                  className="flex-shrink-0 px-4 py-2 rounded-lg text-sm font-bold whitespace-nowrap"
+                  style={{ background: "#22d65f", color: "#0a0b0f",
+                    fontFamily: "'Jua', sans-serif",
+                    boxShadow: "0 0 16px rgba(34, 214, 95, 0.4)" }}>
+                  전환 →
+                </button>
+              </div>
+            )
+          ) : isAtTerminus && (
+            <div className="px-5 py-3 border-x-2"
+              style={{ background: "rgba(100, 116, 139, 0.1)", borderColor: "#3a3f54",
+                borderBottom: "1px solid #3a3f54" }}>
+              <div className="text-xs text-center text-slate-400" style={{ fontFamily: "'Jua', sans-serif" }}>
+                🏁 오늘 운행 종료
+              </div>
+            </div>
+          )}
+
+          {/* GPS error banner (compact) */}
+          {(gpsError || permissionState === "denied") && (
+            <div className="px-5 py-2 border-x-2 flex items-center gap-2 text-xs"
+              style={{ background: "rgba(239,68,68,0.08)", borderColor: "#3a3f54",
+                borderBottom: "1px solid #3a3f54", color: "#fca5a5" }}>
+              <AlertCircle size={12} />
+              <span className="flex-1">{permissionState === "denied" ? "위치 권한 차단됨" : gpsError}</span>
+              <button onClick={() => setMode("advanced")}
+                className="text-amber-400 underline">설정에서 해결</button>
+            </div>
+          )}
+
+          {/* Controls — big play */}
+          <div className="px-5 py-6 border-2 border-t-0 rounded-b-3xl flex items-center justify-center gap-4"
+            style={{ background: "linear-gradient(180deg, #1c1f2b 0%, #13151c 100%)", borderColor: "#3a3f54" }}>
+            <button onClick={prev} disabled={currentIdx === 0}
+              className="w-14 h-14 rounded-full flex items-center justify-center disabled:opacity-30"
+              style={{ background: "rgba(251, 191, 36, 0.1)",
+                border: "1px solid rgba(251, 191, 36, 0.3)", color: "#fbbf24" }}>
+              <SkipBack size={22} />
+            </button>
+            <button onClick={announce}
+              className="w-24 h-24 rounded-full flex items-center justify-center relative"
+              style={{
+                background: isAnnouncing ? "linear-gradient(135deg, #ef4444 0%, #dc2626 100%)"
+                  : "linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%)",
+                boxShadow: isAnnouncing ? "0 0 36px rgba(239, 68, 68, 0.6)"
+                  : "0 0 36px rgba(251, 191, 36, 0.5)",
+                color: "#0a0b0f" }}>
+              {isAnnouncing ? <Pause size={36} /> : <Volume2 size={36} />}
+              {isAnnouncing && (<div className="absolute inset-0 rounded-full animate-ping"
+                style={{ background: "rgba(239, 68, 68, 0.4)" }} />)}
+            </button>
+            <button onClick={next} disabled={currentIdx >= stops.length - 1}
+              className="w-14 h-14 rounded-full flex items-center justify-center disabled:opacity-30"
+              style={{ background: "rgba(251, 191, 36, 0.1)",
+                border: "1px solid rgba(251, 191, 36, 0.3)", color: "#fbbf24" }}>
+              <SkipForward size={22} />
+            </button>
+          </div>
+
+          {/* Bottom: GPS auto toggle (compact) */}
+          <div className="mt-3 flex items-center justify-between px-2">
+            <button onClick={() => {
+                if (permissionState === "denied") { setMode("advanced"); return; }
+                if (!autoMode) primeTTS();
+                setAutoMode(!autoMode);
+              }}
+              className="flex items-center gap-2 text-xs px-3 py-1.5 rounded-full"
+              style={{
+                background: autoMode ? "rgba(34, 214, 95, 0.15)" : "rgba(100, 116, 139, 0.1)",
+                color: autoMode ? "#22d65f" : "#94a3b8",
+                border: `1px solid ${autoMode ? "rgba(34, 214, 95, 0.3)" : "#3a3f54"}`,
+                fontFamily: "'Jua', sans-serif",
+              }}>
+              <Navigation size={12} />
+              GPS 자동 {autoMode ? (userPos ? `· ${triggerRadius}m` : "· 신호 대기") : "OFF"}
+            </button>
+            <div className="text-[10px] text-slate-600 tracking-wider"
+              style={{ fontFamily: "'IBM Plex Mono', monospace" }}>
+              {currentIdx + 1}/{stops.length}
+            </div>
+          </div>
+
+          {/* First-run hint when no coords set */}
+          {Object.keys(coords).length === 0 && (
+            <div className="mt-3 px-3 py-2 rounded-lg text-[11px] text-center"
+              style={{ background: "rgba(251, 191, 36, 0.08)", color: "#fbbf24",
+                border: "1px solid rgba(251, 191, 36, 0.2)" }}>
+              💡 처음이라면 ⚙️ 설정에서 정류장별로 GPS 좌표를 한 번씩 등록해주세요
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  /* ===== ADVANCED MODE — full controls ===== */
+  return (
+    <div className="min-h-screen w-full p-4 sm:p-6 flex items-center justify-center"
+      style={{ background: "radial-gradient(ellipse at top, #1a1d29 0%, #0a0b10 60%, #050608 100%)" }}>
+      <div className="w-full max-w-md">
+
+        {/* Header */}
+        <div className="relative rounded-t-3xl px-5 py-4 border-2 border-b-0"
+          style={{ background: "linear-gradient(180deg, #2d3142 0%, #1c1f2b 100%)", borderColor: "#3a3f54" }}>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 rounded-xl flex items-center justify-center shadow-lg"
+                style={{ background: "linear-gradient(135deg, #f59e0b 0%, #d97706 100%)", color: "#fff",
+                  fontFamily: "'Black Han Sans', sans-serif", fontSize: "1rem", lineHeight: 1,
+                  boxShadow: "0 0 20px rgba(245, 158, 11, 0.4)" }}>
+                셔틀
+              </div>
+              <div>
+                <div className="text-[10px] text-amber-400/80 tracking-widest mb-0.5">제4회 무등산 인문축제</div>
+                <div className="text-xl leading-none" style={{ color: "#fbbf24",
+                  fontFamily: "'Black Han Sans', sans-serif", textShadow: "0 0 12px rgba(251, 191, 36, 0.4)" }}>
+                  {route.label}
+                </div>
+              </div>
+            </div>
+            <div className="flex flex-col items-end gap-1">
+              <div className="flex items-center gap-1.5">
+                {autoMode && <Navigation2 size={11} className={userPos ? "" : "animate-pulse"}
+                  style={{ color: userPos ? "#22d65f" : "#fbbf24" }} />}
+                <div className={`w-2 h-2 rounded-full ${isAnnouncing ? "animate-pulse" : ""}`}
+                  style={{ background: isAnnouncing ? "#ef4444" : "#475569" }} />
+              </div>
+              <span className="text-[10px] text-slate-500 tracking-wider">
+                {isAnnouncing ? "ON AIR" : autoMode ? (userPos ? "GPS LOCKED" : "GPS …") : "STAND BY"}
+              </span>
+            </div>
+          </div>
+
+          {/* Direction swap */}
+          <div className="mt-3 flex gap-2">
+            <button onClick={() => setMode("simple")}
+              className="px-3 py-2 rounded-lg flex items-center gap-1 text-xs"
+              style={{ background: "rgba(100, 116, 139, 0.15)", border: "1px solid #3a3f54",
+                color: "#94a3b8", fontFamily: "'Jua', sans-serif" }}>
+              <ChevronLeft size={12} />
+              운행
+            </button>
+            <button onClick={swapDirection}
+              className="flex-1 px-3 py-2 rounded-lg flex items-center justify-center gap-2 text-xs transition-colors"
+              style={{ background: "rgba(251, 191, 36, 0.1)", border: "1px solid rgba(251, 191, 36, 0.3)",
+                color: "#fbbf24", fontFamily: "'Jua', sans-serif" }}>
+              <ArrowLeftRight size={12} />
+              {route.full} · 방향 전환
+            </button>
+          </div>
+        </div>
+
+        {/* Trip selector */}
+        <div className="px-5 py-3 border-x-2"
+          style={{ background: "#13151c", borderColor: "#3a3f54", borderBottom: "1px solid #3a3f54" }}>
+          <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center gap-2">
+              <Clock size={12} style={{ color: tripStatus.color }} />
+              <span className="text-xs font-bold" style={{ color: tripStatus.color, fontFamily: "'Jua', sans-serif" }}>
+                {tripIdx + 1}회차 · {trip[0]} 출발 · {trip[trip.length - 1]} 도착
+              </span>
+            </div>
+            <span className="text-[10px] px-2 py-0.5 rounded-full"
+              style={{ background: `${tripStatus.color}22`, color: tripStatus.color,
+                fontFamily: "'IBM Plex Mono', monospace" }}>
+              {tripStatus.label}
+            </span>
+          </div>
+          <div className="grid grid-cols-6 gap-1">
+            {route.trips.map((t, i) => (
+              <button key={i} onClick={() => { setTripIdx(i); setCurrentIdx(0); announcedRef.current = new Set(); }}
+                className="py-1.5 rounded text-[11px] font-bold transition-all"
+                style={{
+                  background: i === tripIdx ? "#fbbf24" : "rgba(251, 191, 36, 0.08)",
+                  color: i === tripIdx ? "#0a0b0f" : "#fbbf24",
+                  border: `1px solid ${i === tripIdx ? "#fbbf24" : "rgba(251, 191, 36, 0.2)"}`,
+                  fontFamily: "'Jua', sans-serif"
+                }}>
+                {i + 1}회
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* LED Display */}
+        <div className="px-5 py-6 border-x-2"
+          style={{ background: "#0a0b0f", borderColor: "#3a3f54",
+            backgroundImage: "repeating-linear-gradient(0deg, rgba(255,255,255,0.02) 0px, rgba(255,255,255,0.02) 1px, transparent 1px, transparent 3px)" }}>
+          <div className="text-center mb-2">
+            <span className="text-[11px] tracking-[0.3em] px-3 py-1 rounded-full"
+              style={{ color: "#fbbf24", background: "rgba(251, 191, 36, 0.1)",
+                fontFamily: "'IBM Plex Mono', monospace" }}>
+              이번 정류장 · {trip[currentIdx]}
+            </span>
+          </div>
+          <div className="text-center py-3">
+            <div className="text-5xl font-black leading-tight break-keep"
+              style={{ color: "#fbbf24", fontFamily: "'Black Han Sans', sans-serif",
+                textShadow: "0 0 20px rgba(251, 191, 36, 0.6), 0 0 40px rgba(251, 191, 36, 0.3)",
+                letterSpacing: "-0.02em" }}>
+              {curStop?.name || "—"}
+            </div>
+            {curStop?.sub && <div className="text-xs text-amber-500/70 mt-1">{curStop.sub}</div>}
+          </div>
+          <div className="border-t border-dashed mt-3 pt-3" style={{ borderColor: "#374151" }}>
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] tracking-[0.3em]"
+                style={{ color: "#64748b", fontFamily: "'IBM Plex Mono', monospace" }}>
+                다음 · {nextStop ? trip[currentIdx + 1] : "종점"}
+              </span>
+              <div className="flex items-center gap-2">
+                {distToNext != null && (
+                  <span className="text-[10px] px-1.5 py-0.5 rounded"
+                    style={{ background: distToNext < triggerRadius ? "rgba(239,68,68,0.2)" : "rgba(34,214,95,0.15)",
+                      color: distToNext < triggerRadius ? "#ef4444" : "#22d65f",
+                      fontFamily: "'IBM Plex Mono', monospace" }}>
+                    {fmtDist(distToNext)}
+                  </span>
+                )}
+                <span className="text-xl font-bold"
+                  style={{ color: nextStop ? "#e2e8f0" : "#475569", fontFamily: "'Jua', sans-serif" }}>
+                  {nextStop?.name || "종점"}
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Next leg connection card */}
+        {nextLegInfo ? (
+          <div className="px-5 py-3 border-x-2 flex items-center justify-between gap-3"
+            style={{
+              background: isAtTerminus ? "rgba(34, 214, 95, 0.15)" : "#13151c",
+              borderColor: "#3a3f54",
+              borderBottom: "1px solid #3a3f54",
+            }}>
+            <div className="flex items-center gap-2 min-w-0">
+              <div className="flex flex-col items-center px-2 py-1 rounded"
+                style={{ background: isAtTerminus ? "#22d65f" : "rgba(34, 214, 95, 0.15)" }}>
+                <span className="text-[8px] tracking-widest"
+                  style={{ color: isAtTerminus ? "#0a0b0f" : "#22d65f", fontFamily: "'IBM Plex Mono', monospace" }}>
+                  NEXT
+                </span>
+                <span className="text-xs font-black leading-none"
+                  style={{ color: isAtTerminus ? "#0a0b0f" : "#22d65f", fontFamily: "'IBM Plex Mono', monospace" }}>
+                  {nextLegInfo.departTime}
+                </span>
+              </div>
+              <div className="min-w-0">
+                <div className="text-sm font-bold truncate"
+                  style={{ color: isAtTerminus ? "#22d65f" : "#cbd5e1", fontFamily: "'Jua', sans-serif" }}>
+                  {nextLegInfo.label} {nextLegInfo.tripNum}회차
+                </div>
+                <div className="text-[10px] text-slate-500">
+                  {isAtTerminus ? "종점 도착 · 순환 운행 연결" : "이번 운행 종료 후 자동 연결"}
+                </div>
+              </div>
+            </div>
+            {isAtTerminus && (
+              <button onClick={goToNextLeg}
+                className="flex-shrink-0 px-3 py-2 rounded-lg text-xs font-bold whitespace-nowrap"
+                style={{ background: "#22d65f", color: "#0a0b0f", fontFamily: "'Jua', sans-serif",
+                  boxShadow: "0 0 16px rgba(34, 214, 95, 0.4)" }}>
+                전환 →
+              </button>
+            )}
+          </div>
+        ) : isAtTerminus && (
+          <div className="px-5 py-3 border-x-2"
+            style={{ background: "rgba(100, 116, 139, 0.1)", borderColor: "#3a3f54",
+              borderBottom: "1px solid #3a3f54" }}>
+            <div className="text-xs text-center text-slate-400" style={{ fontFamily: "'Jua', sans-serif" }}>
+              🏁 오늘 운행 종료 · 이용해 주셔서 감사합니다
+            </div>
+          </div>
+        )}
+
+        {/* Auto Mode toggle */}
+        <div className="px-5 py-3 border-x-2 flex items-center justify-between"
+          style={{ background: autoMode ? "rgba(34, 214, 95, 0.08)" : "#13151c",
+            borderColor: "#3a3f54", borderBottom: "1px solid #3a3f54" }}>
+          <div className="flex items-center gap-2">
+            <Navigation size={16}
+              style={{ color: permissionState === "denied" ? "#ef4444" : autoMode ? "#22d65f" : "#64748b" }} />
+            <div>
+              <div className="text-sm font-bold"
+                style={{ color: permissionState === "denied" ? "#fca5a5" : autoMode ? "#22d65f" : "#cbd5e1",
+                  fontFamily: "'Jua', sans-serif" }}>
+                GPS 자동 안내
+              </div>
+              <div className="text-[10px] text-slate-500">
+                {permissionState === "denied" ? "위치 권한 차단됨"
+                  : autoMode ? (userPos ? `반경 ${triggerRadius}m 진입 시 안내` : "GPS 신호 대기 중…")
+                  : "정류장 근처에서 자동 방송"}
+              </div>
+            </div>
+          </div>
+          <button
+            onClick={() => {
+              if (permissionState === "denied") { setGpsError("위치 권한이 차단되어 있어요"); return; }
+              if (!autoMode) primeTTS();
+              setAutoMode(!autoMode);
+            }}
+            disabled={permissionState === "denied"}
+            className="relative w-12 h-7 rounded-full"
+            style={{ background: permissionState === "denied" ? "#7f1d1d" : autoMode ? "#22d65f" : "#3a3f54",
+              opacity: permissionState === "denied" ? 0.6 : 1 }}>
+            <div className="absolute top-0.5 w-6 h-6 rounded-full bg-white shadow"
+              style={{ transform: autoMode ? "translateX(22px)" : "translateX(2px)", transition: "transform 0.2s" }} />
+          </button>
+        </div>
+
+        {(gpsError || permissionState === "denied") && (
+          <div className="px-5 py-3 border-x-2 space-y-2"
+            style={{ background: "rgba(239,68,68,0.08)", borderColor: "#3a3f54", borderBottom: "1px solid #3a3f54" }}>
+            <div className="flex items-start gap-2">
+              <AlertCircle size={14} style={{ color: "#fca5a5" }} />
+              <div className="flex-1">
+                <div className="text-xs font-bold" style={{ color: "#fca5a5", fontFamily: "'Jua', sans-serif" }}>
+                  {permissionState === "denied" ? "위치 권한이 차단되어 있어요" : gpsError}
+                </div>
+              </div>
+            </div>
+            <div className="flex gap-2">
+              <button onClick={retryPermission}
+                className="flex-1 px-3 py-1.5 rounded-md text-xs font-bold"
+                style={{ background: "#22d65f", color: "#0a0b0f", fontFamily: "'Jua', sans-serif" }}>
+                🔄 다시 시도
+              </button>
+              {permissionState === "denied" && (
+                <button onClick={() => setShowHelp(!showHelp)}
+                  className="px-3 py-1.5 rounded-md text-xs"
+                  style={{ background: "rgba(251, 191, 36, 0.15)", color: "#fbbf24",
+                    border: "1px solid rgba(251, 191, 36, 0.3)" }}>
+                  {showHelp ? "안내 닫기" : "허용 방법"}
+                </button>
+              )}
+            </div>
+            {showHelp && permissionState === "denied" && (
+              <div className="mt-2 p-3 rounded-lg text-[11px] leading-relaxed space-y-2"
+                style={{ background: "#0a0b0f", border: "1px solid #3a3f54", color: "#cbd5e1" }}>
+                {isIOS && (<div><div className="font-bold text-amber-400 mb-1">📱 iPhone · Safari</div>
+                  <div>1. 주소창 왼쪽 <b>ᴬA</b> → <b>웹사이트 설정</b></div>
+                  <div>2. <b>위치</b> → <b>허용</b></div></div>)}
+                {isAndroid && (<div><div className="font-bold text-amber-400 mb-1">📱 Android · Chrome</div>
+                  <div>1. 주소창 왼쪽 <b>🔒</b> 아이콘 탭</div>
+                  <div>2. <b>권한 → 위치 → 허용</b></div>
+                  <div>3. 페이지 새로고침</div></div>)}
+                {!isIOS && !isAndroid && (<div><div className="font-bold text-amber-400 mb-1">💻 데스크톱</div>
+                  <div>주소창의 자물쇠 아이콘 클릭 → 위치 → 허용 → 새로고침</div></div>)}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Stop list with schedule */}
+        <div className="px-5 py-4 border-x-2 max-h-80 overflow-y-auto"
+          style={{ background: "#13151c", borderColor: "#3a3f54" }}>
+          <div className="flex items-center gap-2 text-slate-400 text-xs tracking-widest mb-3">
+            <MapPin size={12} /><span>{tripIdx + 1}회차 운행 시각</span>
+          </div>
+
+          <div className="relative">
+            <div className="absolute left-[7px] top-2 bottom-2 w-px" style={{ background: "#3a3f54" }} />
+            {stops.map((s, i) => {
+              const isCurrent = i === currentIdx;
+              const isPast = i < currentIdx;
+              const c = coords[s.name];
+              const dist = autoMode && userPos && c ? distanceMeters(userPos, c) : null;
+              return (
+                <div key={i} className="flex items-center gap-3 py-2 cursor-pointer"
+                  onClick={() => setCurrentIdx(i)}>
+                  <div className="relative z-10 w-[15px] h-[15px] rounded-full flex items-center justify-center"
+                    style={{ background: isCurrent ? "#fbbf24" : isPast ? "#475569" : "#1e2230",
+                      border: `2px solid ${isCurrent ? "#fbbf24" : isPast ? "#475569" : "#3a3f54"}`,
+                      boxShadow: isCurrent ? "0 0 12px rgba(251, 191, 36, 0.8)" : "none" }}>
+                    {isCurrent && <div className="w-2 h-2 rounded-full" style={{ background: "#0a0b0f" }} />}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span style={{ color: isCurrent ? "#fbbf24" : isPast ? "#64748b" : "#cbd5e1",
+                          fontFamily: "'Jua', sans-serif",
+                          fontSize: isCurrent ? "1.05rem" : "0.95rem",
+                          fontWeight: isCurrent ? 700 : 400,
+                          textDecoration: isPast ? "line-through" : "none" }}>
+                        {s.name}
+                      </span>
+                      {s.terminus && (
+                        <span className="text-[9px] px-1 py-0.5 rounded"
+                          style={{ background: "rgba(239, 68, 68, 0.15)", color: "#fca5a5", border: "1px solid rgba(239, 68, 68, 0.3)" }}>
+                          종점
+                        </span>
+                      )}
+                      {!c && (
+                        <span className="text-[9px] px-1 py-0.5 rounded text-amber-500/70 border border-amber-500/30">
+                          좌표 없음
+                        </span>
+                      )}
+                    </div>
+                    {s.sub && <div className="text-[10px] text-slate-500 mt-0.5">{s.sub}</div>}
+                  </div>
+                  <div className="flex flex-col items-end gap-0.5">
+                    <span className="text-sm font-bold"
+                      style={{ color: isCurrent ? "#fbbf24" : isPast ? "#64748b" : "#94a3b8",
+                        fontFamily: "'IBM Plex Mono', monospace" }}>
+                      {trip[i]}
+                    </span>
+                    {dist != null && (
+                      <span className="text-[9px] text-slate-500" style={{ fontFamily: "'IBM Plex Mono', monospace" }}>
+                        {fmtDist(dist)}
+                      </span>
+                    )}
+                  </div>
+                  <button onClick={(e) => { e.stopPropagation(); setStopCoordHere(i); }}
+                    title="현재 위치를 이 정류장 좌표로 설정"
+                    className="text-emerald-400 p-1.5 rounded hover:bg-emerald-500/10">
+                    <Crosshair size={14} />
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Settings */}
+        <div className="px-5 py-4 border-x-2 space-y-2"
+          style={{ background: "#0e1018", borderColor: "#3a3f54", borderBottom: "1px solid #3a3f54" }}>
+          <div className="flex items-center gap-3">
+            <label className="text-xs text-slate-400 w-16">속도</label>
+            <input type="range" min="0.5" max="1.5" step="0.05" value={rate}
+              onChange={(e) => setRate(parseFloat(e.target.value))} className="flex-1 accent-amber-400" />
+            <span className="text-xs text-amber-400 w-10 text-right" style={{ fontFamily: "'IBM Plex Mono', monospace" }}>
+              {rate.toFixed(2)}
+            </span>
+          </div>
+          <div className="flex items-center gap-3">
+            <label className="text-xs text-slate-400 w-16">자동반경</label>
+            <input type="range" min="50" max="500" step="10" value={triggerRadius}
+              onChange={(e) => setTriggerRadius(parseInt(e.target.value))} className="flex-1 accent-emerald-400" />
+            <span className="text-xs text-emerald-400 w-12 text-right" style={{ fontFamily: "'IBM Plex Mono', monospace" }}>
+              {triggerRadius}m
+            </span>
+          </div>
+
+          <div className="pt-2 border-t" style={{ borderColor: "#3a3f54" }}>
+            <div className="flex items-center justify-between gap-2 mb-2">
+              <div className="flex items-center gap-2">
+                <Volume2 size={12} style={{
+                  color: ttsStatus === "ready" ? "#22d65f" : ttsStatus === "no-korean" ? "#fbbf24"
+                    : (ttsStatus === "unsupported" || ttsStatus === "error") ? "#ef4444" : "#64748b" }} />
+                <span className="text-xs" style={{
+                  color: ttsStatus === "ready" ? "#22d65f" : ttsStatus === "no-korean" ? "#fbbf24"
+                    : (ttsStatus === "unsupported" || ttsStatus === "error") ? "#fca5a5" : "#94a3b8",
+                  fontFamily: "'Jua', sans-serif" }}>
+                  {ttsStatus === "ready" ? "음성 사용 가능"
+                    : ttsStatus === "no-korean" ? "한국어 음성 없음"
+                    : ttsStatus === "unsupported" ? "음성 미지원"
+                    : ttsStatus === "error" ? "음성 오류" : "음성 확인 중…"}
+                </span>
+              </div>
+              <button onClick={testVoice} disabled={ttsStatus === "unsupported"}
+                className="text-xs px-2 py-1 rounded-md disabled:opacity-30"
+                style={{ background: "rgba(34, 214, 95, 0.15)", color: "#22d65f",
+                  border: "1px solid rgba(34, 214, 95, 0.3)", fontFamily: "'Jua', sans-serif" }}>
+                🔊 테스트
+              </button>
+            </div>
+            {voices.filter(v => v.lang.startsWith("ko")).length > 1 && (
+              <select value={selectedVoiceURI || ""} onChange={(e) => setSelectedVoiceURI(e.target.value)}
+                className="w-full px-2 py-1.5 rounded text-xs"
+                style={{ background: "#0a0b0f", border: "1px solid #3a3f54", color: "#cbd5e1" }}>
+                {voices.filter(v => v.lang.startsWith("ko")).map(v => (
+                  <option key={v.voiceURI} value={v.voiceURI}>
+                    {v.name} {v.localService ? "· 기기 내장" : "· 온라인"}
+                  </option>
+                ))}
+              </select>
+            )}
+          </div>
+        </div>
+
+        {/* Controls */}
+        <div className="rounded-b-3xl px-5 py-5 border-2 border-t-0 flex items-center justify-center gap-3"
+          style={{ background: "linear-gradient(180deg, #1c1f2b 0%, #13151c 100%)", borderColor: "#3a3f54" }}>
+          <button onClick={prev} disabled={currentIdx === 0}
+            className="w-12 h-12 rounded-full flex items-center justify-center disabled:opacity-30"
+            style={{ background: "rgba(251, 191, 36, 0.1)", border: "1px solid rgba(251, 191, 36, 0.3)", color: "#fbbf24" }}>
+            <SkipBack size={18} />
+          </button>
+          <button onClick={announce}
+            className="w-20 h-20 rounded-full flex items-center justify-center relative"
+            style={{
+              background: isAnnouncing ? "linear-gradient(135deg, #ef4444 0%, #dc2626 100%)"
+                : "linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%)",
+              boxShadow: isAnnouncing ? "0 0 30px rgba(239, 68, 68, 0.6)" : "0 0 30px rgba(251, 191, 36, 0.5)",
+              color: "#0a0b0f" }}>
+            {isAnnouncing ? <Pause size={28} /> : <Volume2 size={28} />}
+            {isAnnouncing && (<div className="absolute inset-0 rounded-full animate-ping"
+              style={{ background: "rgba(239, 68, 68, 0.4)" }} />)}
+          </button>
+          <button onClick={next} disabled={currentIdx >= stops.length - 1}
+            className="w-12 h-12 rounded-full flex items-center justify-center disabled:opacity-30"
+            style={{ background: "rgba(251, 191, 36, 0.1)", border: "1px solid rgba(251, 191, 36, 0.3)", color: "#fbbf24" }}>
+            <SkipForward size={18} />
+          </button>
+        </div>
+
+        <div className="text-center mt-4 text-[10px] text-slate-600 tracking-wider leading-relaxed"
+          style={{ fontFamily: "'IBM Plex Mono', monospace" }}>
+          {currentIdx + 1} / {stops.length} STOPS · TRIP {tripIdx + 1}/6 · {autoMode ? "GPS AUTO" : "MANUAL"}
+          <div className="text-slate-500 mt-1">※ 6.13.(토) 1~6회차 · 6.14.(일) 1~5회차 운영</div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+</body>
+</html>
