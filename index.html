@@ -351,6 +351,11 @@ function App() {
     const cur = stops[idx]; if (!cur) return;
     const nxt = stops[idx + 1];
     const curSay = spokenName(cur.name);
+    // 출발(시작) 승강장 — 도착 안내 대신 출발 안내
+    if (idx === 0 && nxt) {
+      chimeThenSpeak(`잠시 후 출발합니다. 다음 정류장은 ${spokenName(nxt.name)}입니다.`);
+      return;
+    }
     let text;
     if (nxt) {
       text = `이번 정류장은 ${curSay}, ${curSay}입니다. 다음 정류장은 ${spokenName(nxt.name)}입니다.`;
@@ -436,7 +441,8 @@ function App() {
     if (nearestDist <= triggerRadius && !announcedRef.current.has(nearestIdx)) {
       announcedRef.current.add(nearestIdx);
       setCurrentIdx(nearestIdx);
-      announceStop(nearestIdx);
+      // 시작 승강장(출발지)은 자동 방송에서 생략 — 다음 정류장부터 안내
+      if (nearestIdx !== 0) announceStop(nearestIdx);
       // Arm auto leg-switch once the bus has actually arrived at the terminus
       if (nearestIdx === stops.length - 1 && nextLeg) legSwitchArmedRef.current = true;
     }
