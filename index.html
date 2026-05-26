@@ -70,8 +70,10 @@ const spokenTime = (hm) => {
   return m === 0 ? `${h}시` : `${h}시 ${m}분`;
 };
 
-/* Coordinate key — per-direction so 건너편(반대 방향) 정류장 좌표를 따로 관리 */
-const coordKey = (dir, name) => `${dir}|${name}`;
+/* Coordinate key — 건너편 승강장이 따로 있는 정류장만 방향별로 분리,
+   단일 승강장(축제장·5·18민주광장·하늘마당)은 이름 기준으로 양방향 공유 */
+const SHARED_STOPS = new Set(["축제장", "5·18민주광장", "하늘마당"]);
+const coordKey = (dir, name) => SHARED_STOPS.has(name) ? name : `${dir}|${name}`;
 
 /* Route data — 제4회 동구 무등산 인문축제 셔틀 */
 const ROUTES = {
