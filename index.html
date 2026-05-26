@@ -38,7 +38,7 @@
 
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef, useMemo } = React;
-const BUILD = "b22"; /* 화면 우하단 표시 — 최신 배포 확인용 */
+const BUILD = "b23"; /* 화면 우하단 표시 — 최신 배포 확인용 */
 
 /* Icons */
 const Svg = ({ size = 16, children, ...rest }) => (
@@ -185,25 +185,27 @@ const FESTIVAL = {
   allday: "동네책방이 큐레이션한 1187 라이브러리 서가 전시, 무등산을 담은 체험존과 인문 팝업 스토어, 한강 작가에게 엽서 쓰기, 생각의 통로를 채우는 무등 버스킹, 그리고 곳곳에 숨은 명언을 찾는 문장 보물찾기는 온종일 즐기실 수 있습니다. 의재로의 다섯 개 미술관에서도 특별 전시와 체험이 함께 열립니다.",
   // 축제 기간 외 기본 안내
   defaultProgram: "잠시 후 무등생각 축제장에 도착합니다. 이곳에서는 편백숲 디지털 디톡스와 증심사 명상, 한강 작가에게 엽서 쓰기, 무등 버스킹, 미술관 특별 전시 등 다양한 인문 프로그램을 즐기실 수 있습니다. 천천히 둘러보며 편안한 시간 보내세요.",
+  // 민주광장 방향(축제장 출발) 하차 안내
+  alight: "5·18민주광장 방향 셔틀버스입니다. 내리실 정류장이 가까워지면 미리 말씀해 주세요.",
 };
 
-/* 지정한 날(dayKey)의 프로그램 중, 축제장 도착(예정) 시각 이후 시작분만 골라 안내 문구 생성.
-   refMin: 기준 시각(분). 보통 현재 시각 + 축제장까지 남은 운행 시간. 없으면 현재 시각 사용 */
-const festivalProgramText = (dayKey, refMin) => {
-  const list = dayKey === "day1" ? FESTIVAL.schedule.day1
-    : dayKey === "day2" ? FESTIVAL.schedule.day2 : null;
-  if (!list) return FESTIVAL.defaultProgram;
+/* 지정한 멘트 설정(m)의 schedule에서, 축제장 도착(예정) 시각 이후 시작분만 골라 안내 문구 생성.
+   refMin: 기준 시각(분). 없으면 현재 시각 사용 */
+const buildProgramText = (m, dayKey, refMin) => {
+  const list = dayKey === "day1" ? m.schedule.day1
+    : dayKey === "day2" ? m.schedule.day2 : null;
+  if (!list) return m.defaultProgram;
   const d = new Date();
   const nowMin = typeof refMin === "number" ? refMin : d.getHours() * 60 + d.getMinutes();
   const intro = "잠시 후, 무등생각 축제장에 도착합니다. ";
   const upcoming = list.filter(p => toMin(p.t) >= nowMin);
   if (upcoming.length === 0) {
-    return intro + "오늘 준비된 주요 프로그램은 대부분 마무리되었어요. 그래도 " + FESTIVAL.allday + " 무등산에서 천천히, 편안한 시간 보내세요.";
+    return intro + "오늘 준비된 주요 프로그램은 대부분 마무리되었어요. 그래도 " + m.allday + " 무등산에서 천천히, 편안한 시간 보내세요.";
   }
   const shown = upcoming.slice(0, 6); // 안내가 길어지지 않도록 다가오는 6개까지만
   const items = shown.map(p => `${spokenClock(p.t)}에는 ${p.d}`).join(", ");
   const more = upcoming.length > shown.length ? " 이 외에도 더 많은 프로그램이 여러분을 기다리고 있어요." : "";
-  return intro + "도착하시면, " + items + " 등 다양한 프로그램을 만나보실 수 있습니다." + more + " 그리고 " + FESTIVAL.allday + " 오늘 무등생각과 함께, 마음을 쉬어가는 하루 보내세요.";
+  return intro + "도착하시면, " + items + " 등 다양한 프로그램을 만나보실 수 있습니다." + more + " 그리고 " + m.allday + " 오늘 무등생각과 함께, 마음을 쉬어가는 하루 보내세요.";
 };
 
 /* localStorage helpers — survive across reloads */
@@ -299,6 +301,13 @@ function App() {
     });
     return { ...base, ...migrated };
   });
+
+  // 안내 멘트 설정 (기본 FESTIVAL + localStorage 사용자 수정본)
+  const [ments, setMents] = useState(() => {
+    const stored = LS.getJSON("ments", null);
+    return stored ? { ...FESTIVAL, ...stored } : FESTIVAL;
+  });
+  useEffect(() => LS.setJSON("ments", ments), [ments]);
 
   // GPS / auto
   const [autoMode, setAutoMode] = useState(false);
@@ -620,12 +629,12 @@ function App() {
     const curSay = spokenName(cur.name);
     // 축제장 방향 출발지(5·18민주광장) — 축제 환영 안내 (다음 정류장 안내는 생략)
     if (direction === "outbound" && idx === 0) {
-      chimeThenSpeak(FESTIVAL.welcome);
+      chimeThenSpeak(ments.welcome);
       return;
     }
     // 민주광장 방향 출발지(축제장) — 하차 안내 포함
     if (direction === "inbound" && idx === 0) {
-      let t = "5·18민주광장 방향 셔틀버스입니다. 내리실 정류장이 가까워지면 미리 말씀해 주세요.";
+      let t = ments.alight;
       if (nxt) t += ` 다음 정류장은 ${spokenName(nxt.name)}입니다.`;
       chimeThenSpeak(t);
       return;
@@ -639,8 +648,8 @@ function App() {
     if (nxt) {
       // 축제장 방향: 대부분 종점까지 가므로 일반 정류장 도착 안내는 생략하고 축제 홍보/프로그램만
       if (direction === "outbound") {
-        if (FESTIVAL.promos[cur.name]) { chimeThenSpeak(FESTIVAL.promos[cur.name]); return; }
-        if (cur.name === FESTIVAL.programStop) {
+        if (ments.promos[cur.name]) { chimeThenSpeak(ments.promos[cur.name]); return; }
+        if (cur.name === ments.programStop) {
           // 기준 시각: 시간표 기준이면 이 회차의 축제장 도착 시각, 아니면 현재 시각 + 남은 운행 시간
           let arrivalMin;
           if (progTimeBase === "trip") {
@@ -650,7 +659,7 @@ function App() {
             const remain = Math.max(0, toMin(trip[trip.length - 1]) - toMin(trip[idx]));
             arrivalMin = now.getHours() * 60 + now.getMinutes() + remain;
           }
-          chimeThenSpeak(festivalProgramText(resolveFestivalDay(), arrivalMin));
+          chimeThenSpeak(buildProgramText(ments, resolveFestivalDay(), arrivalMin));
           return;
         }
         return; // 그 외 중간 정류장은 안내 없음
@@ -740,6 +749,40 @@ function App() {
     if (!file) return;
     const reader = new FileReader();
     reader.onload = () => { setBackup(String(reader.result)); setBackupMsg("파일을 불러왔어요. '불러오기'를 눌러 적용하세요"); };
+    reader.readAsText(file);
+  };
+
+  // 멘트(안내 문구) 백업·복원
+  const [mentBackup, setMentBackup] = useState(null);
+  const [mentMsg, setMentMsg] = useState("");
+  const openMentBackup = () => { setMentMsg(""); setMentBackup(JSON.stringify(ments, null, 2)); };
+  const copyMent = () => {
+    try { navigator.clipboard.writeText(mentBackup); setMentMsg("클립보드에 복사했어요"); }
+    catch (_) { setMentMsg("복사 실패 — 직접 선택해 복사하세요"); }
+  };
+  const applyMent = () => {
+    try {
+      const obj = JSON.parse(mentBackup);
+      if (typeof obj !== "object" || !obj.welcome) { setMentMsg("멘트 형식이 올바르지 않습니다"); return; }
+      setMents({ ...FESTIVAL, ...obj });
+      setMentMsg("멘트를 불러왔어요");
+    } catch (_) { setMentMsg("형식이 올바르지 않습니다 (JSON 확인)"); }
+  };
+  const resetMent = () => { setMents(FESTIVAL); setMentBackup(JSON.stringify(FESTIVAL, null, 2)); setMentMsg("기본 멘트로 되돌렸어요"); };
+  const downloadMent = () => {
+    try {
+      const blob = new Blob([JSON.stringify(ments, null, 2)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url; a.download = "무등생각셔틀-멘트.json"; a.click();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+      setMentMsg("파일로 저장했어요");
+    } catch (_) { setMentMsg("파일 저장 실패"); }
+  };
+  const uploadMent = (file) => {
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => { setMentBackup(String(reader.result)); setMentMsg("파일을 불러왔어요. '불러오기'를 눌러 적용하세요"); };
     reader.readAsText(file);
   };
 
@@ -1558,6 +1601,12 @@ function App() {
                 ))}
               </select>
             )}
+            <button onClick={openMentBackup}
+              className="mt-2 w-full py-1.5 rounded text-[11px] flex items-center justify-center gap-1"
+              style={{ background: "rgba(34,214,95,0.12)", color: "#22d65f", border: "1px solid rgba(34,214,95,0.3)",
+                fontFamily: "'Jua', sans-serif" }}>
+              안내 멘트 편집·백업·복원
+            </button>
           </div>
         </div>
 
@@ -1593,6 +1642,59 @@ function App() {
           <div className="text-slate-500 mt-1">※ 6.13.(토) 1~6회차 · 6.14.(일) 1~5회차 운영</div>
         </div>
       </div>
+
+      {/* 멘트 편집·백업·복원 모달 */}
+      {mentBackup !== null && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          style={{ background: "rgba(0,0,0,0.7)" }} onClick={() => setMentBackup(null)}>
+          <div className="w-full max-w-md rounded-2xl border-2 p-4 space-y-3"
+            style={{ background: "#13151c", borderColor: "#3a3f54" }} onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between">
+              <div className="text-sm font-bold" style={{ color: "#22d65f", fontFamily: "'Jua', sans-serif" }}>
+                안내 멘트 편집·백업·복원
+              </div>
+              <button onClick={() => setMentBackup(null)} className="text-slate-400 hover:text-amber-400 text-lg leading-none px-1">×</button>
+            </div>
+            <div className="text-[11px] text-slate-500">
+              환영·홍보·하차·프로그램(일정 포함) 멘트입니다. 문구를 직접 고친 뒤 <b>불러오기</b>를 누르면 적용·저장됩니다. 복사·파일로 다른 기기와 공유할 수 있어요.
+            </div>
+            <textarea value={mentBackup} onChange={(e) => setMentBackup(e.target.value)}
+              spellCheck={false} rows={10}
+              className="w-full px-2 py-2 rounded text-[11px]"
+              style={{ background: "#0a0b0f", border: "1px solid #3a3f54", color: "#cbd5e1",
+                fontFamily: "'IBM Plex Mono', monospace", resize: "vertical" }} />
+            {mentMsg && <div className="text-[11px]" style={{ color: "#fbbf24" }}>{mentMsg}</div>}
+            <div className="grid grid-cols-2 gap-2">
+              <button onClick={copyMent}
+                className="px-3 py-2 rounded-lg text-xs font-bold"
+                style={{ background: "rgba(251,191,36,0.15)", color: "#fbbf24", border: "1px solid rgba(251,191,36,0.3)" }}>
+                📋 복사
+              </button>
+              <button onClick={downloadMent}
+                className="px-3 py-2 rounded-lg text-xs font-bold"
+                style={{ background: "rgba(251,191,36,0.15)", color: "#fbbf24", border: "1px solid rgba(251,191,36,0.3)" }}>
+                💾 파일 저장
+              </button>
+              <label className="px-3 py-2 rounded-lg text-xs font-bold text-center cursor-pointer"
+                style={{ background: "rgba(100,116,139,0.15)", color: "#94a3b8", border: "1px solid #3a3f54" }}>
+                📂 파일 열기
+                <input type="file" accept="application/json,.json" className="hidden"
+                  onChange={(e) => uploadMent(e.target.files && e.target.files[0])} />
+              </label>
+              <button onClick={applyMent}
+                className="px-3 py-2 rounded-lg text-xs font-bold"
+                style={{ background: "#22d65f", color: "#0a0b0f", fontFamily: "'Jua', sans-serif" }}>
+                ⬇ 불러오기
+              </button>
+            </div>
+            <button onClick={resetMent}
+              className="w-full py-1.5 rounded-lg text-[11px]"
+              style={{ background: "rgba(239,68,68,0.12)", color: "#fca5a5", border: "1px solid rgba(239,68,68,0.3)" }}>
+              기본 멘트로 되돌리기
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* 좌표 백업·복원 모달 */}
       {backup !== null && (
