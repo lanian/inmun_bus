@@ -1116,6 +1116,9 @@ function App() {
               {tripStatus.label}
             </span>
           </div>
+          <div className="text-[10px] text-slate-500 mb-1" style={{ fontFamily: "'IBM Plex Mono', monospace" }}>
+            오늘 운행 {tripsToday}회차 {festivalDay === "auto" ? "(자동)" : festivalDay === "day2" ? "(6.14 일)" : "(6.13 토)"}
+          </div>
           <div className="grid gap-1" style={{ gridTemplateColumns: `repeat(${tripsToday}, minmax(0, 1fr))` }}>
             {route.trips.slice(0, tripsToday).map((t, i) => (
               <button key={i} onClick={() => { setTripIdx(i); setCurrentIdx(0); announcedRef.current = new Set(); }}
