@@ -186,13 +186,14 @@ const FESTIVAL = {
   defaultProgram: "잠시 후 무등생각 축제장에 도착합니다. 이곳에서는 편백숲 디지털 디톡스와 증심사 명상, 한강 작가에게 엽서 쓰기, 무등 버스킹, 미술관 특별 전시 등 다양한 인문 프로그램을 즐기실 수 있습니다. 천천히 둘러보며 편안한 시간 보내세요.",
 };
 
-/* 지정한 날(dayKey)의 프로그램 중, 도착(현재) 시각 이후 시작분만 골라 안내 문구 생성 */
-const festivalProgramText = (dayKey) => {
+/* 지정한 날(dayKey)의 프로그램 중, 축제장 도착(예정) 시각 이후 시작분만 골라 안내 문구 생성.
+   refMin: 기준 시각(분). 보통 현재 시각 + 축제장까지 남은 운행 시간. 없으면 현재 시각 사용 */
+const festivalProgramText = (dayKey, refMin) => {
   const list = dayKey === "day1" ? FESTIVAL.schedule.day1
     : dayKey === "day2" ? FESTIVAL.schedule.day2 : null;
   if (!list) return FESTIVAL.defaultProgram;
   const d = new Date();
-  const nowMin = d.getHours() * 60 + d.getMinutes();
+  const nowMin = typeof refMin === "number" ? refMin : d.getHours() * 60 + d.getMinutes();
   const intro = "잠시 후 무등생각 축제장에 도착합니다. ";
   const upcoming = list.filter(p => toMin(p.t) >= nowMin);
   if (upcoming.length === 0) {
@@ -607,7 +608,14 @@ function App() {
       // 축제장 방향: 대부분 종점까지 가므로 일반 정류장 도착 안내는 생략하고 축제 홍보/프로그램만
       if (direction === "outbound") {
         if (FESTIVAL.promos[cur.name]) { chimeThenSpeak(FESTIVAL.promos[cur.name]); return; }
-        if (cur.name === FESTIVAL.programStop) { chimeThenSpeak(festivalProgramText(resolveFestivalDay())); return; }
+        if (cur.name === FESTIVAL.programStop) {
+          // 현재 시각 + 이 정류장에서 축제장까지 남은 운행 시간 = 도착 예정 시각 기준
+          const now = new Date();
+          const remain = Math.max(0, toMin(trip[trip.length - 1]) - toMin(trip[idx]));
+          const arrivalMin = now.getHours() * 60 + now.getMinutes() + remain;
+          chimeThenSpeak(festivalProgramText(resolveFestivalDay(), arrivalMin));
+          return;
+        }
         return; // 그 외 중간 정류장은 안내 없음
       }
       // 민주광장 방향: 하차가 많으므로 정류장 안내 전체 유지
