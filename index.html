@@ -135,9 +135,11 @@ const ROUTES = {
 const FESTIVAL = {
   // 축제장 방향 출발지(5·18민주광장)에서 — 환영 + 축제 소개
   welcome: "무등산 인문축제, 무등생각 셔틀버스입니다. 이용해 주셔서 감사합니다. 이 버스는 축제장으로 향합니다. 제4회 무등산 인문축제 무등생각은, 생각을 끄고 생각을 켜다를 주제로 무등산 증심사 일원에서 열립니다.",
-  // 축제장 방향 중간 정류장에서 — 짧은 홍보
-  mid: "이 셔틀은 무등산 인문축제 무등생각 축제장으로 향하고 있습니다. 숲속 명상과 음악, 영화 등 다양한 인문 프로그램이 여러분을 기다립니다.",
-  promoStops: ["하늘마당", "학동증심사역"], // 축제 홍보를 내보낼 정류장들
+  // 축제장 방향 중간 정류장별 — 정류장마다 다른 부드러운 홍보 멘트
+  promos: {
+    "하늘마당": "무등산 인문축제 무등생각에 오신 것을 환영합니다. 이 셔틀은 생각을 끄고, 생각을 켜다, 무등생각 축제장으로 향하고 있습니다. 잠시 창밖 풍경과 함께 편안히 쉬어가세요. 곧 무등산의 푸른 숲이 여러분을 맞이합니다.",
+    "학동증심사역": "무등생각 축제장이 점점 가까워지고 있습니다. 편백숲에서의 쉼과 명상, 음악과 영화, 책과 미술까지 다채로운 인문 프로그램이 여러분을 기다립니다. 일상의 소음을 잠시 내려놓고, 무등산에서의 하루를 천천히 즐겨보세요.",
+  },
   // 축제장 도착 전 정류장에서 — 그날 주요 프로그램 음성 안내 (종점 안내와 겹치지 않도록 한 정거장 앞당김 + 간결화)
   programStop: "운림중학교",
   programs: {
@@ -549,7 +551,7 @@ function App() {
     if (nxt) {
       // 축제장 방향: 대부분 종점까지 가므로 일반 정류장 도착 안내는 생략하고 축제 홍보/프로그램만
       if (direction === "outbound") {
-        if (FESTIVAL.promoStops.includes(cur.name)) { chimeThenSpeak(FESTIVAL.mid); return; }
+        if (FESTIVAL.promos[cur.name]) { chimeThenSpeak(FESTIVAL.promos[cur.name]); return; }
         if (cur.name === FESTIVAL.programStop) { chimeThenSpeak(festivalProgramText()); return; }
         return; // 그 외 중간 정류장은 안내 없음
       }
