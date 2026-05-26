@@ -64,6 +64,12 @@ const toMin = (hm) => { const [h, m] = hm.split(":").map(Number); return h * 60 
 /* Spoken-name helper — TTS reads "5·18" oddly, normalize before speaking */
 const spokenName = (name) => (name || "").replace(/5·18/g, "오일팔");
 
+/* Spoken-time helper — "09:45" → "9시 45분" so TTS doesn't read the colon */
+const spokenTime = (hm) => {
+  const [h, m] = hm.split(":").map(Number);
+  return m === 0 ? `${h}시` : `${h}시 ${m}분`;
+};
+
 /* Route data — 제4회 동구 무등산 인문축제 셔틀 */
 const ROUTES = {
   outbound: {
@@ -293,7 +299,7 @@ function App() {
       // Terminus — include circular connection info
       const base = `이번 정류장은 ${curSay}입니다. 이번 정류장이 종점입니다. 안전하게 내려주세요.`;
       if (nextLegInfo) {
-        text = `${base} 잠시 후 ${nextLegInfo.departTime}에 ${nextLegInfo.label} ${nextLegInfo.tripNum}회차 셔틀버스가 출발합니다.`;
+        text = `${base} 잠시 후 ${spokenTime(nextLegInfo.departTime)}에 ${nextLegInfo.label} ${nextLegInfo.tripNum}회차 셔틀버스가 출발합니다.`;
       } else {
         text = `${base} 오늘 운행이 종료되었습니다. 이용해 주셔서 감사합니다.`;
       }
