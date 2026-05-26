@@ -70,6 +70,9 @@ const spokenTime = (hm) => {
   return m === 0 ? `${h}시` : `${h}시 ${m}분`;
 };
 
+/* Coordinate key — per-direction so 건너편(반대 방향) 정류장 좌표를 따로 관리 */
+const coordKey = (dir, name) => `${dir}|${name}`;
+
 /* Route data — 제4회 동구 무등산 인문축제 셔틀 */
 const ROUTES = {
   outbound: {
@@ -131,14 +134,22 @@ function App() {
   const [isAnnouncing, setIsAnnouncing] = useState(false);
   const [rate, setRate] = useState(() => parseFloat(LS.get("rate", "0.95")));
 
-  // Coordinates keyed by stop name (shared across directions) — defaults from ROUTES, overridden by localStorage
+  // Coordinates keyed by 방향|정류장이름 (방향별 분리) — defaults from ROUTES, overridden by localStorage
   const [coords, setCoords] = useState(() => {
     const base = {};
-    [...ROUTES.outbound.stops, ...ROUTES.inbound.stops].forEach(s => {
-      if (s.lat != null && s.lng != null) base[s.name] = { lat: s.lat, lng: s.lng };
+    ["outbound", "inbound"].forEach(dir => {
+      ROUTES[dir].stops.forEach(s => {
+        if (s.lat != null && s.lng != null) base[coordKey(dir, s.name)] = { lat: s.lat, lng: s.lng };
+      });
     });
     const stored = LS.getJSON("coords", {});
-    return { ...base, ...stored };
+    const migrated = {};
+    Object.entries(stored).forEach(([k, v]) => {
+      if (k.includes("|")) migrated[k] = v;               // already direction-scoped
+      else { migrated[coordKey("outbound", k)] = v;       // legacy name-key → both directions
+             migrated[coordKey("inbound", k)] = v; }
+    });
+    return { ...base, ...migrated };
   });
 
   // GPS / auto
@@ -361,7 +372,7 @@ function App() {
 
   const setStopCoordHere = (i) => {
     if (!userPos) { setGpsError("먼저 자동 모드를 켜서 GPS를 활성화하세요"); return; }
-    setCoords(prev => ({ ...prev, [stops[i].name]: { lat: userPos.lat, lng: userPos.lng } }));
+    setCoords(prev => ({ ...prev, [coordKey(direction, stops[i].name)]: { lat: userPos.lat, lng: userPos.lng } }));
   };
 
   /* --- GPS watch --- */
@@ -410,7 +421,7 @@ function App() {
     if (!autoMode || !userPos) return;
     let nearestIdx = -1, nearestDist = Infinity;
     for (let i = currentIdx; i < stops.length; i++) {
-      const c = coords[stops[i].name]; if (!c) continue;
+      const c = coords[coordKey(direction, stops[i].name)]; if (!c) continue;
       const d = distanceMeters(userPos, c);
       if (d < nearestDist) { nearestDist = d; nearestIdx = i; }
     }
@@ -426,8 +437,8 @@ function App() {
 
   const curStop = stops[currentIdx];
   const nextStop = stops[currentIdx + 1];
-  const curCoord = coords[curStop?.name];
-  const nextCoord = coords[nextStop?.name];
+  const curCoord = curStop ? coords[coordKey(direction, curStop.name)] : undefined;
+  const nextCoord = nextStop ? coords[coordKey(direction, nextStop.name)] : undefined;
   const distToNext = autoMode && userPos && nextCoord ? distanceMeters(userPos, nextCoord) : null;
   const fmtDist = (m) => (m == null ? null : m < 1000 ? `${Math.round(m)}m` : `${(m / 1000).toFixed(2)}km`);
 
@@ -929,7 +940,7 @@ function App() {
             {stops.map((s, i) => {
               const isCurrent = i === currentIdx;
               const isPast = i < currentIdx;
-              const c = coords[s.name];
+              const c = coords[coordKey(direction, s.name)];
               const dist = autoMode && userPos && c ? distanceMeters(userPos, c) : null;
               return (
                 <div key={i} className="flex items-center gap-3 py-2 cursor-pointer"
