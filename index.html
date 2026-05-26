@@ -38,7 +38,7 @@
 
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef, useMemo } = React;
-const BUILD = "b20"; /* 화면 우하단 표시 — 최신 배포 확인용 */
+const BUILD = "b21"; /* 화면 우하단 표시 — 최신 배포 확인용 */
 
 /* Icons */
 const Svg = ({ size = 16, children, ...rest }) => (
@@ -706,6 +706,43 @@ function App() {
     setEditing(null);
   };
 
+  // 좌표 백업·복원 (내보내기/불러오기)
+  const [backup, setBackup] = useState(null);     // null | 텍스트(JSON)
+  const [backupMsg, setBackupMsg] = useState("");
+  const openBackup = () => { setBackupMsg(""); setBackup(JSON.stringify(coords, null, 2)); };
+  const copyBackup = () => {
+    try { navigator.clipboard.writeText(backup); setBackupMsg("클립보드에 복사했어요"); }
+    catch (_) { setBackupMsg("복사 실패 — 직접 선택해 복사하세요"); }
+  };
+  const applyBackup = () => {
+    try {
+      const obj = JSON.parse(backup);
+      const clean = {};
+      Object.entries(obj).forEach(([k, v]) => {
+        if (v && Number.isFinite(+v.lat) && Number.isFinite(+v.lng)) clean[k] = { lat: +v.lat, lng: +v.lng };
+      });
+      if (!Object.keys(clean).length) { setBackupMsg("유효한 좌표가 없습니다"); return; }
+      setCoords(prev => ({ ...prev, ...clean }));
+      setBackupMsg(`${Object.keys(clean).length}개 좌표를 불러왔어요`);
+    } catch (_) { setBackupMsg("형식이 올바르지 않습니다 (JSON 확인)"); }
+  };
+  const downloadBackup = () => {
+    try {
+      const blob = new Blob([JSON.stringify(coords, null, 2)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url; a.download = "무등생각셔틀-좌표.json"; a.click();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+      setBackupMsg("파일로 저장했어요");
+    } catch (_) { setBackupMsg("파일 저장 실패"); }
+  };
+  const uploadBackup = (file) => {
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => { setBackup(String(reader.result)); setBackupMsg("파일을 불러왔어요. '불러오기'를 눌러 적용하세요"); };
+    reader.readAsText(file);
+  };
+
   /* --- GPS watch --- */
   useEffect(() => {
     if (!autoMode) {
@@ -1329,8 +1366,14 @@ function App() {
         {/* Stop list with schedule */}
         <div className="px-5 py-4 border-x-2 max-h-80 overflow-y-auto"
           style={{ background: "#13151c", borderColor: "#3a3f54" }}>
-          <div className="flex items-center gap-2 text-slate-400 text-xs tracking-widest mb-3">
-            <MapPin size={12} /><span>{tripIdx + 1}회차 운행 시각</span>
+          <div className="flex items-center justify-between gap-2 text-slate-400 text-xs tracking-widest mb-3">
+            <div className="flex items-center gap-2"><MapPin size={12} /><span>{tripIdx + 1}회차 운행 시각</span></div>
+            <button onClick={openBackup}
+              className="text-[10px] px-2 py-1 rounded flex items-center gap-1"
+              style={{ background: "rgba(34,214,95,0.12)", color: "#22d65f", border: "1px solid rgba(34,214,95,0.3)",
+                fontFamily: "'Jua', sans-serif" }}>
+              좌표 백업·복원
+            </button>
           </div>
 
           <div className="relative">
@@ -1550,6 +1593,54 @@ function App() {
           <div className="text-slate-500 mt-1">※ 6.13.(토) 1~6회차 · 6.14.(일) 1~5회차 운영</div>
         </div>
       </div>
+
+      {/* 좌표 백업·복원 모달 */}
+      {backup !== null && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          style={{ background: "rgba(0,0,0,0.7)" }} onClick={() => setBackup(null)}>
+          <div className="w-full max-w-md rounded-2xl border-2 p-4 space-y-3"
+            style={{ background: "#13151c", borderColor: "#3a3f54" }} onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between">
+              <div className="text-sm font-bold" style={{ color: "#22d65f", fontFamily: "'Jua', sans-serif" }}>
+                정류장 좌표 백업·복원
+              </div>
+              <button onClick={() => setBackup(null)} className="text-slate-400 hover:text-amber-400 text-lg leading-none px-1">×</button>
+            </div>
+            <div className="text-[11px] text-slate-500">
+              아래 좌표를 복사해 다른 기기에 붙여넣거나, 파일로 저장·불러올 수 있습니다. 붙여넣은 뒤 <b>불러오기</b>를 누르면 적용됩니다.
+            </div>
+            <textarea value={backup} onChange={(e) => setBackup(e.target.value)}
+              spellCheck={false} rows={8}
+              className="w-full px-2 py-2 rounded text-[11px]"
+              style={{ background: "#0a0b0f", border: "1px solid #3a3f54", color: "#cbd5e1",
+                fontFamily: "'IBM Plex Mono', monospace", resize: "vertical" }} />
+            {backupMsg && <div className="text-[11px]" style={{ color: "#fbbf24" }}>{backupMsg}</div>}
+            <div className="grid grid-cols-2 gap-2">
+              <button onClick={copyBackup}
+                className="px-3 py-2 rounded-lg text-xs font-bold"
+                style={{ background: "rgba(251,191,36,0.15)", color: "#fbbf24", border: "1px solid rgba(251,191,36,0.3)" }}>
+                📋 복사
+              </button>
+              <button onClick={downloadBackup}
+                className="px-3 py-2 rounded-lg text-xs font-bold"
+                style={{ background: "rgba(251,191,36,0.15)", color: "#fbbf24", border: "1px solid rgba(251,191,36,0.3)" }}>
+                💾 파일 저장
+              </button>
+              <label className="px-3 py-2 rounded-lg text-xs font-bold text-center cursor-pointer"
+                style={{ background: "rgba(100,116,139,0.15)", color: "#94a3b8", border: "1px solid #3a3f54" }}>
+                📂 파일 열기
+                <input type="file" accept="application/json,.json" className="hidden"
+                  onChange={(e) => uploadBackup(e.target.files && e.target.files[0])} />
+              </label>
+              <button onClick={applyBackup}
+                className="px-3 py-2 rounded-lg text-xs font-bold"
+                style={{ background: "#22d65f", color: "#0a0b0f", fontFamily: "'Jua', sans-serif" }}>
+                ⬇ 불러오기
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Coordinate editor modal — map + manual input */}
       {editing && (
