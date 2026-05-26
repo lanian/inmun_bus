@@ -154,10 +154,12 @@ function App() {
   const [selectedVoiceURI, setSelectedVoiceURI] = useState(() => LS.get("voice", null));
   const [ttsStatus, setTtsStatus] = useState("unknown");
   const [ttsPrimed, setTtsPrimed] = useState(false);
+  const [chimeEnabled, setChimeEnabled] = useState(() => LS.get("chime", "1") === "1");
 
   const watchIdRef = useRef(null);
   const announcedRef = useRef(new Set());
   const utterRef = useRef(null);
+  const audioCtxRef = useRef(null);
 
   // Persist on change
   useEffect(() => LS.set("mode", mode), [mode]);
@@ -165,6 +167,7 @@ function App() {
   useEffect(() => LS.set("rate", String(rate)), [rate]);
   useEffect(() => LS.set("radius", String(triggerRadius)), [triggerRadius]);
   useEffect(() => { if (selectedVoiceURI) LS.set("voice", selectedVoiceURI); }, [selectedVoiceURI]);
+  useEffect(() => LS.set("chime", chimeEnabled ? "1" : "0"), [chimeEnabled]);
 
   const route = ROUTES[direction];
   const stops = route.stops;
@@ -279,14 +282,52 @@ function App() {
     setTimeout(() => window.speechSynthesis.speak(u), 50);
   };
 
+  /* Bus arrival chime — two-tone "딩-동" via Web Audio, then speak */
+  const playChime = (onDone) => {
+    try {
+      const Ctx = window.AudioContext || window.webkitAudioContext;
+      if (!Ctx) { onDone && onDone(); return; }
+      if (!audioCtxRef.current) audioCtxRef.current = new Ctx();
+      const ctx = audioCtxRef.current;
+      if (ctx.state === "suspended") ctx.resume();
+      const t0 = ctx.currentTime + 0.02;
+      const dur = 0.5;
+      [{ f: 988, t: 0 }, { f: 740, t: 0.22 }].forEach(({ f, t }) => {
+        const osc = ctx.createOscillator();
+        const g = ctx.createGain();
+        osc.type = "sine";
+        osc.frequency.setValueAtTime(f, t0 + t);
+        g.gain.setValueAtTime(0.0001, t0 + t);
+        g.gain.exponentialRampToValueAtTime(0.3, t0 + t + 0.015);
+        g.gain.exponentialRampToValueAtTime(0.0001, t0 + t + dur);
+        osc.connect(g); g.connect(ctx.destination);
+        osc.start(t0 + t);
+        osc.stop(t0 + t + dur + 0.05);
+      });
+      if (onDone) setTimeout(onDone, 850);
+    } catch (_) { onDone && onDone(); }
+  };
+
+  const chimeThenSpeak = (text) => {
+    if (chimeEnabled) playChime(() => speak(text));
+    else speak(text);
+  };
+
   const primeTTS = () => {
+    try {
+      const Ctx = window.AudioContext || window.webkitAudioContext;
+      if (Ctx) {
+        if (!audioCtxRef.current) audioCtxRef.current = new Ctx();
+        if (audioCtxRef.current.state === "suspended") audioCtxRef.current.resume();
+      }
+    } catch (_) {}
     if (!window.speechSynthesis || ttsPrimed) return;
     const u = new SpeechSynthesisUtterance(" ");
     u.volume = 0; u.rate = 1;
     try { window.speechSynthesis.speak(u); setTtsPrimed(true); } catch (_) {}
   };
 
-  const testVoice = () => { primeTTS(); speak("안녕하세요. 무등산 인문축제 셔틀버스 음성 안내 테스트입니다."); };
+  const testVoice = () => { primeTTS(); chimeThenSpeak("안녕하세요. 무등산 인문축제 셔틀버스 음성 안내 테스트입니다."); };
 
   const announceStop = (idx) => {
     const cur = stops[idx]; if (!cur) return;
@@ -304,7 +345,7 @@ function App() {
         text = `${base} 오늘 운행이 종료되었습니다. 이용해 주셔서 감사합니다.`;
       }
     }
-    speak(text);
+    chimeThenSpeak(text);
   };
 
   const announce = () => {
@@ -955,6 +996,15 @@ function App() {
             <span className="text-xs text-amber-400 w-10 text-right" style={{ fontFamily: "'IBM Plex Mono', monospace" }}>
               {rate.toFixed(2)}
             </span>
+          </div>
+          <div className="flex items-center justify-between gap-3">
+            <label className="text-xs text-slate-400">안내 전 벨소리 (딩-동)</label>
+            <button onClick={() => { if (!chimeEnabled) { primeTTS(); playChime(); } setChimeEnabled(!chimeEnabled); }}
+              className="relative w-12 h-7 rounded-full flex-shrink-0"
+              style={{ background: chimeEnabled ? "#fbbf24" : "#3a3f54" }}>
+              <div className="absolute top-0.5 w-6 h-6 rounded-full bg-white shadow"
+                style={{ transform: chimeEnabled ? "translateX(22px)" : "translateX(2px)", transition: "transform 0.2s" }} />
+            </button>
           </div>
           <div className="flex items-center gap-3">
             <label className="text-xs text-slate-400 w-16">자동반경</label>
