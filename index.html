@@ -134,6 +134,24 @@ const FESTIVAL = {
   // 축제장 방향 중간 정류장에서 — 짧은 홍보
   mid: "이 셔틀은 무등산 인문축제 무등생각 축제장으로 향하고 있습니다. 숲속 명상과 음악, 영화 등 다양한 인문 프로그램이 여러분을 기다립니다.",
   midStop: "홍림교", // 중간 홍보를 내보낼 정류장
+  // 축제장 도착 직전 정류장에서 — 그날 주요 프로그램 음성 안내
+  programStop: "학운초등학교",
+  programs: {
+    // 6월 13일 토요일
+    day1: "오늘 무등생각 주요 프로그램을 안내합니다. 오전 열 시, 잔디광장에서 개막식이 열립니다. 한강 작가에게 엽서 쓰기, 무등 버스킹, 디지털 디톡스 마음의 숲, 증심사 고요를 찾아서 명상 프로그램이 진행됩니다. 저녁 일곱 시에는 무성영화극장 영화로운 광주가 열립니다.",
+    // 6월 14일 일요일
+    day2: "오늘 무등생각 주요 프로그램을 안내합니다. 엘피 청음회 동무다방, 북콘서트 생각하는 인간, 올해의 책 북토크, 침묵 독서 책 읽는 숲, 증심사 고요를 찾아서 명상 프로그램이 진행됩니다. 의재 사생대회 시상식도 함께 열립니다.",
+    // 축제 기간 외 기본 안내
+    default: "무등생각 축제장에서는 한강 작가에게 엽서 쓰기, 무등 버스킹, 디지털 디톡스 마음의 숲, 증심사 명상, 미술관 연계 전시 등 다양한 인문 프로그램이 열립니다.",
+  },
+};
+
+/* 날짜에 따라 그날 주요 프로그램 안내 문구 선택 (6.13 토 / 6.14 일) */
+const festivalProgramText = () => {
+  const d = new Date();
+  if (d.getMonth() === 5 && d.getDate() === 13) return FESTIVAL.programs.day1;
+  if (d.getMonth() === 5 && d.getDate() === 14) return FESTIVAL.programs.day2;
+  return FESTIVAL.programs.default;
 };
 
 /* localStorage helpers — survive across reloads */
@@ -431,6 +449,8 @@ function App() {
       text = `이번 정류장은 ${curSay}, ${curSay}입니다. 다음 정류장은 ${spokenName(nxt.name)}입니다.`;
       // 축제장 방향 중간 정류장 — 축제 홍보 추가
       if (direction === "outbound" && cur.name === FESTIVAL.midStop) text += ` ${FESTIVAL.mid}`;
+      // 축제장 도착 직전 정류장 — 그날 주요 프로그램 안내
+      if (direction === "outbound" && cur.name === FESTIVAL.programStop) text += ` ${festivalProgramText()}`;
     } else {
       // Terminus — include circular connection info
       const base = `이번 정류장은 ${curSay}입니다. 이번 정류장이 종점입니다. 안전하게 내려주세요.`;
