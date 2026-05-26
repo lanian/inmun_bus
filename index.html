@@ -10,6 +10,8 @@
 <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
 <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 <script src="https://cdn.tailwindcss.com"></script>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Black+Han+Sans&family=Gowun+Dodum&family=Jua&family=IBM+Plex+Mono:wght@400;500;700&display=swap" rel="stylesheet" />
 
 <style>
@@ -20,6 +22,11 @@
   .boot::after { content: ""; width: 14px; height: 14px; border: 2px solid #fbbf24;
     border-top-color: transparent; border-radius: 50%; margin-left: 12px; animation: spin 0.8s linear infinite; }
   @keyframes spin { to { transform: rotate(360deg); } }
+  /* Leaflet vs Tailwind preflight fix — keep map tiles/markers from being shrunk */
+  .leaflet-container .leaflet-tile,
+  .leaflet-container .leaflet-marker-icon,
+  .leaflet-container .leaflet-marker-shadow,
+  .leaflet-pane img { max-width: none !important; }
 </style>
 </head>
 <body>
@@ -127,6 +134,53 @@ const LS = {
   set: (k, v) => { try { localStorage.setItem("shuttle:" + k, v); } catch (_) {} },
   setJSON: (k, v) => { try { localStorage.setItem("shuttle:" + k, JSON.stringify(v)); } catch (_) {} },
 };
+
+/* Leaflet map picker — click or drag pin to choose a coordinate */
+function MapPicker({ lat, lng, onPick }) {
+  const elRef = useRef(null);
+  const mapRef = useRef(null);
+  const markerRef = useRef(null);
+
+  useEffect(() => {
+    if (!window.L || !elRef.current || mapRef.current) return;
+    const map = window.L.map(elRef.current).setView([lat, lng], 16);
+    window.L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      maxZoom: 19, attribution: "© OpenStreetMap",
+    }).addTo(map);
+    const icon = window.L.icon({
+      iconUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png",
+      iconRetinaUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png",
+      shadowUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png",
+      iconSize: [25, 41], iconAnchor: [12, 41],
+    });
+    const marker = window.L.marker([lat, lng], { draggable: true, icon }).addTo(map);
+    marker.on("dragend", () => { const p = marker.getLatLng(); onPick(p.lat, p.lng); });
+    map.on("click", (e) => { marker.setLatLng(e.latlng); onPick(e.latlng.lat, e.latlng.lng); });
+    mapRef.current = map; markerRef.current = marker;
+    setTimeout(() => map.invalidateSize(), 80);
+    return () => { map.remove(); mapRef.current = null; markerRef.current = null; };
+  }, []);
+
+  // Sync external (manual-input) coordinate changes onto the map
+  useEffect(() => {
+    if (!markerRef.current || !mapRef.current) return;
+    const c = markerRef.current.getLatLng();
+    if (Math.abs(c.lat - lat) > 1e-7 || Math.abs(c.lng - lng) > 1e-7) {
+      markerRef.current.setLatLng([lat, lng]);
+      mapRef.current.panTo([lat, lng]);
+    }
+  }, [lat, lng]);
+
+  if (!window.L) {
+    return (
+      <div className="text-xs text-center py-6 rounded-lg"
+        style={{ background: "#0a0b0f", border: "1px solid #3a3f54", color: "#fca5a5" }}>
+        지도를 불러올 수 없습니다 (네트워크 확인). 아래 좌표 입력은 사용할 수 있어요.
+      </div>
+    );
+  }
+  return <div ref={elRef} style={{ width: "100%", height: "260px", borderRadius: "12px", overflow: "hidden" }} />;
+}
 
 function App() {
   const [mode, setMode] = useState(() => LS.get("mode", "simple"));
@@ -385,6 +439,21 @@ function App() {
   const setStopCoordHere = (i) => {
     if (!userPos) { setGpsError("먼저 자동 모드를 켜서 GPS를 활성화하세요"); return; }
     setCoords(prev => ({ ...prev, [coordKey(direction, stops[i].name)]: { lat: userPos.lat, lng: userPos.lng } }));
+  };
+
+  // Coordinate editor (map + manual input)
+  const [editing, setEditing] = useState(null); // { idx, lat, lng }
+  const openCoordEditor = (i) => {
+    const c = coords[coordKey(direction, stops[i].name)];
+    setEditing({ idx: i, lat: c ? c.lat : 35.130, lng: c ? c.lng : 126.940 });
+  };
+  const saveCoordEditor = () => {
+    if (!editing) return;
+    const la = parseFloat(editing.lat), ln = parseFloat(editing.lng);
+    if (Number.isFinite(la) && Number.isFinite(ln)) {
+      setCoords(prev => ({ ...prev, [coordKey(direction, stops[editing.idx].name)]: { lat: la, lng: ln } }));
+    }
+    setEditing(null);
   };
 
   /* --- GPS watch --- */
@@ -1010,8 +1079,13 @@ function App() {
                       </span>
                     )}
                   </div>
+                  <button onClick={(e) => { e.stopPropagation(); openCoordEditor(i); }}
+                    title="지도·좌표로 이 정류장 위치 설정"
+                    className="text-amber-400 p-1.5 rounded hover:bg-amber-500/10">
+                    <MapPin size={14} />
+                  </button>
                   <button onClick={(e) => { e.stopPropagation(); setStopCoordHere(i); }}
-                    title="현재 위치를 이 정류장 좌표로 설정"
+                    title="현재 GPS 위치를 이 정류장 좌표로 설정"
                     className="text-emerald-400 p-1.5 rounded hover:bg-emerald-500/10">
                     <Crosshair size={14} />
                   </button>
@@ -1131,6 +1205,61 @@ function App() {
           <div className="text-slate-500 mt-1">※ 6.13.(토) 1~6회차 · 6.14.(일) 1~5회차 운영</div>
         </div>
       </div>
+
+      {/* Coordinate editor modal — map + manual input */}
+      {editing && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          style={{ background: "rgba(0,0,0,0.7)" }} onClick={() => setEditing(null)}>
+          <div className="w-full max-w-md rounded-2xl border-2 p-4 space-y-3"
+            style={{ background: "#13151c", borderColor: "#3a3f54" }} onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between">
+              <div className="text-sm font-bold" style={{ color: "#fbbf24", fontFamily: "'Jua', sans-serif" }}>
+                {stops[editing.idx]?.name} 위치 설정
+                <span className="text-[10px] text-slate-500 ml-2">{route.label}</span>
+              </div>
+              <button onClick={() => setEditing(null)} className="text-slate-400 hover:text-amber-400 text-lg leading-none px-1">×</button>
+            </div>
+            <div className="text-[11px] text-slate-500">지도를 탭하거나 핀을 끌어 위치를 지정하세요. 좌표를 직접 입력해도 됩니다.</div>
+            <MapPicker lat={parseFloat(editing.lat) || 35.130} lng={parseFloat(editing.lng) || 126.940}
+              onPick={(la, ln) => setEditing(e => ({ ...e, lat: la, lng: ln }))} />
+            <div className="flex gap-2">
+              <div className="flex-1">
+                <label className="text-[10px] text-slate-400">위도(lat)</label>
+                <input type="number" step="0.0001" value={editing.lat}
+                  onChange={(e) => setEditing(p => ({ ...p, lat: e.target.value }))}
+                  className="w-full px-2 py-1.5 rounded text-xs"
+                  style={{ background: "#0a0b0f", border: "1px solid #3a3f54", color: "#cbd5e1", fontFamily: "'IBM Plex Mono', monospace" }} />
+              </div>
+              <div className="flex-1">
+                <label className="text-[10px] text-slate-400">경도(lng)</label>
+                <input type="number" step="0.0001" value={editing.lng}
+                  onChange={(e) => setEditing(p => ({ ...p, lng: e.target.value }))}
+                  className="w-full px-2 py-1.5 rounded text-xs"
+                  style={{ background: "#0a0b0f", border: "1px solid #3a3f54", color: "#cbd5e1", fontFamily: "'IBM Plex Mono', monospace" }} />
+              </div>
+            </div>
+            <div className="flex gap-2 pt-1">
+              {userPos && (
+                <button onClick={() => setEditing(p => ({ ...p, lat: userPos.lat, lng: userPos.lng }))}
+                  className="px-3 py-2 rounded-lg text-xs font-bold flex items-center gap-1"
+                  style={{ background: "rgba(34, 214, 95, 0.15)", color: "#22d65f", border: "1px solid rgba(34, 214, 95, 0.3)" }}>
+                  <Crosshair size={12} /> 현재 GPS
+                </button>
+              )}
+              <button onClick={() => setEditing(null)}
+                className="flex-1 px-3 py-2 rounded-lg text-xs"
+                style={{ background: "rgba(100, 116, 139, 0.15)", color: "#94a3b8", border: "1px solid #3a3f54" }}>
+                취소
+              </button>
+              <button onClick={saveCoordEditor}
+                className="flex-1 px-3 py-2 rounded-lg text-xs font-bold"
+                style={{ background: "#fbbf24", color: "#0a0b0f", fontFamily: "'Jua', sans-serif" }}>
+                저장
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
