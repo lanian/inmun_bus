@@ -603,7 +603,7 @@ function App() {
     }
     // 민주광장 방향 출발지(축제장) — 하차 안내 포함
     if (direction === "inbound" && idx === 0) {
-      let t = "민주광장 방향 셔틀버스입니다. 내리실 분은 도착하실 정류장을 미리 기사님께 말씀해 주시기 바랍니다.";
+      let t = "민주광장 방향 셔틀버스입니다. 내리실 분은 도착하실 정류장을 미리 말씀해 주시기 바랍니다.";
       if (nxt) t += ` 다음 정류장은 ${spokenName(nxt.name)}입니다.`;
       chimeThenSpeak(t);
       return;
