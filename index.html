@@ -453,25 +453,33 @@ function App() {
     };
   }, []);
 
-  /* --- Wake Lock: 자동 모드 중 화면이 꺼져 음성·GPS가 멈추지 않도록 유지 --- */
+  /* --- Wake Lock: 앱이 떠 있는 동안 화면이 자동으로 꺼지지 않게 유지 ---
+     (모바일은 화면이 꺼지면 음성·GPS가 멈추므로 화면을 깨워둠. 단, 전원 버튼으로
+      직접 끄는 것은 막을 수 없음) */
   useEffect(() => {
     const acquire = async () => {
       try {
-        if (autoMode && "wakeLock" in navigator && document.visibilityState === "visible") {
+        if ("wakeLock" in navigator && document.visibilityState === "visible" && !wakeLockRef.current) {
           wakeLockRef.current = await navigator.wakeLock.request("screen");
           wakeLockRef.current.addEventListener?.("release", () => { wakeLockRef.current = null; });
         }
       } catch (_) {}
     };
-    const onVis = () => { if (document.visibilityState === "visible" && autoMode && !wakeLockRef.current) acquire(); };
-    if (autoMode) acquire();
+    const onVis = () => {
+      if (document.visibilityState === "visible") {
+        acquire();
+        if (audioCtxRef.current?.state === "suspended") audioCtxRef.current.resume();
+        if (window.speechSynthesis?.paused) window.speechSynthesis.resume();
+      }
+    };
+    acquire();
     document.addEventListener("visibilitychange", onVis);
     return () => {
       document.removeEventListener("visibilitychange", onVis);
       try { wakeLockRef.current?.release?.(); } catch (_) {}
       wakeLockRef.current = null;
     };
-  }, [autoMode]);
+  }, []);
 
   /* 긴 문장은 브라우저가 ~15초에서 끊으므로 문장·쉼표 단위로 짧게 분할 */
   const chunkText = (text) => {
@@ -1014,6 +1022,13 @@ function App() {
               style={{ fontFamily: "'IBM Plex Mono', monospace" }}>
               {currentIdx + 1}/{stops.length}
             </div>
+          </div>
+
+          {/* 화면 꺼짐 주의 안내 */}
+          <div className="mt-3 px-3 py-2 rounded-lg text-[11px] text-center leading-relaxed"
+            style={{ background: "rgba(251, 191, 36, 0.08)", color: "#fcd34d",
+              border: "1px solid rgba(251, 191, 36, 0.2)" }}>
+            💡 운행 중에는 화면을 끄지 말고 켜 두세요. 화면이 꺼지거나 다른 앱으로 전환하면 음성과 GPS가 멈춥니다. (기기 설정에서 자동 잠금을 ‘안 함’으로 두시는 걸 권장)
           </div>
         </div>
       </div>
