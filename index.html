@@ -270,16 +270,23 @@ function App() {
   const stops = route.stops;
   const trip = route.trips[tripIdx];
 
+  /* --- 운행 회차 수: 6.14(일)은 5회차까지만, 그 외 전체(6회차) --- */
+  const tripsToday = useMemo(() => {
+    const d = new Date();
+    if (d.getMonth() === 5 && d.getDate() === 14) return 5;
+    return ROUTES.outbound.trips.length;
+  }, []);
+
   /* --- Circular route: next leg computation ---
      outbound n → inbound n (15분 후, 축제장 휴식)
      inbound n → outbound n+1 (즉시 환승, 같은 시각)
-     inbound 6 → 운행 종료 (or 다음 회차 운행 시작점) */
+     마지막 회차 → 운행 종료 */
   const nextLeg = useMemo(() => {
     if (direction === "outbound") return { direction: "inbound", tripIdx };
-    if (tripIdx < ROUTES.outbound.trips.length - 1)
+    if (tripIdx < tripsToday - 1)
       return { direction: "outbound", tripIdx: tripIdx + 1 };
     return null; // last leg of the day
-  }, [direction, tripIdx]);
+  }, [direction, tripIdx, tripsToday]);
 
   const nextLegInfo = nextLeg ? {
     label: ROUTES[nextLeg.direction].label,
@@ -305,6 +312,7 @@ function App() {
     const all = [];
     ["outbound", "inbound"].forEach(dir => {
       ROUTES[dir].trips.forEach((t, i) => {
+        if (i >= tripsToday) return; // 6.14(일) 6회차 제외
         all.push({ dir, idx: i, dep: toMin(t[0]), arr: toMin(t[t.length - 1]) });
       });
     });
@@ -872,8 +880,8 @@ function App() {
               {tripStatus.label}
             </span>
           </div>
-          <div className="grid grid-cols-6 gap-1">
-            {route.trips.map((t, i) => (
+          <div className="grid gap-1" style={{ gridTemplateColumns: `repeat(${tripsToday}, minmax(0, 1fr))` }}>
+            {route.trips.slice(0, tripsToday).map((t, i) => (
               <button key={i} onClick={() => { setTripIdx(i); setCurrentIdx(0); announcedRef.current = new Set(); }}
                 className="py-1.5 rounded text-[11px] font-bold transition-all"
                 style={{
@@ -1239,7 +1247,7 @@ function App() {
 
         <div className="text-center mt-4 text-[10px] text-slate-600 tracking-wider leading-relaxed"
           style={{ fontFamily: "'IBM Plex Mono', monospace" }}>
-          {currentIdx + 1} / {stops.length} STOPS · TRIP {tripIdx + 1}/6 · {autoMode ? "GPS AUTO" : "MANUAL"}
+          {currentIdx + 1} / {stops.length} STOPS · TRIP {tripIdx + 1}/{tripsToday} · {autoMode ? "GPS AUTO" : "MANUAL"}
           <div className="text-slate-500 mt-1">※ 6.13.(토) 1~6회차 · 6.14.(일) 1~5회차 운영</div>
         </div>
       </div>
