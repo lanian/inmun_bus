@@ -4,11 +4,15 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
 <meta name="theme-color" content="#0a0b10" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="apple-mobile-web-app-title" content="무등생각 셔틀" />
+<link rel="manifest" href="manifest.webmanifest" />
 <title>무등산 인문축제 셔틀</title>
 
-<script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
-<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
-<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<script src="https://unpkg.com/react@18.3.1/umd/react.production.min.js" crossorigin></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js" crossorigin></script>
+<script src="https://unpkg.com/@babel/standalone@7.26.4/babel.min.js"></script>
 <script src="https://cdn.tailwindcss.com"></script>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -134,15 +138,15 @@ const FESTIVAL = {
   // 축제장 방향 중간 정류장에서 — 짧은 홍보
   mid: "이 셔틀은 무등산 인문축제 무등생각 축제장으로 향하고 있습니다. 숲속 명상과 음악, 영화 등 다양한 인문 프로그램이 여러분을 기다립니다.",
   midStop: "홍림교", // 중간 홍보를 내보낼 정류장
-  // 축제장 도착 직전 정류장에서 — 그날 주요 프로그램 음성 안내
-  programStop: "학운초등학교",
+  // 축제장 도착 전 정류장에서 — 그날 주요 프로그램 음성 안내 (종점 안내와 겹치지 않도록 한 정거장 앞당김 + 간결화)
+  programStop: "운림중학교",
   programs: {
     // 6월 13일 토요일
-    day1: "오늘 무등생각 주요 프로그램을 안내합니다. 오전 열 시, 잔디광장에서 개막식이 열립니다. 한강 작가에게 엽서 쓰기, 무등 버스킹, 디지털 디톡스 마음의 숲, 증심사 고요를 찾아서 명상 프로그램이 진행됩니다. 저녁 일곱 시에는 무성영화극장 영화로운 광주가 열립니다.",
+    day1: "오늘 주요 프로그램입니다. 오전 열 시 개막식, 디지털 디톡스 마음의 숲, 증심사 명상, 저녁 일곱 시 무성영화 영화로운 광주가 열립니다.",
     // 6월 14일 일요일
-    day2: "오늘 무등생각 주요 프로그램을 안내합니다. 엘피 청음회 동무다방, 북콘서트 생각하는 인간, 올해의 책 북토크, 침묵 독서 책 읽는 숲, 증심사 고요를 찾아서 명상 프로그램이 진행됩니다. 의재 사생대회 시상식도 함께 열립니다.",
+    day2: "오늘 주요 프로그램입니다. 엘피 청음회, 북콘서트 생각하는 인간, 올해의 책 북토크, 침묵 독서 책 읽는 숲, 증심사 명상이 진행됩니다.",
     // 축제 기간 외 기본 안내
-    default: "무등생각 축제장에서는 한강 작가에게 엽서 쓰기, 무등 버스킹, 디지털 디톡스 마음의 숲, 증심사 명상, 미술관 연계 전시 등 다양한 인문 프로그램이 열립니다.",
+    default: "축제장에서는 디지털 디톡스, 증심사 명상, 무등 버스킹, 미술관 연계 전시 등 다양한 인문 프로그램이 열립니다.",
   },
 };
 
@@ -228,9 +232,9 @@ function App() {
     const stored = LS.getJSON("coords", {});
     const migrated = {};
     Object.entries(stored).forEach(([k, v]) => {
-      if (k.includes("|")) migrated[k] = v;               // already direction-scoped
-      else { migrated[coordKey("outbound", k)] = v;       // legacy name-key → both directions
-             migrated[coordKey("inbound", k)] = v; }
+      if (k.includes("|")) migrated[k] = v;               // 이미 방향별 키
+      else if (SHARED_STOPS.has(k)) migrated[k] = v;      // 단일 승강장: 이름 키 그대로 공유
+      // 그 외(건너편 있는) 레거시 이름 키는 양방향으로 베이킹하지 않고 무시 → ROUTES 기본값 사용
     });
     return { ...base, ...migrated };
   });
@@ -256,6 +260,19 @@ function App() {
   const utterRef = useRef(null);
   const audioCtxRef = useRef(null);
   const legSwitchArmedRef = useRef(false);
+  const legDepartCountRef = useRef(0);     // 종점 이탈 연속 카운트 (자동 전환 히스테리시스)
+  const wakeLockRef = useRef(null);
+  const rateRef = useRef(rate);            // 자동 안내 시 최신 값 참조용
+  const voiceRef = useRef(selectedVoiceURI);
+  useEffect(() => { rateRef.current = rate; }, [rate]);
+  useEffect(() => { voiceRef.current = selectedVoiceURI; }, [selectedVoiceURI]);
+
+  // 현재 시각(분 단위) — 30초마다 갱신해 운행 상태/회차 판정을 최신으로 유지
+  const [nowTick, setNowTick] = useState(() => Date.now());
+  useEffect(() => {
+    const id = setInterval(() => setNowTick(Date.now()), 30000);
+    return () => clearInterval(id);
+  }, []);
 
   // Persist on change
   useEffect(() => LS.set("mode", mode), [mode]);
@@ -270,12 +287,12 @@ function App() {
   const stops = route.stops;
   const trip = route.trips[tripIdx];
 
-  /* --- 운행 회차 수: 6.14(일)은 5회차까지만, 그 외 전체(6회차) --- */
+  /* --- 운행 회차 수: 6.14(일)은 5회차까지만, 그 외 전체(6회차). 자정 경계 대비 nowTick 의존 --- */
   const tripsToday = useMemo(() => {
     const d = new Date();
     if (d.getMonth() === 5 && d.getDate() === 14) return 5;
     return ROUTES.outbound.trips.length;
-  }, []);
+  }, [nowTick]);
 
   /* --- Circular route: next leg computation ---
      outbound n → inbound n (15분 후, 축제장 휴식)
@@ -299,14 +316,15 @@ function App() {
   const goToNextLeg = () => {
     if (!nextLeg) return;
     legSwitchArmedRef.current = false;
+    legDepartCountRef.current = 0;
     setDirection(nextLeg.direction);
     setTripIdx(nextLeg.tripIdx);
     setCurrentIdx(0);
     announcedRef.current = new Set();
   };
 
-  /* --- Mount-only: pick the active or next upcoming leg across all 12 legs --- */
-  useEffect(() => {
+  /* --- 현재 시각 기준으로 운행 중/다음 회차 선택 (마운트 시 1회 + 수동 재설정 버튼) --- */
+  const selectLegByClock = () => {
     const now = new Date();
     const nowMin = now.getHours() * 60 + now.getMinutes();
     const all = [];
@@ -317,21 +335,21 @@ function App() {
       });
     });
     all.sort((a, b) => a.dep - b.dep);
-    // Currently active leg
-    let target = all.find(l => nowMin >= l.dep && nowMin <= l.arr + 5);
-    // Otherwise next upcoming
-    if (!target) target = all.find(l => l.dep > nowMin);
-    // Otherwise first leg of the day
-    if (!target) target = all[0];
+    // 운행 중인 회차 (지연 40분까지 허용)
+    let target = all.find(l => nowMin >= l.dep && nowMin <= l.arr + 40);
+    if (!target) target = all.find(l => l.dep > nowMin); // 다음 예정 회차
+    if (!target) target = all[0];                        // 그 외 첫 회차
     setDirection(target.dir);
     setTripIdx(target.idx);
-  }, []); // mount only
+  };
+  useEffect(() => { selectLegByClock(); }, []); // mount only
 
   /* --- Reset position when leg (direction or trip) changes --- */
   useEffect(() => {
     setCurrentIdx(0);
     announcedRef.current = new Set();
     legSwitchArmedRef.current = false;
+    legDepartCountRef.current = 0;
   }, [direction, tripIdx]);
 
   /* --- Cleanup on unmount --- */
@@ -367,16 +385,43 @@ function App() {
     };
     load();
     window.speechSynthesis.onvoiceschanged = load;
-    return () => { if (window.speechSynthesis) window.speechSynthesis.onvoiceschanged = null; };
+    // iOS는 getVoices()가 처음 비어 있고 onvoiceschanged가 늦거나 안 올 수 있어 재시도
+    const retries = [400, 1200, 3000].map(ms => setTimeout(load, ms));
+    return () => {
+      if (window.speechSynthesis) window.speechSynthesis.onvoiceschanged = null;
+      retries.forEach(clearTimeout);
+    };
   }, []);
+
+  /* --- Wake Lock: 자동 모드 중 화면이 꺼져 음성·GPS가 멈추지 않도록 유지 --- */
+  useEffect(() => {
+    const acquire = async () => {
+      try {
+        if (autoMode && "wakeLock" in navigator && document.visibilityState === "visible") {
+          wakeLockRef.current = await navigator.wakeLock.request("screen");
+          wakeLockRef.current.addEventListener?.("release", () => { wakeLockRef.current = null; });
+        }
+      } catch (_) {}
+    };
+    const onVis = () => { if (document.visibilityState === "visible" && autoMode && !wakeLockRef.current) acquire(); };
+    if (autoMode) acquire();
+    document.addEventListener("visibilitychange", onVis);
+    return () => {
+      document.removeEventListener("visibilitychange", onVis);
+      try { wakeLockRef.current?.release?.(); } catch (_) {}
+      wakeLockRef.current = null;
+    };
+  }, [autoMode]);
 
   const speak = (text) => {
     if (!window.speechSynthesis) { setTtsStatus("unsupported"); return; }
     if (window.speechSynthesis.paused) window.speechSynthesis.resume();
     window.speechSynthesis.cancel();
     const u = new SpeechSynthesisUtterance(text);
-    u.lang = "ko-KR"; u.rate = rate; u.pitch = 1.0;
-    const chosen = voices.find(v => v.voiceURI === selectedVoiceURI)
+    // 최신 속도/음성 사용 (자동 안내가 stale 값으로 말하지 않도록 ref 우선)
+    u.lang = "ko-KR"; u.rate = rateRef.current || rate; u.pitch = 1.0;
+    const wantURI = voiceRef.current || selectedVoiceURI;
+    const chosen = voices.find(v => v.voiceURI === wantURI)
       || voices.find(v => v.lang === "ko-KR" || v.lang.startsWith("ko"));
     if (chosen) u.voice = chosen;
     u.onstart = () => setIsAnnouncing(true);
@@ -388,6 +433,27 @@ function App() {
     utterRef.current = u;
     setTimeout(() => window.speechSynthesis.speak(u), 50);
   };
+
+  /* SpeechSynthesis가 장시간/백그라운드 후 멈추는 버그 방지용 keep-alive */
+  useEffect(() => {
+    if (!window.speechSynthesis) return;
+    const id = setInterval(() => {
+      const s = window.speechSynthesis;
+      if (s.speaking && !s.paused) { s.pause(); s.resume(); } // 큐 유지
+    }, 8000);
+    return () => clearInterval(id);
+  }, []);
+
+  /* 화면 복귀 시 오디오 컨텍스트 재개 (잠금 후 음성/벨 무음 방지) */
+  useEffect(() => {
+    const onVis = () => {
+      if (document.visibilityState !== "visible") return;
+      if (audioCtxRef.current && audioCtxRef.current.state === "suspended") audioCtxRef.current.resume();
+      if (window.speechSynthesis && window.speechSynthesis.paused) window.speechSynthesis.resume();
+    };
+    document.addEventListener("visibilitychange", onVis);
+    return () => document.removeEventListener("visibilitychange", onVis);
+  }, []);
 
   /* Bus arrival chime — two-tone "딩-동" via Web Audio, then speak */
   const playChime = (onDone) => {
@@ -470,7 +536,11 @@ function App() {
       // Terminus — include circular connection info
       const base = `이번 정류장은 ${curSay}입니다. 이번 정류장이 종점입니다. 안전하게 내려주세요.`;
       if (nextLegInfo) {
-        text = `${base} 잠시 후 ${spokenTime(nextLegInfo.departTime)}에 ${nextLegInfo.label} ${nextLegInfo.tripNum}회차 셔틀버스가 출발합니다.`;
+        // 출발 예정 시각이 이미 지났으면(지연 운행) 절대 시각 대신 '잠시 후'로 안내
+        const nowMin = new Date().getHours() * 60 + new Date().getMinutes();
+        const onTime = toMin(nextLegInfo.departTime) >= nowMin;
+        const when = onTime ? `${spokenTime(nextLegInfo.departTime)}에` : "잠시 후";
+        text = `${base} ${when} ${nextLegInfo.label} ${nextLegInfo.tripNum}회차 셔틀버스가 출발합니다.`;
       } else {
         text = `${base} 오늘 운행이 종료되었습니다. 이용해 주셔서 감사합니다.`;
       }
@@ -478,16 +548,18 @@ function App() {
     chimeThenSpeak(text);
   };
 
-  const announce = () => {
-    primeTTS();
-    if (isAnnouncing) { window.speechSynthesis.cancel(); setIsAnnouncing(false); return; }
-    announceStop(currentIdx);
-  };
+  // 탭하면 항상 현재 정류장을 (다시) 안내 — 실수로 한 번 더 눌러도 무음 전환되지 않음
+  const announce = () => { primeTTS(); announceStop(currentIdx); };
+  // 진행 중인 안내를 멈춤 (정지 버튼 전용)
+  const stopAnnounce = () => { if (window.speechSynthesis) window.speechSynthesis.cancel(); setIsAnnouncing(false); };
 
   const next = () => currentIdx < stops.length - 1 && setCurrentIdx(currentIdx + 1);
   const prev = () => currentIdx > 0 && setCurrentIdx(currentIdx - 1);
 
-  const swapDirection = () => setDirection(direction === "outbound" ? "inbound" : "outbound");
+  const swapDirection = () => {
+    setDirection(direction === "outbound" ? "inbound" : "outbound");
+    setTripIdx(t => Math.min(t, tripsToday - 1)); // 일요일 6회차 등 비운행 회차 방지
+  };
 
   const setStopCoordHere = (i) => {
     if (!userPos) { setGpsError("먼저 자동 모드를 켜서 GPS를 활성화하세요"); return; }
@@ -530,7 +602,7 @@ function App() {
         else setGpsError("위치 요청 시간 초과");
         setAutoMode(false);
       },
-      { enableHighAccuracy: true, maximumAge: 2000, timeout: 10000 }
+      { enableHighAccuracy: true, maximumAge: 5000, timeout: 10000 }
     );
     return () => { if (watchIdRef.current !== null) { navigator.geolocation.clearWatch(watchIdRef.current); watchIdRef.current = null; } };
   }, [autoMode, permissionState]);
@@ -550,7 +622,8 @@ function App() {
   const isIOS = /iPad|iPhone|iPod/.test(ua);
   const isAndroid = /Android/.test(ua);
 
-  /* --- Auto announce when entering trigger radius --- */
+  /* --- Auto announce: 반경 내 가장 가까운 '아직 안내 안 한 전방 정류장'을 선택,
+         지나친 정류장은 passed 처리해 건너뜀에서 복구 가능하도록 함 --- */
   useEffect(() => {
     if (!autoMode || !userPos) return;
     let nearestIdx = -1, nearestDist = Infinity;
@@ -561,25 +634,32 @@ function App() {
     }
     if (nearestIdx === -1) return;
     if (nearestDist <= triggerRadius && !announcedRef.current.has(nearestIdx)) {
+      // 건너뛴 앞쪽 정류장들은 지나간 것으로 표시 (이후 재안내 방지)
+      for (let k = currentIdx; k < nearestIdx; k++) announcedRef.current.add(k);
       announcedRef.current.add(nearestIdx);
       setCurrentIdx(nearestIdx);
       // 시작 승강장 안내: 출발지(5·18민주광장 환영 / 축제장 하차 안내)도 자동 방송
       announceStop(nearestIdx);
-      // Arm auto leg-switch once the bus has actually arrived at the terminus
-      if (nearestIdx === stops.length - 1 && nextLeg) legSwitchArmedRef.current = true;
+      // 종점 도착 시 자동 회차 전환 무장
+      if (nearestIdx === stops.length - 1 && nextLeg) { legSwitchArmedRef.current = true; legDepartCountRef.current = 0; }
     }
-  }, [userPos, autoMode, stops, triggerRadius, coords]);
+  }, [userPos, autoMode, stops, triggerRadius, coords, direction, currentIdx]);
 
-  /* --- Auto leg-switch: after arriving at terminus, switch when the bus departs --- */
+  /* --- Auto leg-switch: 종점 도착 후, 연속으로 반경*1.5를 벗어나면 전환 (GPS 노이즈 히스테리시스) --- */
   useEffect(() => {
     if (!autoMode || !autoLegSwitch || !userPos) return;
     if (!isAtTerminus || !nextLeg || !legSwitchArmedRef.current) return;
     const tc = coords[coordKey(direction, stops[stops.length - 1].name)];
     if (!tc) return;
-    if (distanceMeters(userPos, tc) > triggerRadius) goToNextLeg();
+    if (distanceMeters(userPos, tc) > triggerRadius * 1.5) {
+      legDepartCountRef.current += 1;
+      if (legDepartCountRef.current >= 3) goToNextLeg(); // 연속 3회 확인 후 전환
+    } else {
+      legDepartCountRef.current = 0; // 다시 반경 안이면 리셋
+    }
   }, [userPos, autoMode, autoLegSwitch, isAtTerminus, nextLeg, triggerRadius, coords]);
 
-  useEffect(() => { if (!autoMode) { announcedRef.current = new Set(); legSwitchArmedRef.current = false; } }, [autoMode]);
+  useEffect(() => { if (!autoMode) { announcedRef.current = new Set(); legSwitchArmedRef.current = false; legDepartCountRef.current = 0; } }, [autoMode]);
 
   const curStop = stops[currentIdx];
   const nextStop = stops[currentIdx + 1];
@@ -588,14 +668,15 @@ function App() {
   const distToNext = autoMode && userPos && nextCoord ? distanceMeters(userPos, nextCoord) : null;
   const fmtDist = (m) => (m == null ? null : m < 1000 ? `${Math.round(m)}m` : `${(m / 1000).toFixed(2)}km`);
 
-  /* --- Trip status (출발 전/운행 중/종료) --- */
+  /* --- Trip status (출발 전/운행 중/지연/종료) — 지연 운행을 '종료'로 오표시하지 않음 --- */
   const tripStatus = useMemo(() => {
     const now = new Date(); const nowMin = now.getHours() * 60 + now.getMinutes();
     const start = toMin(trip[0]); const end = toMin(trip[trip.length - 1]);
     if (nowMin < start) return { state: "upcoming", label: `${start - nowMin}분 후 출발`, color: "#22d65f" };
-    if (nowMin > end + 5) return { state: "done", label: "운행 종료", color: "#64748b" };
-    return { state: "active", label: "운행 중", color: "#fbbf24" };
-  }, [trip]);
+    if (nowMin <= end + 5) return { state: "active", label: "운행 중", color: "#fbbf24" };
+    if (nowMin <= end + 40) return { state: "active", label: "운행 중(지연)", color: "#fb923c" };
+    return { state: "done", label: "운행 종료", color: "#64748b" };
+  }, [trip, nowTick]);
 
   /* ===== SIMPLE MODE — operator/driver view ===== */
   if (mode === "simple") {
@@ -632,6 +713,33 @@ function App() {
                 <Settings size={16} />
               </button>
             </div>
+          </div>
+
+          {/* Big glanceable status bar */}
+          <div className="px-3 py-2 border-x-2 flex items-center justify-between gap-2"
+            style={{
+              background: isAnnouncing ? "rgba(239,68,68,0.18)"
+                : autoMode ? (userPos ? "rgba(34,214,95,0.15)" : "rgba(251,191,36,0.12)")
+                : "rgba(100,116,139,0.12)",
+              borderColor: "#3a3f54", borderBottom: "1px solid #3a3f54",
+            }}>
+            <div className="flex items-center gap-2 min-w-0">
+              <div className={`w-3 h-3 rounded-full flex-shrink-0 ${isAnnouncing || (autoMode && !userPos) ? "animate-pulse" : ""}`}
+                style={{ background: isAnnouncing ? "#ef4444" : autoMode ? (userPos ? "#22d65f" : "#fbbf24") : "#64748b" }} />
+              <span className="text-base font-bold truncate"
+                style={{ fontFamily: "'Jua', sans-serif",
+                  color: isAnnouncing ? "#fca5a5" : autoMode ? (userPos ? "#22d65f" : "#fbbf24") : "#94a3b8" }}>
+                {isAnnouncing ? "📢 안내 방송 중"
+                  : autoMode ? (userPos ? "GPS 자동 · 위치 정상" : "GPS 자동 · 신호 대기")
+                  : "수동 대기 중"}
+              </span>
+            </div>
+            {autoMode && autoLegSwitch && (
+              <span className="flex-shrink-0 text-[10px] font-bold px-2 py-1 rounded"
+                style={{ background: "rgba(34,214,95,0.2)", color: "#22d65f", fontFamily: "'Jua', sans-serif" }}>
+                자동 전환 ON
+              </span>
+            )}
           </div>
 
           {/* Current stop — BIG */}
@@ -737,45 +845,57 @@ function App() {
             </div>
           )}
 
-          {/* GPS error banner (compact) */}
+          {/* GPS error banner (compact) — 운전 화면에서 바로 재시도 */}
           {(gpsError || permissionState === "denied") && (
             <div className="px-5 py-2 border-x-2 flex items-center gap-2 text-xs"
               style={{ background: "rgba(239,68,68,0.08)", borderColor: "#3a3f54",
                 borderBottom: "1px solid #3a3f54", color: "#fca5a5" }}>
               <AlertCircle size={12} />
               <span className="flex-1">{permissionState === "denied" ? "위치 권한 차단됨" : gpsError}</span>
+              <button onClick={retryPermission} className="text-emerald-400 underline">🔄 다시</button>
               <button onClick={() => setMode("advanced")}
-                className="text-amber-400 underline">설정에서 해결</button>
+                className="text-amber-400 underline">설정</button>
             </div>
           )}
 
-          {/* Controls — big play */}
-          <div className="px-5 py-6 border-2 border-t-0 rounded-b-3xl flex items-center justify-center gap-4"
+          {/* Controls — big announce/replay (prev/next spaced apart to avoid mis-taps) */}
+          <div className="px-5 py-6 border-2 border-t-0 rounded-b-3xl flex flex-col items-center gap-3"
             style={{ background: "linear-gradient(180deg, #1c1f2b 0%, #13151c 100%)", borderColor: "#3a3f54" }}>
-            <button onClick={prev} disabled={currentIdx === 0}
-              className="w-14 h-14 rounded-full flex items-center justify-center disabled:opacity-30"
-              style={{ background: "rgba(251, 191, 36, 0.1)",
-                border: "1px solid rgba(251, 191, 36, 0.3)", color: "#fbbf24" }}>
-              <SkipBack size={22} />
-            </button>
-            <button onClick={announce}
-              className="w-24 h-24 rounded-full flex items-center justify-center relative"
-              style={{
-                background: isAnnouncing ? "linear-gradient(135deg, #ef4444 0%, #dc2626 100%)"
-                  : "linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%)",
-                boxShadow: isAnnouncing ? "0 0 36px rgba(239, 68, 68, 0.6)"
-                  : "0 0 36px rgba(251, 191, 36, 0.5)",
-                color: "#0a0b0f" }}>
-              {isAnnouncing ? <Pause size={36} /> : <Volume2 size={36} />}
-              {isAnnouncing && (<div className="absolute inset-0 rounded-full animate-ping"
-                style={{ background: "rgba(239, 68, 68, 0.4)" }} />)}
-            </button>
-            <button onClick={next} disabled={currentIdx >= stops.length - 1}
-              className="w-14 h-14 rounded-full flex items-center justify-center disabled:opacity-30"
-              style={{ background: "rgba(251, 191, 36, 0.1)",
-                border: "1px solid rgba(251, 191, 36, 0.3)", color: "#fbbf24" }}>
-              <SkipForward size={22} />
-            </button>
+            <div className="flex items-center justify-between w-full">
+              <button onClick={prev} disabled={currentIdx === 0}
+                className="w-14 h-14 rounded-full flex items-center justify-center disabled:opacity-30"
+                style={{ background: "rgba(251, 191, 36, 0.1)",
+                  border: "1px solid rgba(251, 191, 36, 0.3)", color: "#fbbf24" }}>
+                <SkipBack size={22} />
+              </button>
+              <button onClick={announce}
+                className="w-24 h-24 rounded-full flex flex-col items-center justify-center relative"
+                style={{
+                  background: "linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%)",
+                  boxShadow: isAnnouncing ? "0 0 36px rgba(239, 68, 68, 0.6)" : "0 0 36px rgba(251, 191, 36, 0.5)",
+                  color: "#0a0b0f" }}>
+                <Volume2 size={34} />
+                <span className="text-[10px] font-bold mt-0.5" style={{ fontFamily: "'Jua', sans-serif" }}>
+                  {isAnnouncing ? "다시" : "안내"}
+                </span>
+                {isAnnouncing && (<div className="absolute inset-0 rounded-full animate-ping"
+                  style={{ background: "rgba(239, 68, 68, 0.35)" }} />)}
+              </button>
+              <button onClick={next} disabled={currentIdx >= stops.length - 1}
+                className="w-14 h-14 rounded-full flex items-center justify-center disabled:opacity-30"
+                style={{ background: "rgba(251, 191, 36, 0.1)",
+                  border: "1px solid rgba(251, 191, 36, 0.3)", color: "#fbbf24" }}>
+                <SkipForward size={22} />
+              </button>
+            </div>
+            {isAnnouncing && (
+              <button onClick={stopAnnounce}
+                className="px-4 py-1.5 rounded-full text-xs font-bold flex items-center gap-1.5"
+                style={{ background: "rgba(239,68,68,0.15)", color: "#fca5a5",
+                  border: "1px solid rgba(239,68,68,0.4)", fontFamily: "'Jua', sans-serif" }}>
+                <Pause size={12} /> 안내 정지
+              </button>
+            )}
           </div>
 
           {/* Bottom: GPS auto toggle (compact) */}
@@ -800,15 +920,6 @@ function App() {
               {currentIdx + 1}/{stops.length}
             </div>
           </div>
-
-          {/* First-run hint when no coords set */}
-          {Object.keys(coords).length === 0 && (
-            <div className="mt-3 px-3 py-2 rounded-lg text-[11px] text-center"
-              style={{ background: "rgba(251, 191, 36, 0.08)", color: "#fbbf24",
-                border: "1px solid rgba(251, 191, 36, 0.2)" }}>
-              💡 처음이라면 ⚙️ 설정에서 정류장별로 GPS 좌표를 한 번씩 등록해주세요
-            </div>
-          )}
         </div>
       </div>
     );
@@ -901,6 +1012,12 @@ function App() {
               </button>
             ))}
           </div>
+          <button onClick={selectLegByClock}
+            className="mt-2 w-full py-1.5 rounded text-[11px] flex items-center justify-center gap-1"
+            style={{ background: "rgba(100,116,139,0.12)", color: "#94a3b8", border: "1px solid #3a3f54",
+              fontFamily: "'Jua', sans-serif" }}>
+            <Clock size={11} /> 현재 시각 기준으로 회차 재설정
+          </button>
         </div>
 
         {/* LED Display */}
@@ -1234,7 +1351,7 @@ function App() {
             style={{ background: "rgba(251, 191, 36, 0.1)", border: "1px solid rgba(251, 191, 36, 0.3)", color: "#fbbf24" }}>
             <SkipBack size={18} />
           </button>
-          <button onClick={announce}
+          <button onClick={isAnnouncing ? stopAnnounce : announce}
             className="w-20 h-20 rounded-full flex items-center justify-center relative"
             style={{
               background: isAnnouncing ? "linear-gradient(135deg, #ef4444 0%, #dc2626 100%)"
@@ -1318,6 +1435,14 @@ function App() {
 }
 
 ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+<script>
+  /* 첫 로딩 후 오프라인 동작을 위한 서비스워커 등록 */
+  if ("serviceWorker" in navigator) {
+    window.addEventListener("load", () => {
+      navigator.serviceWorker.register("sw.js").catch(() => {});
+    });
+  }
 </script>
 </body>
 </html>
