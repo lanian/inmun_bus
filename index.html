@@ -407,6 +407,11 @@ function App() {
   };
   useEffect(() => { selectLegByClock(); }, []); // mount only
 
+  /* --- 운행 회차 수가 줄면(예: 6.14 선택) 현재 회차를 범위 안으로 보정 --- */
+  useEffect(() => {
+    if (tripIdx > tripsToday - 1) setTripIdx(tripsToday - 1);
+  }, [tripsToday, tripIdx]);
+
   /* --- Reset position when leg (direction or trip) changes --- */
   useEffect(() => {
     setCurrentIdx(0);
