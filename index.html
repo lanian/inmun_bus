@@ -413,34 +413,56 @@ function App() {
     };
   }, [autoMode]);
 
+  /* 긴 문장은 브라우저가 ~15초에서 끊으므로 문장·쉼표 단위로 짧게 분할 */
+  const chunkText = (text) => {
+    const out = [];
+    (text.match(/[^.!?。]+[.!?。]?/g) || [text]).forEach(s => {
+      let seg = s.trim(); if (!seg) return;
+      if (seg.length <= 110) { out.push(seg); return; }
+      let buf = "";
+      seg.split(/,\s*/).forEach(part => {
+        if (buf && (buf + ", " + part).length > 110) { out.push(buf); buf = part; }
+        else buf = buf ? buf + ", " + part : part;
+      });
+      if (buf) out.push(buf);
+    });
+    return out.length ? out : [text];
+  };
+
   const speak = (text) => {
     if (!window.speechSynthesis) { setTtsStatus("unsupported"); return; }
     if (window.speechSynthesis.paused) window.speechSynthesis.resume();
     window.speechSynthesis.cancel();
-    const u = new SpeechSynthesisUtterance(text);
-    // 최신 속도/음성 사용 (자동 안내가 stale 값으로 말하지 않도록 ref 우선)
-    u.lang = "ko-KR"; u.rate = rateRef.current || rate; u.pitch = 1.0;
     const wantURI = voiceRef.current || selectedVoiceURI;
     const chosen = voices.find(v => v.voiceURI === wantURI)
       || voices.find(v => v.lang === "ko-KR" || v.lang.startsWith("ko"));
-    if (chosen) u.voice = chosen;
-    u.onstart = () => setIsAnnouncing(true);
-    u.onend = () => setIsAnnouncing(false);
-    u.onerror = (e) => {
-      setIsAnnouncing(false);
-      if (e.error && e.error !== "interrupted" && e.error !== "canceled") setTtsStatus("error");
-    };
-    utterRef.current = u;
-    setTimeout(() => window.speechSynthesis.speak(u), 50);
+    const parts = chunkText(text);
+    // cancel() 직후 약간의 지연을 둔 뒤 분할 발화를 순차 큐잉
+    setTimeout(() => {
+      parts.forEach((p, i) => {
+        const u = new SpeechSynthesisUtterance(p);
+        u.lang = "ko-KR"; u.rate = rateRef.current || rate; u.pitch = 1.0;
+        if (chosen) u.voice = chosen;
+        if (i === 0) u.onstart = () => setIsAnnouncing(true);
+        if (i === parts.length - 1) u.onend = () => setIsAnnouncing(false);
+        u.onerror = (e) => {
+          if (e.error && e.error !== "interrupted" && e.error !== "canceled") {
+            setIsAnnouncing(false); setTtsStatus("error");
+          }
+        };
+        utterRef.current = u;
+        window.speechSynthesis.speak(u);
+      });
+    }, 60);
   };
 
-  /* SpeechSynthesis가 장시간/백그라운드 후 멈추는 버그 방지용 keep-alive */
+  /* SpeechSynthesis가 장시간 발화 중 멈추는 크롬 버그 방지 — pause 없이 resume만 (모바일 안전) */
   useEffect(() => {
     if (!window.speechSynthesis) return;
     const id = setInterval(() => {
       const s = window.speechSynthesis;
-      if (s.speaking && !s.paused) { s.pause(); s.resume(); } // 큐 유지
-    }, 8000);
+      if (s.speaking && !s.paused) s.resume();
+    }, 10000);
     return () => clearInterval(id);
   }, []);
 
