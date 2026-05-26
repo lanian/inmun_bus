@@ -127,6 +127,15 @@ const ROUTES = {
   },
 };
 
+/* 축제 홍보 안내 — 제4회 무등산 인문축제 '무등생각' (6.13~14, 증심사 일원) */
+const FESTIVAL = {
+  // 축제장 방향 출발지(5·18민주광장)에서 — 환영 + 축제 소개
+  welcome: "무등산 인문축제, 무등생각 셔틀버스입니다. 이용해 주셔서 감사합니다. 이 버스는 축제장으로 향합니다. 제4회 무등산 인문축제 무등생각은, 생각을 끄고 생각을 켜다를 주제로 무등산 증심사 일원에서 열립니다.",
+  // 축제장 방향 중간 정류장에서 — 짧은 홍보
+  mid: "이 셔틀은 무등산 인문축제 무등생각 축제장으로 향하고 있습니다. 숲속 명상과 음악, 영화 등 다양한 인문 프로그램이 여러분을 기다립니다.",
+  midStop: "홍림교", // 중간 홍보를 내보낼 정류장
+};
+
 /* localStorage helpers — survive across reloads */
 const LS = {
   get: (k, d) => { try { const v = localStorage.getItem("shuttle:" + k); return v == null ? d : v; } catch (_) { return d; } },
@@ -405,7 +414,14 @@ function App() {
     const cur = stops[idx]; if (!cur) return;
     const nxt = stops[idx + 1];
     const curSay = spokenName(cur.name);
-    // 출발(시작) 승강장 — 도착 안내 대신 출발 안내
+    // 축제장 방향 출발지(5·18민주광장) — 축제 환영·홍보 안내
+    if (direction === "outbound" && idx === 0) {
+      let t = FESTIVAL.welcome;
+      if (nxt) t += ` 다음 정류장은 ${spokenName(nxt.name)}입니다.`;
+      chimeThenSpeak(t);
+      return;
+    }
+    // 그 외 출발(시작) 승강장 — 도착 안내 대신 출발 안내
     if (idx === 0 && nxt) {
       chimeThenSpeak(`잠시 후 출발합니다. 다음 정류장은 ${spokenName(nxt.name)}입니다.`);
       return;
@@ -413,6 +429,8 @@ function App() {
     let text;
     if (nxt) {
       text = `이번 정류장은 ${curSay}, ${curSay}입니다. 다음 정류장은 ${spokenName(nxt.name)}입니다.`;
+      // 축제장 방향 중간 정류장 — 축제 홍보 추가
+      if (direction === "outbound" && cur.name === FESTIVAL.midStop) text += ` ${FESTIVAL.mid}`;
     } else {
       // Terminus — include circular connection info
       const base = `이번 정류장은 ${curSay}입니다. 이번 정류장이 종점입니다. 안전하게 내려주세요.`;
@@ -510,8 +528,8 @@ function App() {
     if (nearestDist <= triggerRadius && !announcedRef.current.has(nearestIdx)) {
       announcedRef.current.add(nearestIdx);
       setCurrentIdx(nearestIdx);
-      // 시작 승강장(출발지)은 자동 방송에서 생략 — 다음 정류장부터 안내
-      if (nearestIdx !== 0) announceStop(nearestIdx);
+      // 시작 승강장은 자동 방송에서 생략하되, 축제장 방향 출발지(5·18민주광장)는 축제 환영 안내
+      if (nearestIdx !== 0 || direction === "outbound") announceStop(nearestIdx);
       // Arm auto leg-switch once the bus has actually arrived at the terminus
       if (nearestIdx === stops.length - 1 && nextLeg) legSwitchArmedRef.current = true;
     }
