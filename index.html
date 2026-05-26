@@ -295,6 +295,7 @@ function App() {
   const [showHelp, setShowHelp] = useState(false);
   const [autoLegSwitch, setAutoLegSwitch] = useState(() => LS.get("autoleg", "0") === "1");
   const [festivalDay, setFestivalDay] = useState(() => LS.get("festday", "auto")); // auto|day1|day2
+  const [progTimeBase, setProgTimeBase] = useState(() => LS.get("progbase", "now")); // now|trip
 
   // TTS
   const [voices, setVoices] = useState([]);
@@ -331,6 +332,7 @@ function App() {
   useEffect(() => LS.set("chime", chimeEnabled ? "1" : "0"), [chimeEnabled]);
   useEffect(() => LS.set("autoleg", autoLegSwitch ? "1" : "0"), [autoLegSwitch]);
   useEffect(() => LS.set("festday", festivalDay), [festivalDay]);
+  useEffect(() => LS.set("progbase", progTimeBase), [progTimeBase]);
 
   // 안내에 사용할 축제일 결정 (수동 지정 우선, 아니면 오늘 날짜로 판단)
   const resolveFestivalDay = () => {
@@ -609,10 +611,15 @@ function App() {
       if (direction === "outbound") {
         if (FESTIVAL.promos[cur.name]) { chimeThenSpeak(FESTIVAL.promos[cur.name]); return; }
         if (cur.name === FESTIVAL.programStop) {
-          // 현재 시각 + 이 정류장에서 축제장까지 남은 운행 시간 = 도착 예정 시각 기준
-          const now = new Date();
-          const remain = Math.max(0, toMin(trip[trip.length - 1]) - toMin(trip[idx]));
-          const arrivalMin = now.getHours() * 60 + now.getMinutes() + remain;
+          // 기준 시각: 시간표 기준이면 이 회차의 축제장 도착 시각, 아니면 현재 시각 + 남은 운행 시간
+          let arrivalMin;
+          if (progTimeBase === "trip") {
+            arrivalMin = toMin(trip[trip.length - 1]);
+          } else {
+            const now = new Date();
+            const remain = Math.max(0, toMin(trip[trip.length - 1]) - toMin(trip[idx]));
+            arrivalMin = now.getHours() * 60 + now.getMinutes() + remain;
+          }
           chimeThenSpeak(festivalProgramText(resolveFestivalDay(), arrivalMin));
           return;
         }
@@ -1407,6 +1414,26 @@ function App() {
                     background: festivalDay === v ? "#fbbf24" : "rgba(251,191,36,0.08)",
                     color: festivalDay === v ? "#0a0b0f" : "#fbbf24",
                     border: `1px solid ${festivalDay === v ? "#fbbf24" : "rgba(251,191,36,0.2)"}`,
+                    fontFamily: "'Jua', sans-serif" }}>
+                  {lbl}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="flex items-center justify-between gap-3">
+            <div className="min-w-0">
+              <div className="text-xs text-slate-400">프로그램 기준 시각</div>
+              <div className="text-[10px] text-slate-600">실시간은 지금 시각, 시간표는 이 회차의 축제장 도착 시각 기준</div>
+            </div>
+            <div className="flex gap-1 flex-shrink-0">
+              {[["now","실시간"],["trip","시간표"]].map(([v, lbl]) => (
+                <button key={v} onClick={() => setProgTimeBase(v)}
+                  className="px-2 py-1 rounded text-[11px] font-bold"
+                  style={{
+                    background: progTimeBase === v ? "#fbbf24" : "rgba(251,191,36,0.08)",
+                    color: progTimeBase === v ? "#0a0b0f" : "#fbbf24",
+                    border: `1px solid ${progTimeBase === v ? "#fbbf24" : "rgba(251,191,36,0.2)"}`,
                     fontFamily: "'Jua', sans-serif" }}>
                   {lbl}
                 </button>
