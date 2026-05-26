@@ -1,7 +1,7 @@
 /* 무등생각 셔틀 — 첫 로딩 후 오프라인 동작을 위한 캐시 서비스워커.
    앱 셸(HTML)은 네트워크 우선, 그 외 정적 자원·지도 타일은 캐시 우선(stale).
    축제장 와이파이/신호가 약해도 한 번 로딩해 두면 계속 동작하도록 함. */
-const CACHE = "muteung-shuttle-v2";
+const CACHE = "muteung-shuttle-v3";
 const SHELL = ["./", "./index.html", "./manifest.webmanifest"];
 
 self.addEventListener("install", (e) => {
@@ -26,10 +26,10 @@ self.addEventListener("fetch", (e) => {
   if (req.method !== "GET") return;
   const url = new URL(req.url);
 
-  // 앱 셸: 네트워크 우선, 실패 시 캐시 (최신 코드 우선 + 오프라인 폴백)
+  // 앱 셸: 네트워크 우선 + HTTP 캐시 우회(no-store)로 항상 최신 HTML, 실패 시 캐시 폴백
   if (isShell(url) || req.mode === "navigate") {
     e.respondWith(
-      fetch(req)
+      fetch(req, { cache: "no-store" })
         .then((res) => {
           const copy = res.clone();
           caches.open(CACHE).then((c) => c.put("./index.html", copy)).catch(() => {});
