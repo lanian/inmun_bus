@@ -137,7 +137,7 @@ const FESTIVAL = {
   welcome: "무등산 인문축제, 무등생각 셔틀버스입니다. 이용해 주셔서 감사합니다. 이 버스는 축제장으로 향합니다. 제4회 무등산 인문축제 무등생각은, 생각을 끄고 생각을 켜다를 주제로 무등산 증심사 일원에서 열립니다.",
   // 축제장 방향 중간 정류장에서 — 짧은 홍보
   mid: "이 셔틀은 무등산 인문축제 무등생각 축제장으로 향하고 있습니다. 숲속 명상과 음악, 영화 등 다양한 인문 프로그램이 여러분을 기다립니다.",
-  midStop: "홍림교", // 중간 홍보를 내보낼 정류장
+  midStop: "학동증심사역", // 중간 홍보를 내보낼 정류장 (프로그램 안내 정류장과 간격 확보)
   // 축제장 도착 전 정류장에서 — 그날 주요 프로그램 음성 안내 (종점 안내와 겹치지 않도록 한 정거장 앞당김 + 간결화)
   programStop: "운림중학교",
   programs: {
@@ -527,11 +527,14 @@ function App() {
     }
     let text;
     if (nxt) {
+      // 축제장 방향: 대부분 종점까지 가므로 일반 정류장 도착 안내는 생략하고 축제 홍보/프로그램만
+      if (direction === "outbound") {
+        if (cur.name === FESTIVAL.midStop) { chimeThenSpeak(FESTIVAL.mid); return; }
+        if (cur.name === FESTIVAL.programStop) { chimeThenSpeak(festivalProgramText()); return; }
+        return; // 그 외 중간 정류장은 안내 없음
+      }
+      // 민주광장 방향: 하차가 많으므로 정류장 안내 전체 유지
       text = `이번 정류장은 ${curSay}, ${curSay}입니다. 다음 정류장은 ${spokenName(nxt.name)}입니다.`;
-      // 축제장 방향 중간 정류장 — 축제 홍보 추가
-      if (direction === "outbound" && cur.name === FESTIVAL.midStop) text += ` ${FESTIVAL.mid}`;
-      // 축제장 도착 직전 정류장 — 그날 주요 프로그램 안내
-      if (direction === "outbound" && cur.name === FESTIVAL.programStop) text += ` ${festivalProgramText()}`;
     } else {
       // Terminus — include circular connection info
       const base = `이번 정류장은 ${curSay}입니다. 이번 정류장이 종점입니다. 안전하게 내려주세요.`;
