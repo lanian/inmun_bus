@@ -181,7 +181,7 @@ const FESTIVAL = {
     ],
   },
   // 시각과 무관하게 온종일(10시~18시) 즐기는 프로그램
-  allday: "이 밖에도 동네책방이 큐레이션한 1187 라이브러리 서가 전시, 무등산을 담은 체험존과 인문 팝업 스토어, 한강 작가에게 엽서 쓰기, 생각의 통로를 채우는 무등 버스킹, 그리고 곳곳에 숨은 명언을 찾는 문장 보물찾기를 온종일 즐기실 수 있습니다. 의재로의 다섯 개 미술관에서도 특별 전시와 체험이 함께 열립니다.",
+  allday: "동네책방이 큐레이션한 1187 라이브러리 서가 전시, 무등산을 담은 체험존과 인문 팝업 스토어, 한강 작가에게 엽서 쓰기, 생각의 통로를 채우는 무등 버스킹, 그리고 곳곳에 숨은 명언을 찾는 문장 보물찾기는 온종일 즐기실 수 있습니다. 의재로의 다섯 개 미술관에서도 특별 전시와 체험이 함께 열립니다.",
   // 축제 기간 외 기본 안내
   defaultProgram: "잠시 후 무등생각 축제장에 도착합니다. 이곳에서는 편백숲 디지털 디톡스와 증심사 명상, 한강 작가에게 엽서 쓰기, 무등 버스킹, 미술관 특별 전시 등 다양한 인문 프로그램을 즐기실 수 있습니다. 천천히 둘러보며 편안한 시간 보내세요.",
 };
@@ -197,12 +197,12 @@ const festivalProgramText = (dayKey, refMin) => {
   const intro = "잠시 후, 무등생각 축제장에 도착합니다. ";
   const upcoming = list.filter(p => toMin(p.t) >= nowMin);
   if (upcoming.length === 0) {
-    return intro + "오늘 준비된 주요 프로그램은 대부분 마무리되었어요. " + FESTIVAL.allday + " 무등산에서 천천히, 편안한 시간 보내세요.";
+    return intro + "오늘 준비된 주요 프로그램은 대부분 마무리되었어요. 그래도 " + FESTIVAL.allday + " 무등산에서 천천히, 편안한 시간 보내세요.";
   }
   const shown = upcoming.slice(0, 6); // 안내가 길어지지 않도록 다가오는 6개까지만
   const items = shown.map(p => `${spokenClock(p.t)}에는 ${p.d}`).join(", ");
   const more = upcoming.length > shown.length ? " 이 외에도 더 많은 프로그램이 여러분을 기다리고 있어요." : "";
-  return intro + "도착하시면, " + items + " 등 다양한 프로그램을 만나보실 수 있습니다." + more + " " + FESTIVAL.allday + " 오늘 무등생각과 함께, 마음을 쉬어가는 하루 보내세요.";
+  return intro + "도착하시면, " + items + " 등 다양한 프로그램을 만나보실 수 있습니다." + more + " 그리고 " + FESTIVAL.allday + " 오늘 무등생각과 함께, 마음을 쉬어가는 하루 보내세요.";
 };
 
 /* localStorage helpers — survive across reloads */
