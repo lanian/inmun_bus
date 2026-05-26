@@ -194,15 +194,15 @@ const festivalProgramText = (dayKey, refMin) => {
   if (!list) return FESTIVAL.defaultProgram;
   const d = new Date();
   const nowMin = typeof refMin === "number" ? refMin : d.getHours() * 60 + d.getMinutes();
-  const intro = "잠시 후 무등생각 축제장에 도착합니다. ";
+  const intro = "잠시 후, 무등생각 축제장에 도착합니다. ";
   const upcoming = list.filter(p => toMin(p.t) >= nowMin);
   if (upcoming.length === 0) {
-    return intro + "오늘 예정된 주요 프로그램은 대부분 마무리되었습니다. " + FESTIVAL.allday + " 천천히 둘러보며 편안한 시간 보내세요.";
+    return intro + "오늘 준비된 주요 프로그램은 대부분 마무리되었어요. " + FESTIVAL.allday + " 무등산에서 천천히, 편안한 시간 보내세요.";
   }
   const shown = upcoming.slice(0, 6); // 안내가 길어지지 않도록 다가오는 6개까지만
-  const items = shown.map(p => `${spokenClock(p.t)} ${p.d}`).join(", ");
-  const more = upcoming.length > shown.length ? " 그 밖에도 다양한 프로그램이 준비되어 있습니다." : "";
-  return intro + "지금부터 즐기실 수 있는 프로그램을 안내해 드릴게요. " + items + " 등이 준비되어 있습니다." + more + " " + FESTIVAL.allday + " 즐거운 시간 보내세요.";
+  const items = shown.map(p => `${spokenClock(p.t)}에는 ${p.d}`).join(", ");
+  const more = upcoming.length > shown.length ? " 이 외에도 더 많은 프로그램이 여러분을 기다리고 있어요." : "";
+  return intro + "도착하시면, " + items + " 등 다양한 프로그램을 만나보실 수 있습니다." + more + " " + FESTIVAL.allday + " 오늘 무등생각과 함께, 마음을 쉬어가는 하루 보내세요.";
 };
 
 /* localStorage helpers — survive across reloads */
