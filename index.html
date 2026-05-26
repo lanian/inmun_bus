@@ -447,6 +447,13 @@ function App() {
       chimeThenSpeak(t);
       return;
     }
+    // 민주광장 방향 출발지(축제장) — 하차 안내 포함
+    if (direction === "inbound" && idx === 0) {
+      let t = "민주광장 방향 셔틀버스입니다. 내리실 분은 도착하실 정류장을 미리 기사님께 말씀해 주시기 바랍니다.";
+      if (nxt) t += ` 다음 정류장은 ${spokenName(nxt.name)}입니다.`;
+      chimeThenSpeak(t);
+      return;
+    }
     // 그 외 출발(시작) 승강장 — 도착 안내 대신 출발 안내
     if (idx === 0 && nxt) {
       chimeThenSpeak(`잠시 후 출발합니다. 다음 정류장은 ${spokenName(nxt.name)}입니다.`);
@@ -556,8 +563,8 @@ function App() {
     if (nearestDist <= triggerRadius && !announcedRef.current.has(nearestIdx)) {
       announcedRef.current.add(nearestIdx);
       setCurrentIdx(nearestIdx);
-      // 시작 승강장은 자동 방송에서 생략하되, 축제장 방향 출발지(5·18민주광장)는 축제 환영 안내
-      if (nearestIdx !== 0 || direction === "outbound") announceStop(nearestIdx);
+      // 시작 승강장 안내: 출발지(5·18민주광장 환영 / 축제장 하차 안내)도 자동 방송
+      announceStop(nearestIdx);
       // Arm auto leg-switch once the bus has actually arrived at the terminus
       if (nearestIdx === stops.length - 1 && nextLeg) legSwitchArmedRef.current = true;
     }
