@@ -38,7 +38,7 @@
 
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef, useMemo } = React;
-const BUILD = "b18"; /* 화면 우하단 표시 — 최신 배포 확인용 */
+const BUILD = "b19"; /* 화면 우하단 표시 — 최신 배포 확인용 */
 
 /* Icons */
 const Svg = ({ size = 16, children, ...rest }) => (
@@ -214,11 +214,13 @@ const LS = {
   setJSON: (k, v) => { try { localStorage.setItem("shuttle:" + k, JSON.stringify(v)); } catch (_) {} },
 };
 
-/* Leaflet map picker — click or drag pin to choose a coordinate */
-function MapPicker({ lat, lng, onPick }) {
+/* Leaflet map picker — click or drag pin to choose a coordinate.
+   radius(m): 자동 안내 시작 반경을 원으로 표시 */
+function MapPicker({ lat, lng, radius, onPick }) {
   const elRef = useRef(null);
   const mapRef = useRef(null);
   const markerRef = useRef(null);
+  const circleRef = useRef(null);
 
   useEffect(() => {
     if (!window.L || !elRef.current || mapRef.current) return;
@@ -232,12 +234,17 @@ function MapPicker({ lat, lng, onPick }) {
       shadowUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png",
       iconSize: [25, 41], iconAnchor: [12, 41],
     });
+    const circle = window.L.circle([lat, lng], {
+      radius: radius || 150, color: "#22d65f", weight: 1.5,
+      fillColor: "#22d65f", fillOpacity: 0.12,
+    }).addTo(map);
     const marker = window.L.marker([lat, lng], { draggable: true, icon }).addTo(map);
-    marker.on("dragend", () => { const p = marker.getLatLng(); onPick(p.lat, p.lng); });
-    map.on("click", (e) => { marker.setLatLng(e.latlng); onPick(e.latlng.lat, e.latlng.lng); });
-    mapRef.current = map; markerRef.current = marker;
+    const move = (la, ln) => { circle.setLatLng([la, ln]); onPick(la, ln); };
+    marker.on("dragend", () => { const p = marker.getLatLng(); move(p.lat, p.lng); });
+    map.on("click", (e) => { marker.setLatLng(e.latlng); move(e.latlng.lat, e.latlng.lng); });
+    mapRef.current = map; markerRef.current = marker; circleRef.current = circle;
     setTimeout(() => map.invalidateSize(), 80);
-    return () => { map.remove(); mapRef.current = null; markerRef.current = null; };
+    return () => { map.remove(); mapRef.current = null; markerRef.current = null; circleRef.current = null; };
   }, []);
 
   // Sync external (manual-input) coordinate changes onto the map
@@ -246,9 +253,15 @@ function MapPicker({ lat, lng, onPick }) {
     const c = markerRef.current.getLatLng();
     if (Math.abs(c.lat - lat) > 1e-7 || Math.abs(c.lng - lng) > 1e-7) {
       markerRef.current.setLatLng([lat, lng]);
+      circleRef.current?.setLatLng([lat, lng]);
       mapRef.current.panTo([lat, lng]);
     }
   }, [lat, lng]);
+
+  // 반경 변경 시 원 갱신
+  useEffect(() => {
+    if (circleRef.current && radius) circleRef.current.setRadius(radius);
+  }, [radius]);
 
   if (!window.L) {
     return (
@@ -1551,8 +1564,9 @@ function App() {
               </div>
               <button onClick={() => setEditing(null)} className="text-slate-400 hover:text-amber-400 text-lg leading-none px-1">×</button>
             </div>
-            <div className="text-[11px] text-slate-500">지도를 탭하거나 핀을 끌어 위치를 지정하세요. 좌표를 직접 입력해도 됩니다.</div>
+            <div className="text-[11px] text-slate-500">지도를 탭하거나 핀을 끌어 위치를 지정하세요. <span style={{ color: "#22d65f" }}>초록 원</span>은 자동 안내가 시작되는 반경({triggerRadius}m)입니다.</div>
             <MapPicker lat={parseFloat(editing.lat) || 35.130} lng={parseFloat(editing.lng) || 126.940}
+              radius={triggerRadius}
               onPick={(la, ln) => setEditing(e => ({ ...e, lat: la, lng: ln }))} />
             <div className="flex gap-2">
               <div className="flex-1">
