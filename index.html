@@ -61,6 +61,9 @@ function distanceMeters(a, b) {
 /* Time helper: HH:MM → minutes since midnight */
 const toMin = (hm) => { const [h, m] = hm.split(":").map(Number); return h * 60 + m; };
 
+/* Spoken-name helper — TTS reads "5·18" oddly, normalize before speaking */
+const spokenName = (name) => (name || "").replace(/5·18/g, "오일팔");
+
 /* Route data — 제4회 동구 무등산 인문축제 셔틀 */
 const ROUTES = {
   outbound: {
@@ -282,12 +285,13 @@ function App() {
   const announceStop = (idx) => {
     const cur = stops[idx]; if (!cur) return;
     const nxt = stops[idx + 1];
+    const curSay = spokenName(cur.name);
     let text;
     if (nxt) {
-      text = `이번 정류장은 ${cur.name}, ${cur.name}입니다. 다음 정류장은 ${nxt.name}입니다.`;
+      text = `이번 정류장은 ${curSay}, ${curSay}입니다. 다음 정류장은 ${spokenName(nxt.name)}입니다.`;
     } else {
       // Terminus — include circular connection info
-      const base = `이번 정류장은 ${cur.name}입니다. 이번 정류장이 종점입니다. 안전하게 내려주세요.`;
+      const base = `이번 정류장은 ${curSay}입니다. 이번 정류장이 종점입니다. 안전하게 내려주세요.`;
       if (nextLegInfo) {
         text = `${base} 잠시 후 ${nextLegInfo.departTime}에 ${nextLegInfo.label} ${nextLegInfo.tripNum}회차 셔틀버스가 출발합니다.`;
       } else {
