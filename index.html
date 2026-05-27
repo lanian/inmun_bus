@@ -38,7 +38,7 @@
 
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef, useMemo } = React;
-const BUILD = "b24"; /* 화면 우하단 표시 — 최신 배포 확인용 */
+const BUILD = "b25"; /* 화면 우하단 표시 — 최신 배포 확인용 */
 
 /* Icons */
 const Svg = ({ size = 16, children, ...rest }) => (
@@ -333,6 +333,7 @@ function App() {
   const audioCtxRef = useRef(null);
   const legSwitchArmedRef = useRef(false);
   const legDepartCountRef = useRef(0);     // 종점 이탈 연속 카운트 (자동 전환 히스테리시스)
+  const resetStopRef = useRef(null);       // 레그 변경 시 currentIdx를 0이 아닌 특정 정류장으로 설정(GPS 스냅)
   const wakeLockRef = useRef(null);
   const rateRef = useRef(rate);            // 자동 안내 시 최신 값 참조용
   const voiceRef = useRef(selectedVoiceURI);
@@ -425,8 +426,30 @@ function App() {
     let target = all.find(l => nowMin >= l.dep && nowMin <= l.arr + 40);
     if (!target) target = all.find(l => l.dep > nowMin); // 다음 예정 회차
     if (!target) target = all[0];                        // 그 외 첫 회차
+
+    // GPS가 있으면 그 방향에서 현재 위치와 가장 가까운 정류장을 현재 승강장으로 설정
+    let ni = 0;
+    if (userPos) {
+      let bd = Infinity;
+      ROUTES[target.dir].stops.forEach((s, i) => {
+        const c = coords[coordKey(target.dir, s.name)];
+        if (!c) return;
+        const d = distanceMeters(userPos, c);
+        if (d < bd) { bd = d; ni = i; }
+      });
+    }
+    const sameLeg = direction === target.dir && tripIdx === target.idx;
+    resetStopRef.current = ni;
     setDirection(target.dir);
     setTripIdx(target.idx);
+    if (sameLeg) {
+      // 레그가 그대로면 리셋 effect가 안 돌므로 직접 적용
+      setCurrentIdx(ni);
+      const set = new Set();
+      for (let k = 0; k < ni; k++) set.add(k);
+      announcedRef.current = set;
+      resetStopRef.current = null;
+    }
   };
   useEffect(() => { selectLegByClock(); }, []); // mount only
 
@@ -435,10 +458,15 @@ function App() {
     if (tripIdx > tripsToday - 1) setTripIdx(tripsToday - 1);
   }, [tripsToday, tripIdx]);
 
-  /* --- Reset position when leg (direction or trip) changes --- */
+  /* --- Reset position when leg (direction or trip) changes ---
+     resetStopRef가 지정돼 있으면(GPS 스냅) 그 정류장으로, 아니면 0(출발지)으로 --- */
   useEffect(() => {
-    setCurrentIdx(0);
-    announcedRef.current = new Set();
+    const ni = resetStopRef.current != null ? resetStopRef.current : 0;
+    setCurrentIdx(ni);
+    const set = new Set();
+    for (let k = 0; k < ni; k++) set.add(k); // 지나온 정류장은 안내 완료 처리
+    announcedRef.current = set;
+    resetStopRef.current = null;
     legSwitchArmedRef.current = false;
     legDepartCountRef.current = 0;
   }, [direction, tripIdx]);
@@ -766,6 +794,7 @@ function App() {
   // 멘트(안내 문구) 백업·복원
   const [mentBackup, setMentBackup] = useState(null);
   const [mentMsg, setMentMsg] = useState("");
+  const [showTimetable, setShowTimetable] = useState(false);
   const openMentBackup = () => { setMentMsg(""); setMentBackup(JSON.stringify(ments, null, 2)); };
   const copyMent = () => {
     try { navigator.clipboard.writeText(mentBackup); setMentMsg("클립보드에 복사했어요"); }
@@ -1136,13 +1165,6 @@ function App() {
               {currentIdx + 1}/{stops.length} · {tripsToday}회 · {BUILD}
             </div>
           </div>
-
-          {/* 화면 꺼짐 주의 안내 */}
-          <div className="mt-3 px-3 py-2 rounded-lg text-[11px] text-center leading-relaxed"
-            style={{ background: "rgba(251, 191, 36, 0.08)", color: "#fcd34d",
-              border: "1px solid rgba(251, 191, 36, 0.2)" }}>
-            💡 운행 중에는 화면을 끄지 말고 켜 두세요. 화면이 꺼지거나 다른 앱으로 전환하면 음성과 GPS가 멈춥니다. (기기 설정에서 자동 잠금을 ‘안 함’으로 두시는 걸 권장)
-          </div>
         </div>
       </div>
     );
@@ -1238,12 +1260,20 @@ function App() {
               </button>
             ))}
           </div>
-          <button onClick={selectLegByClock}
-            className="mt-2 w-full py-1.5 rounded text-[11px] flex items-center justify-center gap-1"
-            style={{ background: "rgba(100,116,139,0.12)", color: "#94a3b8", border: "1px solid #3a3f54",
-              fontFamily: "'Jua', sans-serif" }}>
-            <Clock size={11} /> 현재 시각 기준으로 회차 재설정
-          </button>
+          <div className="mt-2 flex gap-1">
+            <button onClick={selectLegByClock}
+              className="flex-1 py-1.5 rounded text-[11px] flex items-center justify-center gap-1"
+              style={{ background: "rgba(100,116,139,0.12)", color: "#94a3b8", border: "1px solid #3a3f54",
+                fontFamily: "'Jua', sans-serif" }}>
+              <Clock size={11} /> 현재 시각·위치 기준 재설정
+            </button>
+            <button onClick={() => setShowTimetable(true)}
+              className="flex-1 py-1.5 rounded text-[11px] flex items-center justify-center gap-1"
+              style={{ background: "rgba(251,191,36,0.1)", color: "#fbbf24", border: "1px solid rgba(251,191,36,0.3)",
+                fontFamily: "'Jua', sans-serif" }}>
+              🕘 시간표
+            </button>
+          </div>
         </div>
 
         {/* LED Display */}
@@ -1653,6 +1683,55 @@ function App() {
           <div className="text-slate-500 mt-1">※ 6.13.(토) 1~6회차 · 6.14.(일) 1~5회차 운영</div>
         </div>
       </div>
+
+      {/* 시간표 한눈에 보기 모달 */}
+      {showTimetable && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          style={{ background: "rgba(0,0,0,0.8)" }} onClick={() => setShowTimetable(false)}>
+          <div className="w-full max-w-md rounded-2xl border-2 p-4 space-y-3 max-h-[85vh] overflow-y-auto"
+            style={{ background: "#13151c", borderColor: "#3a3f54" }} onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between">
+              <div className="text-sm font-bold" style={{ color: "#fbbf24", fontFamily: "'Jua', sans-serif" }}>
+                운행 시간표 · {tripsToday}회차
+              </div>
+              <button onClick={() => setShowTimetable(false)} className="text-slate-400 hover:text-amber-400 text-lg leading-none px-1">×</button>
+            </div>
+            {["outbound", "inbound"].map((dir) => (
+              <div key={dir} className="space-y-1">
+                <div className="text-xs font-bold" style={{ color: dir === "outbound" ? "#fbbf24" : "#22d65f", fontFamily: "'Jua', sans-serif" }}>
+                  {ROUTES[dir].label} · {ROUTES[dir].full}
+                </div>
+                <div className="overflow-x-auto rounded-lg" style={{ border: "1px solid #3a3f54" }}>
+                  <table className="text-[10px]" style={{ borderCollapse: "collapse", fontFamily: "'IBM Plex Mono', monospace" }}>
+                    <thead>
+                      <tr style={{ background: "#0a0b0f" }}>
+                        <th className="px-2 py-1 text-slate-500 whitespace-nowrap" style={{ position: "sticky", left: 0, background: "#0a0b0f" }}>회차</th>
+                        {ROUTES[dir].stops.map((s, i) => (
+                          <th key={i} className="px-2 py-1 text-slate-300 whitespace-nowrap text-center">{s.name}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {ROUTES[dir].trips.slice(0, tripsToday).map((t, ti) => (
+                        <tr key={ti} style={{ borderTop: "1px solid #23283a" }}>
+                          <td className="px-2 py-1 font-bold whitespace-nowrap" style={{ color: "#fbbf24", position: "sticky", left: 0, background: "#13151c" }}>{ti + 1}회</td>
+                          {t.map((time, si) => (
+                            <td key={si} className="px-2 py-1 text-center whitespace-nowrap"
+                              style={{ color: si === 0 || si === t.length - 1 ? "#e2e8f0" : "#94a3b8" }}>{time}</td>
+                          ))}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            ))}
+            <div className="text-[10px] text-slate-500 leading-relaxed">
+              ※ 6.13.(토) 1~6회차 · 6.14.(일) 1~5회차 운영 · 축제장에서 약 15분 휴식 후 회차 전환
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* 멘트 편집·백업·복원 모달 */}
       {mentBackup !== null && (
