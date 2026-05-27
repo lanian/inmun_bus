@@ -38,7 +38,7 @@
 
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef, useMemo } = React;
-const BUILD = "b32"; /* 화면 우하단 표시 — 최신 배포 확인용 */
+const BUILD = "b33"; /* 화면 우하단 표시 — 최신 배포 확인용 */
 
 /* Icons */
 const Svg = ({ size = 16, children, ...rest }) => (
@@ -419,10 +419,10 @@ function App() {
   useEffect(() => { rateRef.current = rate; }, [rate]);
   useEffect(() => { voiceRef.current = selectedVoiceURI; }, [selectedVoiceURI]);
 
-  // 현재 시각(분 단위) — 30초마다 갱신해 운행 상태/회차 판정을 최신으로 유지
+  // 현재 시각 — 5초마다 갱신해 운행 상태/남은 시간/회차 판정을 최신으로 유지
   const [nowTick, setNowTick] = useState(() => Date.now());
   useEffect(() => {
-    const id = setInterval(() => setNowTick(Date.now()), 30000);
+    const id = setInterval(() => setNowTick(Date.now()), 5000);
     return () => clearInterval(id);
   }, []);
 
