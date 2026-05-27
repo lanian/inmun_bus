@@ -38,7 +38,7 @@
 
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef, useMemo } = React;
-const BUILD = "b38"; /* 화면 우하단 표시 — 최신 배포 확인용 */
+const BUILD = "b39"; /* 화면 우하단 표시 — 최신 배포 확인용 */
 
 /* Icons */
 const Svg = ({ size = 16, children, ...rest }) => (
@@ -364,6 +364,69 @@ function TimetableModal({ tripsToday, onClose }) {
   );
 }
 
+/* 승객용 실시간 위치 지도 — ?view=map&db=<DB주소> 로 진입. Firebase RTDB REST 폴링 */
+function LiveMapView({ dbUrl }) {
+  const elRef = useRef(null), mapRef = useRef(null), markersRef = useRef({});
+  const [status, setStatus] = useState("연결 중…");
+  useEffect(() => {
+    if (!window.L || !elRef.current || mapRef.current) return;
+    const map = window.L.map(elRef.current).setView([35.135, 126.94], 14);
+    window.L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 19, attribution: "© OpenStreetMap" }).addTo(map);
+    const seen = new Set();
+    ["outbound", "inbound"].forEach((dir) => ROUTES[dir].stops.forEach((s) => {
+      if (seen.has(s.name) || s.lat == null) return; seen.add(s.name);
+      window.L.circleMarker([s.lat, s.lng], { radius: 4, color: "#fbbf24", fillColor: "#fbbf24", fillOpacity: 0.8, weight: 1 })
+        .addTo(map).bindTooltip(s.name, { direction: "top" });
+    }));
+    mapRef.current = map;
+    setTimeout(() => map.invalidateSize(), 100);
+    return () => { map.remove(); mapRef.current = null; };
+  }, []);
+  useEffect(() => {
+    if (!dbUrl) { setStatus("공유 주소(db)가 없습니다"); return; }
+    let stopped = false;
+    const base = dbUrl.replace(/\/+$/, "");
+    const poll = async () => {
+      try {
+        const r = await fetch(`${base}/buses.json`, { cache: "no-store" });
+        const data = await r.json();
+        const map = mapRef.current; if (!map) return;
+        const now = Date.now(); let count = 0;
+        Object.entries(data || {}).forEach(([id, b]) => {
+          if (!b || b.lat == null || (b.ts && now - b.ts > 90000)) return; // 90초 이상 미갱신 숨김
+          count++;
+          const label = `${id}호차 · ${b.dir === "inbound" ? "민주광장 방향" : "축제장 방향"} ${b.trip || ""}회차`;
+          let m = markersRef.current[id];
+          if (!m) {
+            const icon = window.L.divIcon({ className: "", html: '<div style="font-size:26px;line-height:1">🚌</div>', iconSize: [30, 30], iconAnchor: [15, 15] });
+            m = window.L.marker([b.lat, b.lng], { icon }).addTo(map);
+            markersRef.current[id] = m;
+          } else m.setLatLng([b.lat, b.lng]);
+          m.bindTooltip(label, { permanent: true, direction: "top", offset: [0, -14] });
+        });
+        Object.keys(markersRef.current).forEach((id) => {
+          const b = data && data[id];
+          if (!b || (b.ts && now - b.ts > 90000)) { map.removeLayer(markersRef.current[id]); delete markersRef.current[id]; }
+        });
+        setStatus(count > 0 ? `운행 중 셔틀 ${count}대 · 실시간` : "운행 중인 셔틀이 없습니다");
+      } catch (_) { setStatus("연결 오류 — 잠시 후 다시 시도합니다"); }
+    };
+    poll();
+    const id = setInterval(() => { if (!stopped) poll(); }, 4000);
+    return () => { stopped = true; clearInterval(id); };
+  }, [dbUrl]);
+  return (
+    <div style={{ position: "relative" }}>
+      <div ref={elRef} style={{ height: "100vh", width: "100%" }} />
+      <div style={{ position: "absolute", top: 10, left: 10, right: 10, zIndex: 1000,
+        background: "rgba(10,11,16,0.85)", color: "#fbbf24", padding: "8px 12px", borderRadius: 12,
+        fontFamily: "'Jua', sans-serif", fontSize: 13, textAlign: "center" }}>
+        무등생각 셔틀 실시간 위치 · {status}
+      </div>
+    </div>
+  );
+}
+
 function App() {
   const [mode, setMode] = useState(() => LS.get("mode", "simple"));
   const [direction, setDirection] = useState("outbound");
@@ -406,6 +469,11 @@ function App() {
   const [showHelp, setShowHelp] = useState(false);
   const [autoLegSwitch, setAutoLegSwitch] = useState(() => LS.get("autoleg", "0") === "1");
   const [festivalDay, setFestivalDay] = useState(() => LS.get("festday", "auto")); // auto|day1|day2
+  // 실시간 위치 공유 (Firebase RTDB REST)
+  const [shareUrl, setShareUrl] = useState(() => LS.get("shareurl", ""));
+  const [busId, setBusId] = useState(() => LS.get("busid", "1"));
+  const [sharing, setSharing] = useState(false);
+  const lastShareRef = useRef(0);
   const [progTimeBase, setProgTimeBase] = useState(() => LS.get("progbase", "now")); // now|trip
 
   // TTS
@@ -450,6 +518,8 @@ function App() {
   useEffect(() => LS.set("autoleg", autoLegSwitch ? "1" : "0"), [autoLegSwitch]);
   useEffect(() => LS.set("festday", festivalDay), [festivalDay]);
   useEffect(() => LS.set("progbase", progTimeBase), [progTimeBase]);
+  useEffect(() => LS.set("shareurl", shareUrl), [shareUrl]);
+  useEffect(() => LS.set("busid", busId), [busId]);
 
   // 안내에 사용할 축제일 결정 (수동 지정 우선, 아니면 오늘 날짜로 판단)
   const resolveFestivalDay = () => {
@@ -1042,6 +1112,30 @@ function App() {
   const nextCoord = nextStop ? coords[coordKey(direction, nextStop.name)] : undefined;
   const distToNext = autoMode && userPos && nextCoord ? distanceMeters(userPos, nextCoord) : null;
   const fmtDist = (m) => (m == null ? null : m < 1000 ? `${Math.round(m)}m` : `${(m / 1000).toFixed(2)}km`);
+
+  /* --- 실시간 위치 공유: 켜져 있고 GPS가 있으면 3초마다 Firebase RTDB에 위치 PUT --- */
+  useEffect(() => {
+    if (!sharing || !shareUrl || !userPos) return;
+    const now = Date.now();
+    if (now - lastShareRef.current < 3000) return;
+    lastShareRef.current = now;
+    const base = shareUrl.replace(/\/+$/, "");
+    const body = JSON.stringify({
+      lat: userPos.lat, lng: userPos.lng, dir: direction, trip: tripIdx + 1,
+      stop: curStop?.name || "", ts: now,
+    });
+    fetch(`${base}/buses/${encodeURIComponent(busId || "1")}.json`, { method: "PUT", body }).catch(() => {});
+  }, [userPos, sharing, shareUrl, busId, direction, tripIdx, curStop]);
+
+  // 공유를 끄면(켰다가 끈 경우만) 내 위치 노드 삭제 — 지도에서 사라지게
+  const wasSharingRef = useRef(false);
+  useEffect(() => {
+    if (sharing) { wasSharingRef.current = true; return; }
+    if (!wasSharingRef.current || !shareUrl) return;
+    wasSharingRef.current = false;
+    const base = shareUrl.replace(/\/+$/, "");
+    fetch(`${base}/buses/${encodeURIComponent(busId || "1")}.json`, { method: "DELETE" }).catch(() => {});
+  }, [sharing]);
 
   /* --- Trip status (출발 전/운행 중/지연/종료) — 지연 운행을 '종료'로 오표시하지 않음 --- */
   const tripStatus = useMemo(() => {
@@ -1841,6 +1935,48 @@ function App() {
               안내 멘트 편집·백업·복원
             </button>
           </div>
+
+          {/* 실시간 위치 공유 */}
+          <div className="pt-2 border-t space-y-2" style={{ borderColor: "#3a3f54" }}>
+            <div className="text-xs font-bold" style={{ color: "#cbd5e1", fontFamily: "'Jua', sans-serif" }}>실시간 위치 공유</div>
+            <input type="text" value={shareUrl} onChange={(e) => setShareUrl(e.target.value)}
+              placeholder="Firebase DB 주소 (https://...firebasedatabase.app)"
+              className="w-full px-2 py-1.5 rounded text-[11px]"
+              style={{ background: "#0a0b0f", border: "1px solid #3a3f54", color: "#cbd5e1", fontFamily: "'IBM Plex Mono', monospace" }} />
+            <div className="flex items-center gap-2">
+              <label className="text-[11px] text-slate-400">버스 번호</label>
+              <input type="text" value={busId} onChange={(e) => setBusId(e.target.value)}
+                className="w-16 px-2 py-1 rounded text-[11px]"
+                style={{ background: "#0a0b0f", border: "1px solid #3a3f54", color: "#cbd5e1", fontFamily: "'IBM Plex Mono', monospace" }} />
+              <button onClick={() => { if (!shareUrl) { setGpsError("먼저 DB 주소를 입력하세요"); return; } if (!sharing && !autoMode) primeTTS(); setSharing(!sharing); }}
+                disabled={!shareUrl}
+                className="flex-1 py-1.5 rounded text-[11px] font-bold disabled:opacity-40"
+                style={{ background: sharing ? "#22d65f" : "rgba(34,214,95,0.12)", color: sharing ? "#0a0b0f" : "#22d65f",
+                  border: "1px solid rgba(34,214,95,0.3)", fontFamily: "'Jua', sans-serif" }}>
+                {sharing ? "● 위치 공유 중 (끄기)" : "내 위치 공유 시작"}
+              </button>
+            </div>
+            <div className="text-[10px] text-slate-600">GPS 자동이 켜져 있어야 위치가 올라갑니다. 끄면 내 위치는 지도에서 사라집니다.</div>
+            {shareUrl && (() => {
+              const purl = `${location.origin}${location.pathname}?view=map&db=${encodeURIComponent(shareUrl)}`;
+              return (
+                <div className="flex items-center gap-2 pt-1">
+                  <img alt="QR" width="72" height="72" style={{ borderRadius: 6, background: "#fff", padding: 2 }}
+                    src={`https://api.qrserver.com/v1/create-qr-code/?size=120x120&data=${encodeURIComponent(purl)}`} />
+                  <div className="flex-1 min-w-0">
+                    <div className="text-[10px] text-slate-500 mb-1">승객용 실시간 지도 링크</div>
+                    <button onClick={() => { try { navigator.clipboard.writeText(purl); setGpsError(""); } catch (_) {} }}
+                      className="w-full py-1.5 rounded text-[11px] font-bold"
+                      style={{ background: "rgba(251,191,36,0.15)", color: "#fbbf24", border: "1px solid rgba(251,191,36,0.3)", fontFamily: "'Jua', sans-serif" }}>
+                      📋 승객 링크 복사
+                    </button>
+                    <a href={purl} target="_blank" rel="noopener noreferrer"
+                      className="block text-center mt-1 text-[10px] underline" style={{ color: "#22d65f" }}>지도 미리보기</a>
+                  </div>
+                </div>
+              );
+            })()}
+          </div>
         </div>
 
         {/* Controls */}
@@ -2043,7 +2179,11 @@ function App() {
   );
 }
 
-ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+(function () {
+  const p = new URLSearchParams(window.location.search);
+  const Root = p.get("view") === "map" ? () => <LiveMapView dbUrl={p.get("db")} /> : App;
+  ReactDOM.createRoot(document.getElementById('root')).render(<Root />);
+})();
 </script>
 <script>
   /* 서비스워커 미등록(캐시 문제로 제거). 기존에 설치된 옛 서비스워커가 있으면
