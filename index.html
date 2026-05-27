@@ -38,7 +38,7 @@
 
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef, useMemo } = React;
-const BUILD = "b36"; /* 화면 우하단 표시 — 최신 배포 확인용 */
+const BUILD = "b37"; /* 화면 우하단 표시 — 최신 배포 확인용 */
 
 /* Icons */
 const Svg = ({ size = 16, children, ...rest }) => (
@@ -970,6 +970,17 @@ function App() {
       announceStop(nearestIdx);
       // 종점 도착 시 자동 회차 전환 무장
       if (nearestIdx === stops.length - 1 && nextLeg) { legSwitchArmedRef.current = true; legDepartCountRef.current = 0; }
+      return;
+    }
+    // 안내한 현재 정류장을 통과(반경 밖 + 다음 정류장이 더 가까움)하면 표시를 다음 정류장으로 전환
+    if (currentIdx < stops.length - 1 && announcedRef.current.has(currentIdx)) {
+      const curC = coords[coordKey(direction, stops[currentIdx].name)];
+      const nextC = coords[coordKey(direction, stops[currentIdx + 1].name)];
+      if (curC && nextC) {
+        const dCur = distanceMeters(userPos, curC);
+        const dNext = distanceMeters(userPos, nextC);
+        if (dCur > triggerRadius && dNext < dCur) setCurrentIdx(currentIdx + 1);
+      }
     }
   }, [userPos, autoMode, stops, triggerRadius, coords, direction, currentIdx]);
 
