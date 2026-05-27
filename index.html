@@ -38,7 +38,7 @@
 
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef, useMemo } = React;
-const BUILD = "b31"; /* 화면 우하단 표시 — 최신 배포 확인용 */
+const BUILD = "b32"; /* 화면 우하단 표시 — 최신 배포 확인용 */
 
 /* Icons */
 const Svg = ({ size = 16, children, ...rest }) => (
@@ -1007,6 +1007,9 @@ function App() {
   /* ===== SIMPLE MODE — operator/driver view ===== */
   if (mode === "simple") {
     const arrivalDistText = distToNext != null ? fmtDist(distToNext) : null;
+    // 시간표상 다음 정류장 예정 시각까지 남은 시간(분). +면 여유, -면 지연
+    const nowMinNow = new Date().getHours() * 60 + new Date().getMinutes();
+    const nextSchedDiff = nextStop ? toMin(trip[currentIdx + 1]) - nowMinNow : null;
     return (
       <div className="min-h-screen w-full p-4 sm:p-6 flex items-center justify-center"
         style={{ background: "radial-gradient(ellipse at top, #1a1d29 0%, #0a0b10 60%, #050608 100%)" }}>
@@ -1121,8 +1124,16 @@ function App() {
                 style={{ color: nextStop ? "#e2e8f0" : "#64748b", fontFamily: "'Jua', sans-serif" }}>
                 {nextStop?.name || "운행 종료"}
               </div>
-              {arrivalDistText && nextStop && (
+              {nextStop && nextSchedDiff != null && (
                 <div className="text-[11px] mt-1"
+                  style={{ color: nextSchedDiff < 0 ? "#fb923c" : "#22d65f", fontFamily: "'Jua', sans-serif" }}>
+                  {nextSchedDiff > 0 ? `예정까지 ${nextSchedDiff}분`
+                    : nextSchedDiff === 0 ? "예정 시각"
+                    : `${-nextSchedDiff}분 지연`}
+                </div>
+              )}
+              {arrivalDistText && nextStop && (
+                <div className="text-[11px] mt-0.5"
                   style={{ color: distToNext < triggerRadius ? "#ef4444" : "#22d65f",
                     fontFamily: "'IBM Plex Mono', monospace" }}>
                   ↓ {arrivalDistText}
