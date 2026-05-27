@@ -38,7 +38,7 @@
 
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef, useMemo } = React;
-const BUILD = "b23"; /* 화면 우하단 표시 — 최신 배포 확인용 */
+const BUILD = "b24"; /* 화면 우하단 표시 — 최신 배포 확인용 */
 
 /* Icons */
 const Svg = ({ size = 16, children, ...rest }) => (
@@ -719,6 +719,17 @@ function App() {
   const [backup, setBackup] = useState(null);     // null | 텍스트(JSON)
   const [backupMsg, setBackupMsg] = useState("");
   const openBackup = () => { setBackupMsg(""); setBackup(JSON.stringify(coords, null, 2)); };
+  const resetCoords = () => {
+    const base = {};
+    ["outbound", "inbound"].forEach(dir => {
+      ROUTES[dir].stops.forEach(s => {
+        if (s.lat != null && s.lng != null) base[coordKey(dir, s.name)] = { lat: s.lat, lng: s.lng };
+      });
+    });
+    setCoords(base);
+    setBackup(JSON.stringify(base, null, 2));
+    setBackupMsg("기본 좌표로 초기화했어요");
+  };
   const copyBackup = () => {
     try { navigator.clipboard.writeText(backup); setBackupMsg("클립보드에 복사했어요"); }
     catch (_) { setBackupMsg("복사 실패 — 직접 선택해 복사하세요"); }
@@ -1740,6 +1751,11 @@ function App() {
                 ⬇ 불러오기
               </button>
             </div>
+            <button onClick={resetCoords}
+              className="w-full py-1.5 rounded-lg text-[11px]"
+              style={{ background: "rgba(239,68,68,0.12)", color: "#fca5a5", border: "1px solid rgba(239,68,68,0.3)" }}>
+              기본 좌표로 초기화
+            </button>
           </div>
         </div>
       )}
