@@ -38,7 +38,7 @@
 
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef, useMemo } = React;
-const BUILD = "b34"; /* 화면 우하단 표시 — 최신 배포 확인용 */
+const BUILD = "b35"; /* 화면 우하단 표시 — 최신 배포 확인용 */
 
 /* Icons */
 const Svg = ({ size = 16, children, ...rest }) => (
@@ -1009,9 +1009,11 @@ function App() {
   /* ===== SIMPLE MODE — operator/driver view ===== */
   if (mode === "simple") {
     const arrivalDistText = distToNext != null ? fmtDist(distToNext) : null;
-    // 시간표상 다음 정류장 예정 시각까지 남은 시간(분). +면 여유, -면 지연
-    const nowMinNow = new Date().getHours() * 60 + new Date().getMinutes();
-    const nextSchedDiff = nextStop ? toMin(trip[currentIdx + 1]) - nowMinNow : null;
+    // 시간표상 다음 정류장 예정 시각까지 남은 시간(초). +면 여유, -면 지연
+    const _now = new Date();
+    const nowSecNow = _now.getHours() * 3600 + _now.getMinutes() * 60 + _now.getSeconds();
+    const nextSchedDiffSec = nextStop ? toMin(trip[currentIdx + 1]) * 60 - nowSecNow : null;
+    const fmtMS = (sec) => { const a = Math.abs(sec); const m = Math.floor(a / 60), s = a % 60; return m > 0 ? `${m}분 ${s}초` : `${s}초`; };
     return (
       <div className="min-h-screen w-full p-4 sm:p-6 flex items-center justify-center"
         style={{ background: "radial-gradient(ellipse at top, #1a1d29 0%, #0a0b10 60%, #050608 100%)" }}>
@@ -1126,12 +1128,10 @@ function App() {
                 style={{ color: nextStop ? "#e2e8f0" : "#64748b", fontFamily: "'Jua', sans-serif" }}>
                 {nextStop?.name || "운행 종료"}
               </div>
-              {nextStop && nextSchedDiff != null && (
+              {nextStop && nextSchedDiffSec != null && (
                 <div className="text-[11px] mt-1"
-                  style={{ color: nextSchedDiff < 0 ? "#fb923c" : "#22d65f", fontFamily: "'Jua', sans-serif" }}>
-                  {nextSchedDiff > 0 ? `예정까지 ${nextSchedDiff}분`
-                    : nextSchedDiff === 0 ? "예정 시각"
-                    : `${-nextSchedDiff}분 지연`}
+                  style={{ color: nextSchedDiffSec < 0 ? "#fb923c" : "#22d65f", fontFamily: "'Jua', sans-serif" }}>
+                  {nextSchedDiffSec >= 0 ? `예정까지 ${fmtMS(nextSchedDiffSec)}` : `${fmtMS(nextSchedDiffSec)} 지연`}
                 </div>
               )}
               {arrivalDistText && nextStop && (
