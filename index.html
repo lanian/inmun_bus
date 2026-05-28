@@ -66,7 +66,7 @@
 
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef, useMemo } = React;
-const BUILD = "b129"; /* 화면 우하단 표시 — 최신 배포 확인용 */
+const BUILD = "b130"; /* 화면 우하단 표시 — 최신 배포 확인용 */
 
 /* 실시간 위치 공유용 Firebase DB 주소. 여기에 한 번 넣어두면 승객 링크가 ?view=map 만 남아 깔끔해집니다. */
 const SHARE_DB = "https://innum-bus-default-rtdb.firebaseio.com";
@@ -598,6 +598,20 @@ function VenueModal({ onClose, initialZone = 0 }) {
   const [expandedImg, setExpandedImg] = useState(null);
   const [progDay, setProgDay] = useState("day1");
   const [progZone, setProgZone] = useState(initialZone); // 0=전체, 1~5=해당 구역
+  const [hidePast, setHidePast] = useState(false);
+  // 일자 키(day1=6.13, day2=6.14) 기준 항목이 지나간 일정인지 판정
+  const isPastItem = (item, dayKey) => {
+    if (item.time === "상시") return false;
+    const end = (item.time.split("~")[1] || item.time).trim();
+    if (!/^\d/.test(end)) return false;
+    const now = new Date();
+    const m = now.getMonth(), d = now.getDate();
+    const targetDay = dayKey === "day1" ? 13 : 14;
+    if (m !== 5) return m > 5; // 6월이 아니면: 7월 이후=과거, 5월 이전=미래
+    if (d > targetDay) return true;
+    if (d < targetDay) return false;
+    return toMin(end) < (now.getHours() * 60 + now.getMinutes());
+  };
   const progSrc = progDay === "day1" ? "program-day1.png" : "program-day2.png";
   const progLabel = progDay === "day1" ? "6.13 (토)" : "6.14 (일)";
   return (
@@ -643,7 +657,15 @@ function VenueModal({ onClose, initialZone = 0 }) {
         ))}
 
         {/* 프로그램표 (리스트) */}
-        <div style={{ fontSize: 12, color: FT.ink, fontFamily: "'Jua', sans-serif", fontWeight: 700, marginTop: 4 }}>🕑 프로그램표</div>
+        <div className="flex items-center justify-between" style={{ marginTop: 4 }}>
+          <div style={{ fontSize: 12, color: FT.ink, fontFamily: "'Jua', sans-serif", fontWeight: 700 }}>🕑 프로그램표</div>
+          <button onClick={() => setHidePast((v) => !v)}
+            style={{ fontSize: 10, fontFamily: "'Jua', sans-serif", fontWeight: 700, padding: "3px 9px", borderRadius: 999,
+              background: hidePast ? FT.ink : "#fff", color: hidePast ? "#fff" : FT.ink,
+              border: "1.5px solid " + FT.ink }}>
+            {hidePast ? "✓ 지나간 일정 숨김" : "지나간 일정 숨기기"}
+          </button>
+        </div>
         <div className="flex" style={{ border: "2px solid " + FT.ink, borderRadius: 10, overflow: "hidden" }}>
           {Object.entries(FESTIVAL_PROGRAM).map(([k, d], i) => (
             <button key={k} onClick={() => setProgDay(k)}
@@ -675,12 +697,13 @@ function VenueModal({ onClose, initialZone = 0 }) {
           {(() => {
             const filtered = FESTIVAL_PROGRAM[progDay].items
               .filter((it) => !progZone || it.zone === progZone)
+              .filter((it) => !hidePast || !isPastItem(it, progDay))
               .slice()
               .sort((a, b) => programTimeKey(a.time).localeCompare(programTimeKey(b.time)) || a.zone - b.zone);
             if (!filtered.length) {
               return (
                 <div style={{ textAlign: "center", padding: "20px 0", fontSize: 12, color: FT.inkSoft, fontFamily: "'Jua', sans-serif" }}>
-                  해당 구역에 등록된 프로그램이 없습니다.
+                  {hidePast ? "남은 일정이 없습니다." : "해당 구역에 등록된 프로그램이 없습니다."}
                 </div>
               );
             }
