@@ -86,7 +86,7 @@
 
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef, useMemo } = React;
-const BUILD = "b199"; /* 화면 우하단 표시 — 최신 배포 확인용 */
+const BUILD = "b200"; /* 화면 우하단 표시 — 최신 배포 확인용 */
 
 /* 실시간 위치 공유용 Firebase DB 주소. 여기에 한 번 넣어두면 승객 링크가 ?view=map 만 남아 깔끔해집니다. */
 const SHARE_DB = "https://innum-bus-default-rtdb.firebaseio.com";
@@ -1688,6 +1688,35 @@ function LiveMapView({ dbUrl }) {
     };
     const seenShared = new Set();
     const allCoords = [];
+    // 정류장 팝업용 — 오늘 회차 수, 현재 시각
+    const today = new Date();
+    const tripsToday2 = today.getMonth() === 5 && today.getDate() === 14 ? 5 : ROUTES.outbound.trips.length;
+    const nowMinNow2 = today.getHours() * 60 + today.getMinutes();
+    const buildStopPopup = (stopName, sub, dirs) => {
+      const sections = dirs.map((d) => {
+        const route = ROUTES[d];
+        const idx = route.stops.findIndex((x) => x.name === stopName);
+        if (idx < 0) return "";
+        const times = route.trips.slice(0, tripsToday2).map((t, i) => ({ trip: i + 1, time: t[idx] })).filter((x) => x.time);
+        const nextTime = times.find((x) => toMin(x.time) >= nowMinNow2 - 1);
+        const rows = times.map(({ trip, time }) => {
+          const m = toMin(time);
+          const past = m < nowMinNow2 - 1;
+          const isNext = nextTime && nextTime.trip === trip;
+          const style = past
+            ? "color:#94a3b8;text-decoration:line-through"
+            : isNext ? "color:#dc2626;font-weight:700" : "color:#101113";
+          return `<div style="font-size:11px;${style};margin:1px 0">${trip}회차 · ${time}${isNext ? " ← 다음 도착" : ""}</div>`;
+        }).join("");
+        const dColor = d === "outbound" ? FT.orange : FT.teal;
+        const dLabel = route.label;
+        return `<div style="margin-top:6px"><div style="font-size:11px;color:${dColor};font-weight:700;margin-bottom:2px">● ${dLabel}</div>${rows}</div>`;
+      }).join("");
+      return `<div style="font-family:'Jua',sans-serif;max-width:240px"><b>${stopName}</b>`
+        + (sub ? `<div style="color:#4A4E55;font-size:11px">${sub}</div>` : "")
+        + sections
+        + `</div>`;
+    };
     ["outbound", "inbound"].forEach((dir) => {
       const dirColor = dir === "outbound" ? FT.orange : FT.teal;
       const dash = dir === "inbound" ? "10,8" : null;
@@ -1698,7 +1727,8 @@ function LiveMapView({ dbUrl }) {
         if (SHARED_STOPS.has(s.name)) {
           if (seenShared.has(s.name)) return; seenShared.add(s.name);
           const m = L.circleMarker(c, { radius: 5, color: FT.ink, fillColor: "#fff", fillOpacity: 1, weight: 2 })
-            .addTo(map).bindTooltip(s.name, { permanent: true, direction: "top", offset: [0, -4], className: "fest-stop" });
+            .addTo(map).bindTooltip(s.name, { permanent: true, direction: "top", offset: [0, -4], className: "fest-stop" })
+            .bindPopup(buildStopPopup(s.name, s.sub, ["outbound", "inbound"]));
           stopLayersRef.current.push(m);
         } else {
           // 축제장행(outbound) 라벨은 마커 아래, 민주광장행(inbound) 라벨은 마커 위 — 위치+색으로 방향 구분
@@ -1706,7 +1736,8 @@ function LiveMapView({ dbUrl }) {
             .addTo(map).bindTooltip(s.name, { permanent: true,
               direction: dir === "outbound" ? "bottom" : "top",
               offset: [0, dir === "outbound" ? 4 : -4],
-              className: `fest-stop ${dir === "outbound" ? "dir-out" : "dir-in"}` });
+              className: `fest-stop ${dir === "outbound" ? "dir-out" : "dir-in"}` })
+            .bindPopup(buildStopPopup(s.name, s.sub, [dir]));
           stopLayersRef.current.push(m);
         }
       });
