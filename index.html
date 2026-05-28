@@ -73,7 +73,7 @@
 
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef, useMemo } = React;
-const BUILD = "b165"; /* 화면 우하단 표시 — 최신 배포 확인용 */
+const BUILD = "b166"; /* 화면 우하단 표시 — 최신 배포 확인용 */
 
 /* 실시간 위치 공유용 Firebase DB 주소. 여기에 한 번 넣어두면 승객 링크가 ?view=map 만 남아 깔끔해집니다. */
 const SHARE_DB = "https://innum-bus-default-rtdb.firebaseio.com";
@@ -738,7 +738,9 @@ function VenueModal({ onClose, initialZone = 0 }) {
       <div className="w-full max-w-md p-4 space-y-3 max-h-[88vh] overflow-y-auto"
         style={{ background: "#fff", border: "2.5px solid " + FT.ink, borderRadius: 16, boxShadow: "4px 4px 0 " + FT.ink }}
         onClick={(e) => e.stopPropagation()}>
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between sticky"
+          style={{ top: -16, marginLeft: -16, marginRight: -16, marginTop: -16, paddingLeft: 16, paddingRight: 16, paddingTop: 12, paddingBottom: 10,
+            background: "#fff", borderBottom: "1.5px solid " + FT.mute + "55", zIndex: 5 }}>
           <div>
             <div style={{ fontSize: 11, color: FT.inkSoft, fontFamily: "'Jua', sans-serif" }}>Festival Map · Program</div>
             <div style={{ color: FT.ink, fontFamily: "'Jua', sans-serif", fontWeight: 700, fontSize: 16 }}>
@@ -747,8 +749,8 @@ function VenueModal({ onClose, initialZone = 0 }) {
             <div style={{ fontSize: 11, color: FT.inkSoft, fontFamily: "'Jua', sans-serif" }}>무등산국립공원 증심사지구 일원</div>
           </div>
           <button onClick={onClose} aria-label="닫기"
-            style={{ width: 28, height: 28, lineHeight: 1, borderRadius: 8, border: "2px solid " + FT.ink,
-              background: "#fff", color: FT.ink, fontWeight: 700, fontFamily: "'Jua', sans-serif" }}>×</button>
+            style={{ width: 32, height: 32, lineHeight: 1, borderRadius: 8, border: "2px solid " + FT.ink,
+              background: "#fff", color: FT.ink, fontWeight: 700, fontFamily: "'Jua', sans-serif", fontSize: 18 }}>×</button>
         </div>
 
         {/* 행사장 지도 */}
