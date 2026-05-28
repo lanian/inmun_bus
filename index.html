@@ -45,7 +45,7 @@
 
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef, useMemo } = React;
-const BUILD = "b119"; /* 화면 우하단 표시 — 최신 배포 확인용 */
+const BUILD = "b120"; /* 화면 우하단 표시 — 최신 배포 확인용 */
 
 /* 실시간 위치 공유용 Firebase DB 주소. 여기에 한 번 넣어두면 승객 링크가 ?view=map 만 남아 깔끔해집니다. */
 const SHARE_DB = "https://innum-bus-default-rtdb.firebaseio.com";
@@ -2686,6 +2686,22 @@ function App() {
               </span>
             )}
           </div>
+
+          {/* 대기 표시 — 크게 가운데 배너(탭하여 해제) */}
+          {manualWaiting && (
+            <button onClick={() => setManualWaiting(false)}
+              className="w-full border-x-2 flex flex-col items-center justify-center py-8"
+              style={{ background: "linear-gradient(180deg, rgba(96,165,250,0.22) 0%, rgba(96,165,250,0.12) 100%)",
+                borderColor: "#3a3f54", borderBottom: "1px solid #3a3f54", cursor: "pointer" }}>
+              <div style={{ fontSize: "clamp(2.2rem, 11vw, 3.2rem)", fontFamily: "'Black Han Sans', sans-serif", color: "#60a5fa",
+                textShadow: "0 0 24px rgba(96,165,250,0.7), 0 0 48px rgba(96,165,250,0.3)", lineHeight: 1, letterSpacing: "-0.02em" }}>
+                🅿️ 출발 대기 중
+              </div>
+              <div style={{ fontSize: 12, color: "#94a3b8", fontFamily: "'Jua', sans-serif", marginTop: 8, letterSpacing: 1 }}>
+                탭하여 출발 · 대기 해제
+              </div>
+            </button>
+          )}
 
           {/* Current stop — BIG */}
           <div className="px-5 py-8 border-x-2"
