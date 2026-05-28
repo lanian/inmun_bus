@@ -73,7 +73,7 @@
 
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef, useMemo } = React;
-const BUILD = "b160"; /* 화면 우하단 표시 — 최신 배포 확인용 */
+const BUILD = "b161"; /* 화면 우하단 표시 — 최신 배포 확인용 */
 
 /* 실시간 위치 공유용 Firebase DB 주소. 여기에 한 번 넣어두면 승객 링크가 ?view=map 만 남아 깔끔해집니다. */
 const SHARE_DB = "https://innum-bus-default-rtdb.firebaseio.com";
@@ -2226,10 +2226,16 @@ function App() {
   const countsWriteTimerRef = useRef({}); // key별 디바운스 타이머
   const [showStats, setShowStats] = useState(false);
   const [arrivedPulse, setArrivedPulse] = useState(0); // arrived 트리거 시점(ms)
-  const dateKey = (() => {
-    const d = new Date();
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-  })();
+  const fmtDateKey = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  const [dateKey, setDateKey] = useState(() => fmtDateKey(new Date()));
+  // 자정 경계 대응: 매 분 dateKey 재계산해 새 일자로 자연 전환
+  useEffect(() => {
+    const id = setInterval(() => {
+      const nk = fmtDateKey(new Date());
+      setDateKey((prev) => prev !== nk ? nk : prev);
+    }, 30000);
+    return () => clearInterval(id);
+  }, []);
   const [locShare, setLocShare] = useState(() => LS.get("locshare", "1") === "1"); // 위치 좌표 공유(끄면 운행 정보만 송신)
   useEffect(() => LS.set("locshare", locShare ? "1" : "0"), [locShare]);
   const lastShareRef = useRef(0);
@@ -2237,6 +2243,7 @@ function App() {
   const arrivedStateRef = useRef(false);
   // P2-a: 이탈 명시 — arrived TRUE→FALSE 전환 시 정류장명/시각 기록(90초 유지)
   const departedFromRef = useRef(null);
+  const departureSpokenRef = useRef(0); // 출발 TTS 마지막 재생 시각 — 60초 쿨다운
   // P3-a: GPS stale — userPos 마지막 갱신 시각 추적
   const gpsLastUpdateRef = useRef(0);
   const [gpsStale, setGpsStale] = useState(false);
@@ -2365,9 +2372,10 @@ function App() {
 
   const goToNextLeg = () => {
     if (!nextLeg) return;
-    // 회차 전환 전: 종점이면 잔여 인원 전원 하차 자동 적용
+    // 회차 전환 전: 종점이면 잔여 인원 전원 하차 자동 적용 + 카운트 큐 flush
     const cs = stops[currentIdx];
     if (cs && cs.terminus) { try { alightAll(); } catch (_) {} }
+    try { flushCountsWrites(); } catch (_) {}
     legSwitchArmedRef.current = false;
     legDepartCountRef.current = 0;
     setDirection(nextLeg.direction);
@@ -3076,6 +3084,20 @@ function App() {
     Object.keys(tk).forEach((k) => { clearTimeout(tk[k]); delete tk[k]; });
   };
 
+  /* counts 디바운스 큐 즉시 flush — leg-switch/unmount 시 마지막 입력 손실 방지 */
+  const countsRef = useRef(counts);
+  useEffect(() => { countsRef.current = counts; }, [counts]);
+  const flushCountsWrites = () => {
+    const tk = countsWriteTimerRef.current;
+    Object.entries(tk).forEach(([key, timerId]) => {
+      clearTimeout(timerId);
+      delete tk[key];
+      const v = countsRef.current[key];
+      if (v) writeCount(key, v);
+    });
+  };
+  useEffect(() => () => flushCountsWrites(), []); // unmount 시 강제 flush
+
   /* 현재 회차의 누적 탑승 인원 (탑승합계 - 하차합계) */
   const onboardCount = (() => {
     const tripPrefix = `${direction}|${tripIdx + 1}|`;
@@ -3161,10 +3183,13 @@ function App() {
     } else if (prevArrived && (!hasGps)) {
       // GPS 끊기면 잠시 도착 유지하다가 다음 cycle에서 자연 해제
     }
-    // P2: 이탈 전환 시 정류장명 기록 (90초 유지) + 출발 음성 cue
+    // P2: 이탈 전환 시 정류장명 기록 (90초 유지) + 출발 음성 cue (60초 쿨다운으로 노이즈 반복 방지)
     if (prevArrived && !arrivedNow && curStop?.name) {
       departedFromRef.current = { stop: curStop.name, at: now };
-      if (autoMode) chimeThenSpeak("출발합니다. 안전하게 손잡이를 잡아주세요.");
+      if (autoMode && now - departureSpokenRef.current > 60000) {
+        chimeThenSpeak("출발합니다. 안전하게 손잡이를 잡아주세요.");
+        departureSpokenRef.current = now;
+      }
     }
     // 도착 진입 시 카운트 영역에 펄스 알람
     if (!prevArrived && arrivedNow) {
@@ -3184,6 +3209,12 @@ function App() {
     });
     fetch(`${base}/buses/${encodeURIComponent(busId || "1")}.json${auth}`, { method: "PUT", body })
       .then((r) => {
+        if (r.status === 401 || r.status === 403) {
+          // 인증 토큰 만료/거부 — 즉시 재로그인 시도
+          authTokenRef.current = "";
+          if (driverEmail && driverPass) firebaseSignIn().catch(() => {});
+          throw new Error(String(r.status));
+        }
         if (!r.ok) throw new Error(String(r.status));
         if (broadcastFailRef.current !== 0) { broadcastFailRef.current = 0; setBroadcastStatus("ok"); }
       })
@@ -3363,10 +3394,10 @@ function App() {
                   <div className="text-[10px]" style={{ color: color + "cc", fontFamily: "'Jua', sans-serif", letterSpacing: 1 }}>{label}</div>
                   <div className="flex items-center gap-2 mt-1">
                     <button onClick={() => updateCount(kind, -1)}
-                      style={{ width: 36, height: 36, borderRadius: 10, background: "rgba(255,255,255,0.06)", color: color, border: "1px solid " + color + "55", fontSize: 18, fontFamily: "'Jua', sans-serif", fontWeight: 700 }}>−</button>
-                    <div style={{ minWidth: 44, textAlign: "center", color: color, fontFamily: "'Black Han Sans', sans-serif", fontSize: 26, lineHeight: 1 }}>{cur[kind] || 0}</div>
+                      style={{ width: 44, height: 44, borderRadius: 12, background: color + "26", color: color, border: "1.5px solid " + color, fontSize: 22, fontFamily: "'Jua', sans-serif", fontWeight: 700 }}>−</button>
+                    <div style={{ minWidth: 48, textAlign: "center", color: color, fontFamily: "'Black Han Sans', sans-serif", fontSize: 28, lineHeight: 1 }}>{cur[kind] || 0}</div>
                     <button onClick={() => updateCount(kind, +1)}
-                      style={{ width: 36, height: 36, borderRadius: 10, background: color, color: "#0a0b0f", border: "1px solid " + color, fontSize: 20, fontFamily: "'Jua', sans-serif", fontWeight: 700 }}>+</button>
+                      style={{ width: 44, height: 44, borderRadius: 12, background: color, color: "#0a0b0f", border: "1.5px solid " + color, fontSize: 24, fontFamily: "'Jua', sans-serif", fontWeight: 700 }}>+</button>
                   </div>
                 </div>
               );
