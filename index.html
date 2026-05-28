@@ -66,7 +66,7 @@
 
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef, useMemo } = React;
-const BUILD = "b128"; /* 화면 우하단 표시 — 최신 배포 확인용 */
+const BUILD = "b129"; /* 화면 우하단 표시 — 최신 배포 확인용 */
 
 /* 실시간 위치 공유용 Firebase DB 주소. 여기에 한 번 넣어두면 승객 링크가 ?view=map 만 남아 깔끔해집니다. */
 const SHARE_DB = "https://innum-bus-default-rtdb.firebaseio.com";
@@ -3845,7 +3845,7 @@ function Root() {
   const params = new URLSearchParams(window.location.search);
   const [admin, setAdmin] = useState(params.get("admin") === "1");
   const [ready, setReady] = useState(false);
-  useEffect(() => { const t = setTimeout(() => setReady(true), 1400); return () => clearTimeout(t); }, []);
+  useEffect(() => { const t = setTimeout(() => setReady(true), 1000); return () => clearTimeout(t); }, []);
   if (!ready) return <Intro />;
   if (admin) return <App />;
   const initialTab = params.get("view") === "map" ? "map" : "list";
