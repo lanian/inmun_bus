@@ -38,12 +38,12 @@
 
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef, useMemo } = React;
-const BUILD = "b44"; /* 화면 우하단 표시 — 최신 배포 확인용 */
+const BUILD = "b45"; /* 화면 우하단 표시 — 최신 배포 확인용 */
 
 /* 실시간 위치 공유용 Firebase DB 주소. 여기에 한 번 넣어두면 승객 링크가 ?view=map 만 남아 깔끔해집니다. */
 const SHARE_DB = "https://innum-bus-default-rtdb.firebaseio.com";
 /* 기사 쓰기 로그인용 Firebase 웹 API 키 (콘솔 → 프로젝트 설정 → 일반 → 웹 API 키). 공개돼도 안전(규칙으로 보호). */
-const SHARE_API_KEY = "";
+const SHARE_API_KEY = "AIzaSyAmR4zFCvD-uODve6zsZ-ENe3Y8aJkHrRg";
 
 /* Icons */
 const Svg = ({ size = 16, children, ...rest }) => (
