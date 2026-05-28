@@ -73,7 +73,7 @@
 
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef, useMemo } = React;
-const BUILD = "b168"; /* 화면 우하단 표시 — 최신 배포 확인용 */
+const BUILD = "b169"; /* 화면 우하단 표시 — 최신 배포 확인용 */
 
 /* 실시간 위치 공유용 Firebase DB 주소. 여기에 한 번 넣어두면 승객 링크가 ?view=map 만 남아 깔끔해집니다. */
 const SHARE_DB = "https://innum-bus-default-rtdb.firebaseio.com";
@@ -2007,29 +2007,22 @@ function PassengerView({ dbUrl, onAdmin, initialTab = "list" }) {
         backgroundImage: "radial-gradient(circle at 15% -10%, rgba(22,168,158,0.18), transparent 45%), radial-gradient(circle at 85% 110%, rgba(238,107,46,0.14), transparent 45%)" }}>
       <div className="w-full max-w-md flex flex-col" style={{ flex: 1, minHeight: 0 }}>
         <div className="flex flex-col" style={{ flex: 1, minHeight: 0, background: "#fff", border: "2.5px solid " + FT.ink, borderRadius: 18, boxShadow: "4px 4px 0 " + FT.ink, overflow: "hidden" }}>
-          {/* header — 압축 레이아웃 + 상태 칩 우상단 절대 위치 */}
-          <div style={{ padding: "10px 12px 10px 14px", borderBottom: "2.5px solid " + FT.ink, background: "#fff", display: "flex", gap: 12, alignItems: "center", position: "relative" }}>
-            <FestivalLogo size={40} />
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontSize: 10, color: FT.inkSoft, fontFamily: "'Jua', sans-serif", letterSpacing: 0.2 }}>
-                생각을 끄고, 생각을 켜다 · 제4회 동구 무등산 인문축제
-              </div>
+          {/* header — 상태 칩만 우상단 절대 위치로 압축, 슬로건/부제는 기존 그대로 */}
+          <div style={{ padding: "16px 18px 14px 18px", borderBottom: "2.5px solid " + FT.ink, background: "#fff", display: "flex", gap: 14, alignItems: "flex-start", position: "relative" }}>
+            <FestivalLogo size={44} />
+            <div style={{ flex: 1, minWidth: 0, paddingRight: 20 }}>
+              <div style={{ fontSize: 11, color: FT.inkSoft, fontFamily: "'Jua', sans-serif" }}>생각을 끄고, 생각을 켜다</div>
+              <div style={{ fontSize: 14, color: FT.ink, fontFamily: "'Jua', sans-serif", fontWeight: 700, marginTop: 2 }}>제4회 동구 무등산 인문축제</div>
               <div onClick={onTitleTap} className="select-none"
-                style={{ fontSize: 20, color: FT.orange, fontFamily: "'Jua', sans-serif", fontWeight: 700, lineHeight: 1.2, marginTop: 2 }}>
+                style={{ fontSize: 22, color: FT.orange, fontFamily: "'Jua', sans-serif", fontWeight: 700, lineHeight: 1.15, marginTop: 4 }}>
                 &lt;무등생각&gt; 셔틀버스 안내
               </div>
             </div>
             <div title={statusText}
-              style={{ position: "absolute", top: 8, right: 10, display: "inline-flex", alignItems: "center", gap: 5,
-                background: conn === "error" ? "#FEE2E2" : live.length > 0 ? FT.tealSoft : "#EEEFF1",
-                border: "1.5px solid " + (conn === "error" ? "#B91C1C" : live.length > 0 ? FT.tealDark : FT.mute),
-                borderRadius: 999, padding: "2px 8px", fontFamily: "'Jua', sans-serif", fontSize: 10,
-                color: conn === "error" ? "#B91C1C" : live.length > 0 ? FT.tealDark : FT.inkSoft }}>
-              <span className={live.length > 0 ? "animate-pulse" : ""}
-                style={{ width: 6, height: 6, borderRadius: "50%",
-                  background: conn === "error" ? "#B91C1C" : live.length > 0 ? FT.teal : FT.mute }} />
-              {live.length > 0 ? `운행 ${live.length}` : conn === "error" ? "오류" : "대기"}
-            </div>
+              className={live.length > 0 ? "animate-pulse" : ""}
+              style={{ position: "absolute", top: 12, right: 12, width: 10, height: 10, borderRadius: "50%",
+                background: conn === "error" ? "#B91C1C" : live.length > 0 ? FT.teal : FT.mute,
+                border: "1.5px solid " + FT.ink, boxShadow: "1px 1px 0 " + FT.ink }} />
           </div>
 
 
