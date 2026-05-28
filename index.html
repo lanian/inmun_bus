@@ -73,7 +73,7 @@
 
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef, useMemo } = React;
-const BUILD = "b156"; /* 화면 우하단 표시 — 최신 배포 확인용 */
+const BUILD = "b157"; /* 화면 우하단 표시 — 최신 배포 확인용 */
 
 /* 실시간 위치 공유용 Firebase DB 주소. 여기에 한 번 넣어두면 승객 링크가 ?view=map 만 남아 깔끔해집니다. */
 const SHARE_DB = "https://innum-bus-default-rtdb.firebaseio.com";
@@ -2948,6 +2948,20 @@ function App() {
     fetch(path, { method: "PUT", body: JSON.stringify(data) }).catch(() => {});
   };
 
+  /* 이전 정류장(현 정류장 제외)까지의 누적 (탑승 합 − 하차 합) = 도착 시점 탑승 인원. 음수 0 캡. */
+  const computeOnboardArriving = (prev, csName) => {
+    const tripPrefix = `${direction}|${tripIdx + 1}|`;
+    const stopIdx = stops.findIndex((s) => s.name === csName);
+    if (stopIdx <= 0) return 0; // 시발지면 도착 시 탑승 0
+    let onboard = 0;
+    for (let i = 0; i < stopIdx; i++) {
+      const k = `${tripPrefix}${stops[i].name}`;
+      const v = prev[k] || {};
+      onboard += (v.board || 0) - (v.alight || 0);
+    }
+    return Math.max(0, onboard);
+  };
+
   const updateCount = (kind, delta) => {
     const cs = stops[currentIdx];
     if (!cs) return;
@@ -2959,14 +2973,8 @@ function App() {
       const cur = prev[key] || { board: 0, alight: 0 };
       let nextVal = Math.max(0, (cur[kind] || 0) + delta);
       if (kind === "alight" && delta > 0) {
-        // 하차 캡: 회차 누적 탑승 ≥ 누적 하차 (음수 불가)
-        let totalBoard = 0, otherAlight = 0;
-        Object.entries(prev).forEach(([k, v]) => {
-          if (!k.startsWith(tripPrefix)) return;
-          totalBoard += v.board || 0;
-          if (k !== key) otherAlight += v.alight || 0;
-        });
-        const maxAlightHere = Math.max(0, totalBoard - otherAlight);
+        // 하차 캡: 이 정류장 도착 시점에 버스 안에 있던 인원까지만(=이전 정류장까지 탑승−하차)
+        const maxAlightHere = computeOnboardArriving(prev, cs.name);
         nextVal = Math.min(nextVal, maxAlightHere);
         if (nextVal === cur[kind]) return prev; // 변경 없음 — 디바운스 트리거 안 함
       }
@@ -2979,20 +2987,14 @@ function App() {
     });
   };
 
-  /* 전원 하차 — 종점에서 잔여 인원 일괄 하차 처리 */
+  /* 전원 하차 — 종점에서 도착 시점 잔여 인원만큼 일괄 하차 처리(이전 탑승까지만) */
   const alightAll = () => {
     const cs = stops[currentIdx];
     if (!cs) return;
     const tripPrefix = `${direction}|${tripIdx + 1}|`;
     const key = `${tripPrefix}${cs.name}`;
     setCounts((prev) => {
-      let totalBoard = 0, otherAlight = 0;
-      Object.entries(prev).forEach(([k, v]) => {
-        if (!k.startsWith(tripPrefix)) return;
-        totalBoard += v.board || 0;
-        if (k !== key) otherAlight += v.alight || 0;
-      });
-      const remain = Math.max(0, totalBoard - otherAlight);
+      const remain = computeOnboardArriving(prev, cs.name);
       const next = { ...(prev[key] || { board: 0, alight: 0 }), alight: remain };
       const updated = { ...prev, [key]: next };
       const tk = countsWriteTimerRef.current;
