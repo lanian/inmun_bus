@@ -66,7 +66,7 @@
 
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef, useMemo } = React;
-const BUILD = "b130"; /* 화면 우하단 표시 — 최신 배포 확인용 */
+const BUILD = "b131"; /* 화면 우하단 표시 — 최신 배포 확인용 */
 
 /* 실시간 위치 공유용 Firebase DB 주소. 여기에 한 번 넣어두면 승객 링크가 ?view=map 만 남아 깔끔해집니다. */
 const SHARE_DB = "https://innum-bus-default-rtdb.firebaseio.com";
@@ -515,15 +515,15 @@ function BackupModal({ onClose }) {
             fontFamily: "'IBM Plex Mono', monospace", fontSize: 10, minHeight: 180, resize: "vertical" }} />
         <div className="grid grid-cols-2 gap-2">
           <button onClick={copy}
-            style={{ background: "#fff", color: FT.ink, padding: "8px 10px", borderRadius: 8, border: "2px solid " + FT.ink, boxShadow: "2px 2px 0 " + FT.ink, fontFamily: "'Jua', sans-serif", fontWeight: 700, fontSize: 12 }}>📋 복사</button>
+            style={{ background: "#fff", color: FT.ink, padding: "8px 10px", borderRadius: 8, border: "2px solid " + FT.ink, boxShadow: "2px 2px 0 " + FT.ink, fontFamily: "'Jua', sans-serif", fontWeight: 700, fontSize: 12 }}>복사</button>
           <button onClick={saveFile}
-            style={{ background: "#fff", color: FT.ink, padding: "8px 10px", borderRadius: 8, border: "2px solid " + FT.ink, boxShadow: "2px 2px 0 " + FT.ink, fontFamily: "'Jua', sans-serif", fontWeight: 700, fontSize: 12 }}>💾 파일로 저장</button>
+            style={{ background: "#fff", color: FT.ink, padding: "8px 10px", borderRadius: 8, border: "2px solid " + FT.ink, boxShadow: "2px 2px 0 " + FT.ink, fontFamily: "'Jua', sans-serif", fontWeight: 700, fontSize: 12 }}>파일로 저장</button>
           <label style={{ background: "#fff", color: FT.ink, padding: "8px 10px", borderRadius: 8, border: "2px solid " + FT.ink, boxShadow: "2px 2px 0 " + FT.ink, fontFamily: "'Jua', sans-serif", fontWeight: 700, fontSize: 12, textAlign: "center", cursor: "pointer" }}>
-            📂 파일 불러오기
+            파일 불러오기
             <input type="file" accept="application/json,.json" onChange={loadFile} style={{ display: "none" }} />
           </label>
           <button onClick={restore}
-            style={{ background: FT.orange, color: "#fff", padding: "8px 10px", borderRadius: 8, border: "2px solid " + FT.ink, boxShadow: "2px 2px 0 " + FT.ink, fontFamily: "'Jua', sans-serif", fontWeight: 700, fontSize: 12 }}>🔄 복원하기</button>
+            style={{ background: FT.orange, color: "#fff", padding: "8px 10px", borderRadius: 8, border: "2px solid " + FT.ink, boxShadow: "2px 2px 0 " + FT.ink, fontFamily: "'Jua', sans-serif", fontWeight: 700, fontSize: 12 }}>복원하기</button>
         </div>
         {msg && <div style={{ fontSize: 11, fontFamily: "'Jua', sans-serif",
           color: msg.startsWith("✅") ? FT.tealDark : msg.startsWith("❌") ? "#dc2626" : FT.inkSoft }}>{msg}</div>}
@@ -1067,7 +1067,7 @@ function ViaEditor({ onClose, dbUrl, getAuth }) {
         <div style={{ display: "flex", gap: 6 }}>
           <button onClick={pushNow}
             style={{ background: FT.teal, color: "#fff", padding: "8px 12px", borderRadius: 10,
-              border: "2px solid " + FT.ink, fontFamily: "'Jua', sans-serif", fontSize: 12, boxShadow: "2px 2px 0 " + FT.ink, fontWeight: 700 }}>🔄 지금 반영</button>
+              border: "2px solid " + FT.ink, fontFamily: "'Jua', sans-serif", fontSize: 12, boxShadow: "2px 2px 0 " + FT.ink, fontWeight: 700 }}>지금 반영</button>
           <button onClick={() => { if (window.confirm("저장된 모든 경유점을 초기화할까요? (코드 기본값으로 복귀)")) setViaMap({}); }}
             style={{ background: "#fff", color: FT.ink, padding: "8px 12px", borderRadius: 10,
               border: "2px solid " + FT.ink, fontFamily: "'Jua', sans-serif", fontSize: 12, boxShadow: "2px 2px 0 " + FT.ink, fontWeight: 700 }}>초기화</button>
@@ -1218,7 +1218,7 @@ function LiveMapView({ dbUrl }) {
     };
     const schedIcon = (dir, tripNum) => {
       const c = dir === "inbound" ? FT.teal : FT.orange;
-      const html = `<div style="display:inline-flex;align-items:center;gap:3px;background:#fff;color:${FT.ink};border:2px dashed ${c};border-radius:999px;padding:3px 9px;font-family:'Jua',sans-serif;font-weight:700;font-size:11px;white-space:nowrap;opacity:0.92;">📅 ${tripNum}회차 예상</div>`;
+      const html = `<div style="display:inline-flex;align-items:center;gap:3px;background:#fff;color:${FT.ink};border:2px dashed ${c};border-radius:999px;padding:3px 9px;font-family:'Jua',sans-serif;font-weight:700;font-size:11px;white-space:nowrap;opacity:0.92;">${tripNum}회차 예상</div>`;
       return L.divIcon({ className: "", html, iconSize: [130, 26], iconAnchor: [65, 13] });
     };
     const poll = async () => {
@@ -1487,7 +1487,7 @@ function BusCard({ id, bus, agoText, nowMin, tripsToday }) {
           : mins == null ? null
           : mins > 0 ? `약 ${mins}분 후`
           : mins === 0 ? "잠시 후"
-          : `🔴 지연 ${-mins}분`;
+          : `지연 ${-mins}분`;
         const accent = bus.arrived ? FT.tealDark : FT.orangeDark;
         const etaColor = delayed ? "#dc2626" : accent;
         return (
@@ -1533,7 +1533,7 @@ function BusCard({ id, bus, agoText, nowMin, tripsToday }) {
           <div style={{ marginTop: 6, padding: "7px 10px", background: FT.paper, border: "1.5px solid " + FT.mute + "55", borderRadius: 8 }}>
             <div className="flex items-center justify-between mb-1">
               <span style={{ fontSize: 10, color: FT.inkSoft, fontFamily: "'Jua', sans-serif", fontWeight: 700 }}>남은 정류장</span>
-              {delay > 0 && <span style={{ fontSize: 10, color: "#dc2626", fontFamily: "'Jua', sans-serif", fontWeight: 700 }}>🔴 +{delay}분 지연</span>}
+              {delay > 0 && <span style={{ fontSize: 10, color: "#dc2626", fontFamily: "'Jua', sans-serif", fontWeight: 700 }}>+{delay}분 지연</span>}
             </div>
             <div className="space-y-1">
               {remaining.map((r) => (
@@ -1827,17 +1827,17 @@ function PassengerView({ dbUrl, onAdmin, initialTab = "list" }) {
             <button onClick={() => setTab("map")} className="py-2.5 text-[12px]"
               style={{ background: FT.teal, color: "#fff", border: "2px solid " + FT.ink, borderRadius: 10,
                 boxShadow: "2px 2px 0 " + FT.ink, fontFamily: "'Jua', sans-serif", fontWeight: 700 }}>
-              🗺️ 지도
+              지도
             </button>
             <button onClick={() => { setVenueZone(0); setShowVenue(true); }} className="py-2.5 text-[12px]"
               style={{ background: "#fff", color: FT.ink, border: "2px solid " + FT.ink, borderRadius: 10,
                 boxShadow: "2px 2px 0 " + FT.ink, fontFamily: "'Jua', sans-serif", fontWeight: 700 }}>
-              🎪 행사장
+              행사장
             </button>
             <button onClick={() => setShowTimetable(true)} className="py-2.5 text-[12px]"
               style={{ background: FT.orange, color: "#fff", border: "2px solid " + FT.ink, borderRadius: 10,
                 boxShadow: "2px 2px 0 " + FT.ink, fontFamily: "'Jua', sans-serif", fontWeight: 700 }}>
-              🕑 시간표
+              시간표
             </button>
           </div>
         </div>
@@ -2879,7 +2879,7 @@ function App() {
                 borderBottom: "1px solid #3a3f54", color: "#fca5a5" }}>
               <AlertCircle size={12} />
               <span className="flex-1">{permissionState === "denied" ? "위치 권한 차단됨" : gpsError}</span>
-              <button onClick={retryPermission} className="text-emerald-400 underline">🔄 다시</button>
+              <button onClick={retryPermission} className="text-emerald-400 underline">다시</button>
               <button onClick={() => setMode("advanced")}
                 className="text-amber-400 underline">설정</button>
             </div>
@@ -3300,7 +3300,7 @@ function App() {
               <button onClick={retryPermission}
                 className="flex-1 px-3 py-1.5 rounded-md text-xs font-bold"
                 style={{ background: "#22d65f", color: "#0a0b0f", fontFamily: "'Jua', sans-serif" }}>
-                🔄 다시 시도
+                다시 시도
               </button>
               {permissionState === "denied" && (
                 <button onClick={() => setShowHelp(!showHelp)}
@@ -3640,7 +3640,7 @@ function App() {
                     <button onClick={() => { try { navigator.clipboard.writeText(purl); setGpsError(""); } catch (_) {} }}
                       className="w-full py-1.5 rounded text-[11px] font-bold"
                       style={{ background: "rgba(251,191,36,0.15)", color: "#fbbf24", border: "1px solid rgba(251,191,36,0.3)", fontFamily: "'Jua', sans-serif" }}>
-                      📋 승객 링크 복사
+                      승객 링크 복사
                     </button>
                     <a href={purl} target="_blank" rel="noopener noreferrer"
                       className="block text-center mt-1 text-[10px] underline" style={{ color: "#22d65f" }}>지도 미리보기</a>
@@ -3713,16 +3713,16 @@ function App() {
               <button onClick={copyMent}
                 className="px-3 py-2 rounded-lg text-xs font-bold"
                 style={{ background: "rgba(251,191,36,0.15)", color: "#fbbf24", border: "1px solid rgba(251,191,36,0.3)" }}>
-                📋 복사
+                복사
               </button>
               <button onClick={downloadMent}
                 className="px-3 py-2 rounded-lg text-xs font-bold"
                 style={{ background: "rgba(251,191,36,0.15)", color: "#fbbf24", border: "1px solid rgba(251,191,36,0.3)" }}>
-                💾 파일 저장
+                파일 저장
               </button>
               <label className="px-3 py-2 rounded-lg text-xs font-bold text-center cursor-pointer"
                 style={{ background: "rgba(100,116,139,0.15)", color: "#94a3b8", border: "1px solid #3a3f54" }}>
-                📂 파일 열기
+                파일 열기
                 <input type="file" accept="application/json,.json" className="hidden"
                   onChange={(e) => uploadMent(e.target.files && e.target.files[0])} />
               </label>
@@ -3766,16 +3766,16 @@ function App() {
               <button onClick={copyBackup}
                 className="px-3 py-2 rounded-lg text-xs font-bold"
                 style={{ background: "rgba(251,191,36,0.15)", color: "#fbbf24", border: "1px solid rgba(251,191,36,0.3)" }}>
-                📋 복사
+                복사
               </button>
               <button onClick={downloadBackup}
                 className="px-3 py-2 rounded-lg text-xs font-bold"
                 style={{ background: "rgba(251,191,36,0.15)", color: "#fbbf24", border: "1px solid rgba(251,191,36,0.3)" }}>
-                💾 파일 저장
+                파일 저장
               </button>
               <label className="px-3 py-2 rounded-lg text-xs font-bold text-center cursor-pointer"
                 style={{ background: "rgba(100,116,139,0.15)", color: "#94a3b8", border: "1px solid #3a3f54" }}>
-                📂 파일 열기
+                파일 열기
                 <input type="file" accept="application/json,.json" className="hidden"
                   onChange={(e) => uploadBackup(e.target.files && e.target.files[0])} />
               </label>
