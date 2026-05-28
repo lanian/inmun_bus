@@ -73,7 +73,7 @@
 
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef, useMemo } = React;
-const BUILD = "b176"; /* 화면 우하단 표시 — 최신 배포 확인용 */
+const BUILD = "b177"; /* 화면 우하단 표시 — 최신 배포 확인용 */
 
 /* 실시간 위치 공유용 Firebase DB 주소. 여기에 한 번 넣어두면 승객 링크가 ?view=map 만 남아 깔끔해집니다. */
 const SHARE_DB = "https://innum-bus-default-rtdb.firebaseio.com";
@@ -763,18 +763,41 @@ function VenueModal({ onClose, initialZone = 0 }) {
         </button>
 
         {/* 주요 구역 */}
-        <div style={{ fontSize: 12, color: FT.ink, fontFamily: "'Jua', sans-serif", fontWeight: 700, marginTop: 4 }}>📍 주요 구역</div>
-        {FESTIVAL_ZONES.map((z) => (
-          <div key={z.num} style={{ display: "flex", alignItems: "stretch", gap: 10, background: FT.paper, border: "1.5px solid " + FT.ink, borderRadius: 10, padding: "8px 10px" }}>
-            <div style={{ width: 28, height: 28, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center",
-              background: z.num % 2 ? FT.orange : FT.teal, color: "#fff", border: "2px solid " + FT.ink, borderRadius: 8,
-              fontFamily: "'Jua', sans-serif", fontWeight: 700, fontSize: 14 }}>{z.num}</div>
-            <div style={{ minWidth: 0, flex: 1 }}>
-              <div style={{ color: FT.ink, fontFamily: "'Jua', sans-serif", fontWeight: 700, fontSize: 13 }}>{z.title}</div>
-              <div style={{ color: FT.inkSoft, fontFamily: "'Jua', sans-serif", fontSize: 11, marginTop: 1 }}>{z.sub}</div>
-            </div>
+        <div className="flex items-center justify-between" style={{ marginTop: 4 }}>
+          <div style={{ fontSize: 12, color: FT.ink, fontFamily: "'Jua', sans-serif", fontWeight: 700 }}>
+            📍 주요 구역 <span style={{ fontSize: 10, color: FT.inkSoft, fontWeight: 400 }}>· 탭하면 프로그램 필터</span>
           </div>
-        ))}
+          {progZone !== 0 && (
+            <button onClick={() => setProgZone(0)}
+              style={{ fontSize: 10, fontFamily: "'Jua', sans-serif", fontWeight: 700, padding: "3px 9px", borderRadius: 999,
+                background: "#fff", color: FT.ink, border: "1.5px solid " + FT.ink }}>
+              전체 보기
+            </button>
+          )}
+        </div>
+        {FESTIVAL_ZONES.map((z) => {
+          const active = progZone === z.num;
+          const c = z.num % 2 ? FT.orange : FT.teal;
+          return (
+            <button key={z.num} onClick={() => setProgZone(active ? 0 : z.num)}
+              className="w-full"
+              style={{ display: "flex", alignItems: "stretch", gap: 10,
+                background: active ? c + "26" : FT.paper,
+                border: active ? "2px solid " + c : "1.5px solid " + FT.ink,
+                borderRadius: 10, padding: active ? "7.5px 9.5px" : "8px 10px",
+                boxShadow: active ? "1.5px 1.5px 0 " + c : "none",
+                textAlign: "left", cursor: "pointer" }}>
+              <div style={{ width: 28, height: 28, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center",
+                background: c, color: "#fff", border: "2px solid " + FT.ink, borderRadius: 8,
+                fontFamily: "'Jua', sans-serif", fontWeight: 700, fontSize: 14 }}>{z.num}</div>
+              <div style={{ minWidth: 0, flex: 1 }}>
+                <div style={{ color: FT.ink, fontFamily: "'Jua', sans-serif", fontWeight: 700, fontSize: 13 }}>{z.title}</div>
+                <div style={{ color: FT.inkSoft, fontFamily: "'Jua', sans-serif", fontSize: 11, marginTop: 1 }}>{z.sub}</div>
+              </div>
+              {active && <span style={{ alignSelf: "center", color: c, fontFamily: "'Jua', sans-serif", fontWeight: 700, fontSize: 14 }}>✓</span>}
+            </button>
+          );
+        })}
 
         {/* 프로그램표 (리스트) */}
         <div className="flex items-center justify-between" style={{ marginTop: 4 }}>
@@ -796,23 +819,14 @@ function VenueModal({ onClose, initialZone = 0 }) {
             </button>
           ))}
         </div>
-        {/* 구역 필터 */}
-        <div className="flex gap-1 overflow-x-auto" style={{ paddingBottom: 2 }}>
-          {[{ z: 0, name: "전체" }, ...FESTIVAL_ZONES.map((z) => ({ z: z.num, name: z.title }))].map((opt) => {
-            const active = progZone === opt.z;
-            const c = opt.z === 0 ? FT.ink : (opt.z % 2 ? FT.orange : FT.teal);
-            return (
-              <button key={opt.z} onClick={() => setProgZone(opt.z)}
-                className="flex-shrink-0"
-                style={{ padding: "5px 10px", fontSize: 11, fontFamily: "'Jua', sans-serif", fontWeight: 700,
-                  background: active ? c : "#fff", color: active ? "#fff" : FT.ink,
-                  border: "1.5px solid " + FT.ink, borderRadius: 999,
-                  boxShadow: active ? "1.5px 1.5px 0 " + FT.ink : "none" }}>
-                {opt.z === 0 ? "전체" : opt.name}
-              </button>
-            );
-          })}
-        </div>
+        {/* 활성 필터 표시 — 구역이 선택돼 있으면 작은 안내 */}
+        {progZone !== 0 && (
+          <div style={{ fontSize: 10, color: FT.inkSoft, fontFamily: "'Jua', sans-serif", marginTop: 2 }}>
+            ⓘ <span style={{ color: progZone % 2 ? FT.orangeDark : FT.tealDark, fontWeight: 700 }}>
+              {FESTIVAL_ZONES.find((z) => z.num === progZone)?.title}
+            </span> 만 표시 중 — 위 카드 또는 '전체 보기' 로 해제
+          </div>
+        )}
         <div className="space-y-2">
           {(() => {
             const filtered = FESTIVAL_PROGRAM[progDay].items
