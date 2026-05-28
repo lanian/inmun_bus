@@ -86,7 +86,7 @@
 
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef, useMemo } = React;
-const BUILD = "b200"; /* 화면 우하단 표시 — 최신 배포 확인용 */
+const BUILD = "b201"; /* 화면 우하단 표시 — 최신 배포 확인용 */
 
 /* 실시간 위치 공유용 Firebase DB 주소. 여기에 한 번 넣어두면 승객 링크가 ?view=map 만 남아 깔끔해집니다. */
 const SHARE_DB = "https://innum-bus-default-rtdb.firebaseio.com";
@@ -1621,11 +1621,7 @@ function LiveMapView({ dbUrl }) {
     if (!window.L || !elRef.current || mapRef.current) return;
     const L = window.L;
     const map = L.map(elRef.current, { zoomControl: true });
-    const osm = L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 19, attribution: "© OpenStreetMap" }).addTo(map);
-    // 행사장 지도(stylized) 이미지 오버레이 — 추정 bounds, 운영자가 미세조정 가능
-    const venueBounds = [[35.1300, 126.9520], [35.1378, 126.9665]];
-    const venueOverlay = L.imageOverlay("venue.png", venueBounds, { opacity: 0.55, interactive: false }).addTo(map);
-    L.control.layers({ "OSM 도로지도": osm }, { "행사장 지도": venueOverlay }, { position: "topright", collapsed: true }).addTo(map);
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 19, attribution: "© OpenStreetMap" }).addTo(map);
     map.setView([35.135, 126.94], 14);
     mapRef.current = map;
     setTimeout(() => map.invalidateSize(), 100);
