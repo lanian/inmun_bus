@@ -45,7 +45,7 @@
 
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef, useMemo } = React;
-const BUILD = "b120"; /* 화면 우하단 표시 — 최신 배포 확인용 */
+const BUILD = "b121"; /* 화면 우하단 표시 — 최신 배포 확인용 */
 
 /* 실시간 위치 공유용 Firebase DB 주소. 여기에 한 번 넣어두면 승객 링크가 ?view=map 만 남아 깔끔해집니다. */
 const SHARE_DB = "https://innum-bus-default-rtdb.firebaseio.com";
@@ -2905,8 +2905,21 @@ function App() {
               }}>
               <span className={sharing ? "inline-block w-1.5 h-1.5 rounded-full animate-pulse" : "inline-block w-1.5 h-1.5 rounded-full"}
                 style={{ background: sharing ? "#60a5fa" : "#64748b" }} />
-              위치 공유 {sharing ? "ON" : "OFF"}
+              {sharing ? (locShare ? "공유 ON · 📍 위치+운행" : "공유 ON · 운행만") : "공유 OFF"}
             </button>
+            {sharing && (
+              <button onClick={() => setLocShare((v) => !v)}
+                title={locShare ? "GPS 좌표 송신 중 — 끄면 운행 정보만" : "운행 정보만 송신 중 — 켜면 좌표도 송신"}
+                className="flex items-center gap-1 text-xs px-2.5 py-1.5 rounded-full"
+                style={{
+                  background: locShare ? "rgba(96,165,250,0.18)" : "rgba(100, 116, 139, 0.1)",
+                  color: locShare ? "#60a5fa" : "#94a3b8",
+                  border: `1px solid ${locShare ? "rgba(96,165,250,0.35)" : "#3a3f54"}`,
+                  fontFamily: "'Jua', sans-serif",
+                }}>
+                📍 {locShare ? "ON" : "OFF"}
+              </button>
+            )}
             {sharing && (
               <button onClick={() => setManualWaiting((v) => !v)}
                 className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-full"
