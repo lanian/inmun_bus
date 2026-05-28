@@ -45,7 +45,7 @@
 
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef, useMemo } = React;
-const BUILD = "b123"; /* 화면 우하단 표시 — 최신 배포 확인용 */
+const BUILD = "b124"; /* 화면 우하단 표시 — 최신 배포 확인용 */
 
 /* 실시간 위치 공유용 Firebase DB 주소. 여기에 한 번 넣어두면 승객 링크가 ?view=map 만 남아 깔끔해집니다. */
 const SHARE_DB = "https://innum-bus-default-rtdb.firebaseio.com";
@@ -1857,6 +1857,19 @@ function App() {
   const [locShare, setLocShare] = useState(() => LS.get("locshare", "1") === "1"); // 위치 좌표 공유(끄면 운행 정보만 송신)
   useEffect(() => LS.set("locshare", locShare ? "1" : "0"), [locShare]);
   const lastShareRef = useRef(0);
+  // 좌표 공유가 켜진 채 sharing ON 되면 GPS 자동도 같이 켜기(전환 시점에만 동작)
+  const prevShareRef = useRef({ sharing: false, locShare: false, init: false });
+  useEffect(() => {
+    const prev = prevShareRef.current;
+    if (!prev.init) { prevShareRef.current = { sharing, locShare, init: true }; return; }
+    const wantCoords = sharing && locShare;
+    const wasWantingCoords = prev.sharing && prev.locShare;
+    prevShareRef.current = { sharing, locShare, init: true };
+    if (wantCoords && !wasWantingCoords && !autoMode && permissionState !== "denied") {
+      primeTTS();
+      setAutoMode(true);
+    }
+  }, [sharing, locShare]);
   const authTokenRef = useRef("");
   const [progTimeBase, setProgTimeBase] = useState(() => LS.get("progbase", "now")); // now|trip
 
