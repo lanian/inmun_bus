@@ -46,6 +46,13 @@
   /* 지도 대기 중 버스 마커 펄스 */
   @keyframes waitMarker { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.07); } }
   .fest-wait-marker > div { animation: waitMarker 1.4s ease-in-out infinite; }
+  /* 도착 알람 — 카운트 영역에 부드러운 노란 글로우 */
+  @keyframes arrivedAlert {
+    0% { box-shadow: 0 0 0 0 rgba(251, 191, 36, 0.55); }
+    50% { box-shadow: 0 0 0 12px rgba(251, 191, 36, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(251, 191, 36, 0); }
+  }
+  .arrived-alert { animation: arrivedAlert 1.4s ease-out 3; }
   /* 정류장 상시 라벨 — 무등생각 테마(흰 박스 + 검정 외곽선 + 입체 그림자) */
   .leaflet-tooltip.fest-stop { background: #fff; color: #101113; border: 1.5px solid #101113;
     border-radius: 6px; padding: 1px 7px; font-family: 'Jua', sans-serif; font-size: 11px; font-weight: 700;
@@ -66,7 +73,7 @@
 
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef, useMemo } = React;
-const BUILD = "b148"; /* 화면 우하단 표시 — 최신 배포 확인용 */
+const BUILD = "b149"; /* 화면 우하단 표시 — 최신 배포 확인용 */
 
 /* 실시간 위치 공유용 Firebase DB 주소. 여기에 한 번 넣어두면 승객 링크가 ?view=map 만 남아 깔끔해집니다. */
 const SHARE_DB = "https://innum-bus-default-rtdb.firebaseio.com";
@@ -429,7 +436,7 @@ function TimetableModal({ tripsToday, onClose }) {
 }
 
 /* 전체 수정사항 백업·복원 모달 — localStorage(shuttle:*) 키를 JSON으로 내보내고 다시 적용 */
-function BackupModal({ onClose }) {
+function BackupModal({ onClose, counts, dateKey }) {
   const SENSITIVE = new Set(["driveremail", "driverpass", "apikey"]);
   const [includeSensitive, setIncludeSensitive] = useState(false);
   const [text, setText] = useState("");
@@ -445,9 +452,11 @@ function BackupModal({ onClose }) {
         out[short] = localStorage.getItem(k);
       }
     } catch (_) {}
-    return { version: 1, savedAt: new Date().toISOString(), data: out };
+    const snap = { version: 1, savedAt: new Date().toISOString(), data: out };
+    if (counts && Object.keys(counts).length) snap.counts = { date: dateKey, entries: counts };
+    return snap;
   };
-  useEffect(() => { setText(JSON.stringify(snapshot(includeSensitive), null, 2)); }, [includeSensitive]);
+  useEffect(() => { setText(JSON.stringify(snapshot(includeSensitive), null, 2)); }, [includeSensitive, counts, dateKey]);
   const copy = async () => {
     try { await navigator.clipboard.writeText(text); setMsg("✅ 클립보드에 복사했어요"); }
     catch (_) { setMsg("복사 실패 — 직접 선택해 복사하세요"); }
@@ -591,6 +600,101 @@ const FESTIVAL_PROGRAM = {
 const programTimeKey = (t) => /^\d/.test(t) ? t : "ZZ:ZZ";
 
 /* 행사장 지도 + 프로그램 안내 모달 */
+/* 운영자 전용 — 오늘 일자 승하차 카운트 통계 모달 (회차별·정류장별 합계 + CSV 추출) */
+function StatsModal({ counts, dateKey, onClose }) {
+  const rows = Object.entries(counts).map(([k, v]) => {
+    const [dir, trip, stop] = k.split("|");
+    return { dir, trip: Number(trip), stop, board: v.board || 0, alight: v.alight || 0 };
+  });
+  const byTrip = {};
+  const byStop = {};
+  let totalBoard = 0, totalAlight = 0;
+  rows.forEach((r) => {
+    const tk = `${r.dir}|${r.trip}`;
+    byTrip[tk] = byTrip[tk] || { board: 0, alight: 0 };
+    byTrip[tk].board += r.board; byTrip[tk].alight += r.alight;
+    const sk = `${r.dir}|${r.stop}`;
+    byStop[sk] = byStop[sk] || { board: 0, alight: 0 };
+    byStop[sk].board += r.board; byStop[sk].alight += r.alight;
+    totalBoard += r.board; totalAlight += r.alight;
+  });
+  const dirLabel = (d) => d === "outbound" ? "축제장행" : "광장행";
+  const tripEntries = Object.entries(byTrip).sort((a, b) => a[0].localeCompare(b[0]));
+  const stopEntries = Object.entries(byStop).sort((a, b) => a[0].localeCompare(b[0]));
+  const exportCsv = () => {
+    const header = "date,direction,trip,stop,board,alight";
+    const lines = rows.slice().sort((a, b) =>
+      a.dir.localeCompare(b.dir) || a.trip - b.trip || a.stop.localeCompare(b.stop)
+    ).map((r) => `${dateKey},${r.dir},${r.trip},"${r.stop}",${r.board},${r.alight}`);
+    const csv = [header, ...lines].join("\n");
+    const blob = new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = `counts-${dateKey}.csv`; a.click();
+    URL.revokeObjectURL(url);
+  };
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      style={{ background: "rgba(0,0,0,0.7)" }} onClick={onClose}>
+      <div className="w-full max-w-md rounded-2xl border-2 p-4 space-y-3 max-h-[88vh] overflow-y-auto"
+        style={{ background: "#13151c", borderColor: "#3a3f54" }} onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between">
+          <div className="text-sm font-bold" style={{ color: "#22d65f", fontFamily: "'Jua', sans-serif" }}>
+            오늘 승하차 통계 · {dateKey}
+          </div>
+          <button onClick={onClose} className="text-slate-400 text-lg leading-none px-1">×</button>
+        </div>
+        <div className="grid grid-cols-2 gap-2 text-center">
+          <div className="rounded-lg p-2" style={{ background: "rgba(34,214,95,0.12)", border: "1px solid rgba(34,214,95,0.3)" }}>
+            <div className="text-[10px] text-emerald-400/70" style={{ fontFamily: "'Jua', sans-serif" }}>총 탑승</div>
+            <div className="text-2xl font-bold" style={{ color: "#22d65f", fontFamily: "'Black Han Sans', sans-serif" }}>{totalBoard}</div>
+          </div>
+          <div className="rounded-lg p-2" style={{ background: "rgba(251,146,60,0.12)", border: "1px solid rgba(251,146,60,0.3)" }}>
+            <div className="text-[10px]" style={{ color: "#fb923c", opacity: 0.7, fontFamily: "'Jua', sans-serif" }}>총 하차</div>
+            <div className="text-2xl font-bold" style={{ color: "#fb923c", fontFamily: "'Black Han Sans', sans-serif" }}>{totalAlight}</div>
+          </div>
+        </div>
+        <div>
+          <div className="text-[11px] text-slate-400 mb-1" style={{ fontFamily: "'Jua', sans-serif" }}>회차별 합계</div>
+          {tripEntries.length === 0 ? (
+            <div className="text-[11px] text-slate-600 text-center py-2">기록 없음</div>
+          ) : tripEntries.map(([k, v]) => {
+            const [d, t] = k.split("|");
+            return (
+              <div key={k} className="flex items-center text-xs py-1 border-b border-slate-700">
+                <span style={{ color: d === "outbound" ? "#fb923c" : "#22d65f", minWidth: 80 }}>{dirLabel(d)} {t}회차</span>
+                <span className="ml-auto text-emerald-400">탑 {v.board}</span>
+                <span className="ml-3 text-orange-400">하 {v.alight}</span>
+              </div>
+            );
+          })}
+        </div>
+        <div>
+          <div className="text-[11px] text-slate-400 mb-1" style={{ fontFamily: "'Jua', sans-serif" }}>정류장별 합계</div>
+          {stopEntries.length === 0 ? (
+            <div className="text-[11px] text-slate-600 text-center py-2">기록 없음</div>
+          ) : stopEntries.map(([k, v]) => {
+            const [d, stop] = k.split("|");
+            return (
+              <div key={k} className="flex items-center text-xs py-1 border-b border-slate-700">
+                <span style={{ color: d === "outbound" ? "#fb923c" : "#22d65f", minWidth: 80 }}>{dirLabel(d)}</span>
+                <span className="text-slate-300 truncate" style={{ flex: 1 }}>{stop}</span>
+                <span className="ml-2 text-emerald-400">탑 {v.board}</span>
+                <span className="ml-2 text-orange-400">하 {v.alight}</span>
+              </div>
+            );
+          })}
+        </div>
+        <button onClick={exportCsv}
+          className="w-full px-3 py-2 rounded-lg text-xs font-bold"
+          style={{ background: "#22d65f", color: "#0a0b0f", fontFamily: "'Jua', sans-serif" }}>
+          CSV 내려받기
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function VenueModal({ onClose, initialZone = 0 }) {
   const [expandedImg, setExpandedImg] = useState(null);
   const [progDay, setProgDay] = useState("day1");
@@ -2086,6 +2190,8 @@ function App() {
   // 승하차 카운트 — { "dir|trip|stop": { board: N, alight: N } }. Firebase /counts/{date}/dir/trip/stopName 에 저장.
   const [counts, setCounts] = useState({});
   const countsWriteTimerRef = useRef({}); // key별 디바운스 타이머
+  const [showStats, setShowStats] = useState(false);
+  const [arrivedPulse, setArrivedPulse] = useState(0); // arrived 트리거 시점(ms)
   const dateKey = (() => {
     const d = new Date();
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
@@ -2913,6 +3019,10 @@ function App() {
       departedFromRef.current = { stop: curStop.name, at: now };
       if (autoMode) chimeThenSpeak("출발합니다. 안전하게 손잡이를 잡아주세요.");
     }
+    // 도착 진입 시 카운트 영역에 펄스 알람
+    if (!prevArrived && arrivedNow) {
+      setArrivedPulse(Date.now());
+    }
     arrivedStateRef.current = arrivedNow;
     const dep = departedFromRef.current;
     const departedInfo = dep && (now - dep.at < 90000) ? dep : null;
@@ -3094,8 +3204,10 @@ function App() {
                   </div>
                 </div>
               );
+              const pulseClass = arrivedPulse && (Date.now() - arrivedPulse < 6000) ? " arrived-alert" : "";
               return (
-                <div className="flex items-stretch gap-3 mt-4 pt-3" style={{ borderTop: "1px solid #3a3f54" }}>
+                <div className={"flex items-stretch gap-3 mt-4 pt-3 rounded-lg" + pulseClass}
+                  style={{ borderTop: "1px solid #3a3f54", padding: "8px 4px" }}>
                   <Cell label="탑승" kind="board" color="#22d65f" />
                   <div style={{ width: 1, background: "#3a3f54" }} />
                   <Cell label="하차" kind="alight" color="#fb923c" />
@@ -3294,6 +3406,12 @@ function App() {
                 border: "1px solid rgba(251, 191, 36, 0.3)", fontFamily: "'Jua', sans-serif" }}>
               🕘 시간표
             </button>
+            <button onClick={() => setShowStats(true)}
+              className="flex items-center gap-1 text-xs px-3 py-1.5 rounded-full"
+              style={{ background: "rgba(34, 214, 95, 0.12)", color: "#22d65f",
+                border: "1px solid rgba(34, 214, 95, 0.3)", fontFamily: "'Jua', sans-serif" }}>
+              승하차 통계
+            </button>
             <div className="ml-auto text-[10px] text-slate-600 tracking-wider"
               style={{ fontFamily: "'IBM Plex Mono', monospace" }}>
               {currentIdx + 1}/{stops.length} · {tripsToday}회 · {BUILD}
@@ -3301,6 +3419,7 @@ function App() {
           </div>
 
           {showTimetable && <TimetableModal tripsToday={tripsToday} onClose={() => setShowTimetable(false)} />}
+          {showStats && <StatsModal counts={counts} dateKey={dateKey} onClose={() => setShowStats(false)} />}
         </div>
       </div>
     );
@@ -3990,8 +4109,9 @@ function App() {
       </div>
 
       {showTimetable && <TimetableModal tripsToday={tripsToday} onClose={() => setShowTimetable(false)} />}
+      {showStats && <StatsModal counts={counts} dateKey={dateKey} onClose={() => setShowStats(false)} />}
       {showViaEditor && <ViaEditor onClose={() => setShowViaEditor(false)} dbUrl={shareUrl} getAuth={() => authTokenRef.current} />}
-      {showBackup && <BackupModal onClose={() => setShowBackup(false)} />}
+      {showBackup && <BackupModal onClose={() => setShowBackup(false)} counts={counts} dateKey={dateKey} />}
 
       {/* 멘트 편집·백업·복원 모달 */}
       {mentBackup !== null && (
