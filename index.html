@@ -73,7 +73,7 @@
 
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef, useMemo } = React;
-const BUILD = "b177"; /* 화면 우하단 표시 — 최신 배포 확인용 */
+const BUILD = "b178"; /* 화면 우하단 표시 — 최신 배포 확인용 */
 
 /* 실시간 위치 공유용 Firebase DB 주소. 여기에 한 번 넣어두면 승객 링크가 ?view=map 만 남아 깔끔해집니다. */
 const SHARE_DB = "https://innum-bus-default-rtdb.firebaseio.com";
@@ -3623,13 +3623,6 @@ function App() {
           {/* Controls — big announce/replay (prev/next spaced apart to avoid mis-taps) */}
           <div className="px-5 py-6 border-2 border-t-0 rounded-b-3xl flex flex-col items-center gap-3"
             style={{ background: "linear-gradient(180deg, #1c1f2b 0%, #13151c 100%)", borderColor: "#3a3f54" }}>
-            {/* 안내 정지 — 항상 노출(비활성 시 dim) */}
-            <button onClick={stopAnnounce} disabled={!isAnnouncing}
-              className="w-full py-2 rounded-lg text-[12px] font-bold disabled:opacity-30"
-              style={{ background: isAnnouncing ? "rgba(239,68,68,0.22)" : "rgba(239,68,68,0.08)",
-                color: "#fca5a5", border: "1px solid rgba(239,68,68,0.3)", fontFamily: "'Jua', sans-serif" }}>
-              ⏹ 안내 정지
-            </button>
             <div className="flex items-center justify-between w-full">
               <button onClick={prev} disabled={currentIdx === 0}
                 className="w-14 h-14 rounded-full flex items-center justify-center disabled:opacity-30"
