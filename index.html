@@ -86,7 +86,7 @@
 
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef, useMemo } = React;
-const BUILD = "b202"; /* 화면 우하단 표시 — 최신 배포 확인용 */
+const BUILD = "b203"; /* 화면 우하단 표시 — 최신 배포 확인용 */
 
 /* 실시간 위치 공유용 Firebase DB 주소. 여기에 한 번 넣어두면 승객 링크가 ?view=map 만 남아 깔끔해집니다. */
 const SHARE_DB = "https://innum-bus-default-rtdb.firebaseio.com";
@@ -1162,7 +1162,12 @@ function ZoneEditor({ onClose, dbUrl, getAuth, refreshAuth }) {
   const elRef = useRef(null);
   const mapRef = useRef(null);
   const markersRef = useRef({});
+  const subMarkersRef = useRef({}); // { [zoneNum]: [marker, ...] }
   const zonesRef = useRef({});
+  const cleanSubs = (arr) => Array.isArray(arr)
+    ? arr.filter((s) => s && typeof s.lat === "number" && typeof s.lng === "number")
+        .map((s) => ({ name: String(s.name || ""), lat: s.lat, lng: s.lng }))
+    : [];
   const [zones, setZones] = useState(() => {
     const ls = LS.getJSON("zones", {});
     const out = {};
@@ -1174,6 +1179,7 @@ function ZoneEditor({ onClose, dbUrl, getAuth, refreshAuth }) {
         rA: typeof o.rA === "number" ? o.rA : (z.rA || 80),
         rB: typeof o.rB === "number" ? o.rB : (z.rB || 80),
         rot: typeof o.rot === "number" ? o.rot : (z.rot || 0),
+        subs: Array.isArray(o.subs) ? cleanSubs(o.subs) : cleanSubs(z.subs),
       };
     });
     return out;
@@ -1195,6 +1201,7 @@ function ZoneEditor({ onClose, dbUrl, getAuth, refreshAuth }) {
               rA: typeof v.rA === "number" ? v.rA : (prev[k]?.rA || 80),
               rB: typeof v.rB === "number" ? v.rB : (prev[k]?.rB || 80),
               rot: typeof v.rot === "number" ? v.rot : (prev[k]?.rot || 0),
+              subs: Array.isArray(v.subs) ? cleanSubs(v.subs) : (prev[k]?.subs || []),
             };
           }
         });
@@ -1235,7 +1242,7 @@ function ZoneEditor({ onClose, dbUrl, getAuth, refreshAuth }) {
     const coords = Object.values(init).map((v) => [v.lat, v.lng]);
     if (coords.length) map.fitBounds(coords, { padding: [40, 40] });
     setTimeout(() => map.invalidateSize(), 80);
-    return () => { map.remove(); mapRef.current = null; markersRef.current = {}; };
+    return () => { map.remove(); mapRef.current = null; markersRef.current = {}; subMarkersRef.current = {}; };
   }, []);
   /* zones 변경(기본값 복원/숫자 입력 등) 시 마커 위치 + 타원 폴리곤 동기화 */
   useEffect(() => {
@@ -1247,6 +1254,36 @@ function ZoneEditor({ onClose, dbUrl, getAuth, refreshAuth }) {
         if (Math.abs(c.lat - v.lat) > 1e-7 || Math.abs(c.lng - v.lng) > 1e-7) marker.setLatLng([v.lat, v.lng]);
       }
       if (poly) poly.setLatLngs(ellipsePolygon(v.lat, v.lng, v.rA || 80, v.rB || 80, v.rot || 0));
+    });
+  }, [zones]);
+  /* subs 변경 시 세부장소 마커 재구축(드래그/추가/삭제/이름 변경 반영) */
+  useEffect(() => {
+    const map = mapRef.current; if (!map || !window.L) return;
+    const L = window.L;
+    Object.values(subMarkersRef.current).forEach((list) => list.forEach((m) => map.removeLayer(m)));
+    subMarkersRef.current = {};
+    Object.entries(zones).forEach(([num, v]) => {
+      const subs = Array.isArray(v.subs) ? v.subs : [];
+      if (!subs.length) return;
+      const c = (Number(num) % 2) ? "#fb923c" : "#22d65f";
+      subMarkersRef.current[num] = subs.map((s, idx) => {
+        if (typeof s.lat !== "number" || typeof s.lng !== "number") return null;
+        const label = (s.name || "(이름 없음)").replace(/</g, "&lt;");
+        const html = `<div><span class="dot" style="background:${c}"></span><span>${label}</span></div>`;
+        const icon = L.divIcon({ className: "fest-sub-marker", html, iconSize: [140, 22], iconAnchor: [70, 11] });
+        const m = L.marker([s.lat, s.lng], { draggable: true, icon }).addTo(map).bindTooltip(`${num}-${idx + 1} 세부장소`);
+        m.on("dragend", () => {
+          const p = m.getLatLng();
+          setZones((prev) => {
+            const cur = prev[num] || {};
+            const arr = Array.isArray(cur.subs) ? [...cur.subs] : [];
+            if (!arr[idx]) return prev;
+            arr[idx] = { ...arr[idx], lat: p.lat, lng: p.lng };
+            return { ...prev, [num]: { ...cur, subs: arr } };
+          });
+        });
+        return m;
+      }).filter(Boolean);
     });
   }, [zones]);
   const putZones = async (tok, payload) => {
@@ -1262,6 +1299,7 @@ function ZoneEditor({ onClose, dbUrl, getAuth, refreshAuth }) {
         rA: typeof v.rA === "number" ? v.rA : 80,
         rB: typeof v.rB === "number" ? v.rB : 80,
         rot: typeof v.rot === "number" ? v.rot : 0,
+        subs: cleanSubs(v.subs),
       };
     });
     return out;
@@ -1285,11 +1323,39 @@ function ZoneEditor({ onClose, dbUrl, getAuth, refreshAuth }) {
     } catch (_) { setMsg("⚠ 네트워크 오류 — 로컬만 저장됨"); }
   };
   const resetToDefaults = () => {
-    if (!window.confirm("기본 좌표/반경/회전으로 되돌립니다. 계속할까요?")) return;
+    if (!window.confirm("기본 좌표/반경/회전/세부장소로 되돌립니다. 계속할까요?")) return;
     const out = {};
-    FESTIVAL_ZONES.forEach((z) => { out[z.num] = { lat: z.lat, lng: z.lng, rA: z.rA || 80, rB: z.rB || 80, rot: z.rot || 0 }; });
+    FESTIVAL_ZONES.forEach((z) => {
+      out[z.num] = { lat: z.lat, lng: z.lng, rA: z.rA || 80, rB: z.rB || 80, rot: z.rot || 0, subs: cleanSubs(z.subs) };
+    });
     setZones(out);
     setMsg("기본값으로 되돌림 — 저장 버튼으로 적용");
+  };
+  /* 세부장소 헬퍼 — 추가/삭제/이름 수정 */
+  const addSub = (num) => {
+    setZones((prev) => {
+      const cur = prev[num] || {};
+      const arr = Array.isArray(cur.subs) ? [...cur.subs] : [];
+      arr.push({ name: "", lat: cur.lat, lng: cur.lng });
+      return { ...prev, [num]: { ...cur, subs: arr } };
+    });
+  };
+  const removeSub = (num, idx) => {
+    setZones((prev) => {
+      const cur = prev[num] || {};
+      const arr = Array.isArray(cur.subs) ? [...cur.subs] : [];
+      arr.splice(idx, 1);
+      return { ...prev, [num]: { ...cur, subs: arr } };
+    });
+  };
+  const updateSubName = (num, idx, name) => {
+    setZones((prev) => {
+      const cur = prev[num] || {};
+      const arr = Array.isArray(cur.subs) ? [...cur.subs] : [];
+      if (!arr[idx]) return prev;
+      arr[idx] = { ...arr[idx], name };
+      return { ...prev, [num]: { ...cur, subs: arr } };
+    });
   };
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
@@ -1303,7 +1369,7 @@ function ZoneEditor({ onClose, dbUrl, getAuth, refreshAuth }) {
           <button onClick={onClose} className="text-slate-400 text-lg leading-none px-1">×</button>
         </div>
         <div className="text-[10px] text-slate-500">
-          지도에서 번호 마커를 드래그해 위치를 잡으세요. 저장 시 Firebase /zones에 업로드.
+          번호(주황/녹) 마커는 구역 중심, 흰색 작은 마커는 세부장소입니다. 드래그로 이동, 아래 목록에서 추가/삭제·이름 편집. 저장 시 Firebase /zones에 업로드.
         </div>
         <div ref={elRef} style={{ width: "100%", height: 360, borderRadius: 10, overflow: "hidden", border: "1px solid #3a3f54" }} />
         <div className="grid grid-cols-1 gap-1">
@@ -1344,6 +1410,30 @@ function ZoneEditor({ onClose, dbUrl, getAuth, refreshAuth }) {
                   <input type="number" min="0" max="180" step="5" value={v.rot ?? ""} onChange={(e) => update("rot", e.target.value)} onBlur={() => commitDefault("rot", 0)}
                     className="w-12 px-1 py-0.5 rounded" style={{ background: "#0a0b0f", border: "1px solid #3a3f54", color: "#cbd5e1", fontFamily: "'IBM Plex Mono', monospace" }} />
                   <span style={{ color: "#64748b" }}>°</span>
+                </div>
+                <div className="mt-2 pt-1.5" style={{ borderTop: "1px dashed #2c3142" }}>
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-[10px]" style={{ color: "#94a3b8", fontFamily: "'Jua', sans-serif" }}>세부장소 ({(v.subs || []).length})</span>
+                    <button onClick={() => addSub(z.num)} className="text-[10px] px-2 py-0.5 rounded font-bold"
+                      style={{ background: "rgba(251,191,36,0.15)", color: "#fbbf24", border: "1px solid rgba(251,191,36,0.4)", fontFamily: "'Jua', sans-serif" }}>
+                      + 추가
+                    </button>
+                  </div>
+                  {(v.subs || []).map((s, i) => (
+                    <div key={i} className="flex items-center gap-1 mb-1">
+                      <span className="text-[9px]" style={{ width: 14, textAlign: "center", color: c, fontFamily: "'Jua', sans-serif" }}>{i + 1}</span>
+                      <input type="text" value={s.name || ""} onChange={(e) => updateSubName(z.num, i, e.target.value)} placeholder="장소명"
+                        className="flex-1 px-1.5 py-0.5 rounded text-[10px]"
+                        style={{ background: "#0a0b0f", border: "1px solid #3a3f54", color: "#cbd5e1", fontFamily: "'Jua', sans-serif" }} />
+                      <span className="text-[9px]" style={{ color: "#64748b", fontFamily: "'IBM Plex Mono', monospace", whiteSpace: "nowrap" }}>
+                        {typeof s.lat === "number" ? s.lat.toFixed(5) : "-"},{typeof s.lng === "number" ? s.lng.toFixed(5) : "-"}
+                      </span>
+                      <button onClick={() => removeSub(z.num, i)} className="text-[10px] leading-none px-1.5 py-0.5 rounded font-bold"
+                        style={{ background: "rgba(239,68,68,0.12)", color: "#fca5a5", border: "1px solid rgba(239,68,68,0.3)", fontFamily: "'Jua', sans-serif" }} title="삭제">
+                        ×
+                      </button>
+                    </div>
+                  ))}
                 </div>
               </div>
             );
@@ -1656,12 +1746,18 @@ function LiveMapView({ dbUrl }) {
         const clean = {};
         Object.entries(d).forEach(([k, v]) => {
           if (v && typeof v.lat === "number" && typeof v.lng === "number") {
-            clean[k] = {
+            const c = {
               lat: v.lat, lng: v.lng,
               rA: typeof v.rA === "number" ? v.rA : 80,
               rB: typeof v.rB === "number" ? v.rB : 80,
               rot: typeof v.rot === "number" ? v.rot : 0,
             };
+            if (Array.isArray(v.subs)) {
+              c.subs = v.subs
+                .filter((s) => s && typeof s.lat === "number" && typeof s.lng === "number")
+                .map((s) => ({ name: String(s.name || ""), lat: s.lat, lng: s.lng }));
+            }
+            clean[k] = c;
           }
         });
         if (Object.keys(clean).length) { setZoneOverride(clean); LS.setJSON("zones", clean); }
