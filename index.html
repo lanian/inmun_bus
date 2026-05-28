@@ -38,7 +38,7 @@
 
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef, useMemo } = React;
-const BUILD = "b60"; /* 화면 우하단 표시 — 최신 배포 확인용 */
+const BUILD = "b61"; /* 화면 우하단 표시 — 최신 배포 확인용 */
 
 /* 실시간 위치 공유용 Firebase DB 주소. 여기에 한 번 넣어두면 승객 링크가 ?view=map 만 남아 깔끔해집니다. */
 const SHARE_DB = "https://innum-bus-default-rtdb.firebaseio.com";
@@ -486,6 +486,8 @@ function ViaEditor({ onClose, dbUrl, getAuth }) {
     const map = mapRef.current; if (!map) return;
     const L = window.L;
     layersRef.current.lines.forEach((l) => map.removeLayer(l)); layersRef.current.lines = [];
+    if (layersRef.current.roads) Object.values(layersRef.current.roads).forEach((l) => l && map.removeLayer(l));
+    layersRef.current.roads = {};
     layersRef.current.stops.forEach((l) => map.removeLayer(l)); layersRef.current.stops = [];
     layersRef.current.vias.forEach((l) => map.removeLayer(l)); layersRef.current.vias = [];
 
@@ -494,8 +496,20 @@ function ViaEditor({ onClose, dbUrl, getAuth }) {
       const seq = buildSeq(dir);
       const lineCoords = seq.map((p) => p.coord);
       if (lineCoords.length >= 2) {
-        const line = L.polyline(lineCoords, { color, weight: 4, opacity: 0.7, dashArray: dir === "inbound" ? "10,8" : null, lineCap: "round" }).addTo(map);
+        // 직선 가이드(연하게) — OSRM 도착 전에도 시퀀스를 확인할 수 있게
+        const line = L.polyline(lineCoords, { color, weight: 3, opacity: 0.35, dashArray: "4,6", lineCap: "round" }).addTo(map);
         layersRef.current.lines.push(line);
+        // OSRM 도로 미리보기 — 승객 지도에 보일 실제 경로
+        const path = lineCoords.map(([la, ln]) => `${ln},${la}`).join(";");
+        fetch(`https://router.project-osrm.org/route/v1/driving/${path}?overview=full&geometries=geojson&continue_straight=false`)
+          .then((r) => r.ok ? r.json() : null)
+          .then((d) => {
+            if (!d || d.code !== "Ok" || !d.routes || !d.routes[0]) return;
+            const road = d.routes[0].geometry.coordinates.map(([ln, la]) => [la, ln]);
+            if (layersRef.current.roads[dir]) map.removeLayer(layersRef.current.roads[dir]);
+            layersRef.current.roads[dir] = L.polyline(road, { color, weight: 5, opacity: 0.9, dashArray: dir === "inbound" ? "10,8" : null, lineCap: "round", lineJoin: "round" }).addTo(map);
+          })
+          .catch(() => {});
       }
       seq.forEach((p) => {
         if (p.kind === "stop") {
@@ -523,23 +537,49 @@ function ViaEditor({ onClose, dbUrl, getAuth }) {
     });
   }, [viaMap]);
 
-  // 변경 즉시 로컬 저장 + Firebase 업로드(로그인된 경우만)
+  // 자체 로그인(앱 토큰 없을 때 저장된 자격증명으로 시도)
+  const editorTokenRef = useRef("");
+  const ensureToken = async () => {
+    const ext = getAuth ? getAuth() : "";
+    if (ext) return ext;
+    if (editorTokenRef.current) return editorTokenRef.current;
+    const key = LS.get("apikey", SHARE_API_KEY);
+    const email = LS.get("driveremail", "");
+    const pass = LS.get("driverpass", "");
+    if (!key || !email || !pass) return "";
+    try {
+      const r = await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${key}`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password: pass, returnSecureToken: true }),
+      });
+      const d = await r.json();
+      if (d.idToken) { editorTokenRef.current = d.idToken; return d.idToken; }
+    } catch (_) {}
+    return "";
+  };
+
+  const pushNow = async () => {
+    if (!dbUrl) { setSyncStatus("local"); return; }
+    setSyncStatus("syncing");
+    const auth = await ensureToken();
+    if (!auth) { setSyncStatus("local"); return; }
+    try {
+      const r = await fetch(`${dbUrl.replace(/\/+$/, "")}/viapoints.json?auth=${encodeURIComponent(auth)}`, {
+        method: "PUT", body: JSON.stringify(viaMap),
+      });
+      setSyncStatus(r.ok ? "synced" : "error");
+    } catch (_) { setSyncStatus("error"); }
+  };
+
+  // 변경 시 로컬 저장 + 자동 업로드
   useEffect(() => {
     LS.setJSON("viapoints", viaMap);
-    if (isFirstRef.current) { isFirstRef.current = false; return; } // 초기 로드 직후엔 업로드 생략
-    if (!dbUrl) { setSyncStatus("local"); return; }
-    const auth = getAuth ? getAuth() : "";
-    if (!auth) { setSyncStatus("local"); return; }
-    setSyncStatus("syncing");
-    fetch(`${dbUrl.replace(/\/+$/, "")}/viapoints.json?auth=${encodeURIComponent(auth)}`, {
-      method: "PUT", body: JSON.stringify(viaMap),
-    })
-      .then((r) => setSyncStatus(r.ok ? "synced" : "error"))
-      .catch(() => setSyncStatus("error"));
+    if (isFirstRef.current) { isFirstRef.current = false; return; }
+    pushNow();
   }, [viaMap]);
 
   const totalVia = Object.values(viaMap).reduce((n, v) => n + (Array.isArray(v) ? v.length : 0), 0);
-  const syncLabel = { idle: "", local: "로컬만 저장됨 (공유 안 됨)", syncing: "동기화 중…", synced: "✅ 모든 승객에게 반영됨", error: "❌ 업로드 실패" }[syncStatus];
+  const syncLabel = { idle: "", local: "로컬만 저장됨 — 로그인 정보 확인 필요", syncing: "동기화 중…", synced: "✅ 모든 승객에게 반영됨", error: "❌ 업로드 실패" }[syncStatus];
   const syncColor = syncStatus === "synced" ? FT.teal : syncStatus === "error" ? "#dc2626" : syncStatus === "local" ? FT.orange : FT.inkSoft;
 
   return (
@@ -554,6 +594,9 @@ function ViaEditor({ onClose, dbUrl, getAuth }) {
           {syncLabel ? <div style={{ marginTop: 4, fontSize: 11, color: syncColor, fontWeight: 700 }}>{syncLabel}</div> : null}
         </div>
         <div style={{ display: "flex", gap: 6 }}>
+          <button onClick={pushNow}
+            style={{ background: FT.teal, color: "#fff", padding: "8px 12px", borderRadius: 10,
+              border: "2px solid " + FT.ink, fontFamily: "'Jua', sans-serif", fontSize: 12, boxShadow: "2px 2px 0 " + FT.ink, fontWeight: 700 }}>🔄 지금 반영</button>
           <button onClick={() => { if (window.confirm("저장된 모든 경유점을 초기화할까요? (코드 기본값으로 복귀)")) setViaMap({}); }}
             style={{ background: "#fff", color: FT.ink, padding: "8px 12px", borderRadius: 10,
               border: "2px solid " + FT.ink, fontFamily: "'Jua', sans-serif", fontSize: 12, boxShadow: "2px 2px 0 " + FT.ink, fontWeight: 700 }}>초기화</button>
