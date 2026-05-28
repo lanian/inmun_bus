@@ -38,7 +38,7 @@
 
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef, useMemo } = React;
-const BUILD = "b43"; /* 화면 우하단 표시 — 최신 배포 확인용 */
+const BUILD = "b44"; /* 화면 우하단 표시 — 최신 배포 확인용 */
 
 /* 실시간 위치 공유용 Firebase DB 주소. 여기에 한 번 넣어두면 승객 링크가 ?view=map 만 남아 깔끔해집니다. */
 const SHARE_DB = "https://innum-bus-default-rtdb.firebaseio.com";
@@ -479,6 +479,8 @@ function App() {
   const [busId, setBusId] = useState(() => LS.get("busid", "1"));
   const [driverEmail, setDriverEmail] = useState(() => LS.get("driveremail", "")); // 기사 쓰기 로그인(이 기기에만 저장)
   const [driverPass, setDriverPass] = useState(() => LS.get("driverpass", ""));
+  const [apiKey, setApiKey] = useState(() => LS.get("apikey", SHARE_API_KEY)); // 웹 API 키(이 기기에만 저장)
+  const [authStatus, setAuthStatus] = useState("");
   const [sharing, setSharing] = useState(false);
   const lastShareRef = useRef(0);
   const authTokenRef = useRef("");
@@ -530,6 +532,7 @@ function App() {
   useEffect(() => LS.set("busid", busId), [busId]);
   useEffect(() => LS.set("driveremail", driverEmail), [driverEmail]);
   useEffect(() => LS.set("driverpass", driverPass), [driverPass]);
+  useEffect(() => LS.set("apikey", apiKey), [apiKey]);
 
   // 안내에 사용할 축제일 결정 (수동 지정 우선, 아니면 오늘 날짜로 판단)
   const resolveFestivalDay = () => {
@@ -1124,17 +1127,32 @@ function App() {
   const fmtDist = (m) => (m == null ? null : m < 1000 ? `${Math.round(m)}m` : `${(m / 1000).toFixed(2)}km`);
 
   /* --- 기사 쓰기 로그인(선택): 이메일/비밀번호가 있으면 로그인해 토큰 발급(50분마다 갱신). 없으면 인증 없이 공개 쓰기. --- */
+  const firebaseSignIn = async () => {
+    const key = apiKey || SHARE_API_KEY;
+    const r = await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${key}`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email: driverEmail, password: driverPass, returnSecureToken: true }),
+    });
+    return r.json();
+  };
+  const testLogin = async () => {
+    const key = apiKey || SHARE_API_KEY;
+    if (!key) { setAuthStatus("❌ 웹 API 키를 입력하세요"); return; }
+    if (!driverEmail || !driverPass) { setAuthStatus("❌ 이메일·비밀번호를 입력하세요"); return; }
+    setAuthStatus("로그인 시도 중…");
+    try {
+      const d = await firebaseSignIn();
+      if (d.idToken) setAuthStatus(`✅ 로그인 성공! 규칙에 넣을 UID: ${d.localId}`);
+      else setAuthStatus("❌ " + ((d.error && d.error.message) || "로그인 실패"));
+    } catch (_) { setAuthStatus("❌ 네트워크 오류"); }
+  };
   useEffect(() => {
     if (!sharing) return;
-    if (!SHARE_API_KEY || !driverEmail || !driverPass) return; // 로그인 미설정 → 테스트 모드(공개 쓰기)
+    if (!(apiKey || SHARE_API_KEY) || !driverEmail || !driverPass) return; // 로그인 미설정 → 테스트 모드(공개 쓰기)
     let stopped = false, timer;
     const signIn = async () => {
       try {
-        const r = await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${SHARE_API_KEY}`, {
-          method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ email: driverEmail, password: driverPass, returnSecureToken: true }),
-        });
-        const d = await r.json();
+        const d = await firebaseSignIn();
         if (d.idToken) { authTokenRef.current = d.idToken; setGpsError(""); }
         else { authTokenRef.current = ""; setGpsError("쓰기 로그인 실패: " + ((d.error && d.error.message) || "정보 확인")); }
       } catch (_) { setGpsError("쓰기 로그인 네트워크 오류"); }
@@ -1142,7 +1160,7 @@ function App() {
     signIn();
     timer = setInterval(() => { if (!stopped) signIn(); }, 50 * 60 * 1000);
     return () => { stopped = true; clearInterval(timer); };
-  }, [sharing, driverEmail, driverPass]);
+  }, [sharing, driverEmail, driverPass, apiKey]);
 
   /* --- 실시간 위치 공유: 켜져 있고 GPS가 있으면 3초마다 Firebase RTDB에 위치 PUT --- */
   useEffect(() => {
@@ -1999,7 +2017,18 @@ function App() {
               autoComplete="off"
               className="w-full px-2 py-1.5 rounded text-[11px]"
               style={{ background: "#0a0b0f", border: "1px solid #3a3f54", color: "#cbd5e1", fontFamily: "'IBM Plex Mono', monospace" }} />
-            <div className="text-[10px] text-slate-600">GPS 자동이 켜져 있어야 위치가 올라갑니다. 끄면 내 위치는 지도에서 사라집니다. 로그인은 선택사항 — 비워두면 테스트 모드로 바로 동작합니다.</div>
+            <input type="password" value={apiKey} onChange={(e) => setApiKey(e.target.value)}
+              placeholder="(선택) 웹 API 키 — 콘솔 프로젝트 설정에서 복사"
+              autoComplete="off"
+              className="w-full px-2 py-1.5 rounded text-[11px]"
+              style={{ background: "#0a0b0f", border: "1px solid #3a3f54", color: "#cbd5e1", fontFamily: "'IBM Plex Mono', monospace" }} />
+            <button onClick={testLogin}
+              className="w-full py-1.5 rounded text-[11px] font-bold"
+              style={{ background: "rgba(96,165,250,0.15)", color: "#60a5fa", border: "1px solid rgba(96,165,250,0.3)", fontFamily: "'Jua', sans-serif" }}>
+              쓰기 로그인 테스트 · UID 확인
+            </button>
+            {authStatus && <div className="text-[10px] break-all" style={{ color: authStatus.startsWith("✅") ? "#22d65f" : authStatus.startsWith("❌") ? "#f87171" : "#94a3b8" }}>{authStatus}</div>}
+            <div className="text-[10px] text-slate-600">GPS 자동이 켜져 있어야 위치가 올라갑니다. 로그인을 채우면 승객은 읽기만 가능(쓰기 차단). 비우면 테스트 모드로 동작합니다.</div>
             {shareUrl && (() => {
               const norm = (s) => s.replace(/\/+$/, "");
               const baked = SHARE_DB && norm(shareUrl) === norm(SHARE_DB);
