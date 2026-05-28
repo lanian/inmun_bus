@@ -80,7 +80,7 @@
 
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef, useMemo } = React;
-const BUILD = "b193"; /* 화면 우하단 표시 — 최신 배포 확인용 */
+const BUILD = "b194"; /* 화면 우하단 표시 — 최신 배포 확인용 */
 
 /* 실시간 위치 공유용 Firebase DB 주소. 여기에 한 번 넣어두면 승객 링크가 ?view=map 만 남아 깔끔해집니다. */
 const SHARE_DB = "https://innum-bus-default-rtdb.firebaseio.com";
@@ -1216,22 +1216,35 @@ function ZoneEditor({ onClose, dbUrl, getAuth, refreshAuth }) {
       if (poly) poly.setLatLngs(ellipsePolygon(v.lat, v.lng, v.rA || 80, v.rB || 80, v.rot || 0));
     });
   }, [zones]);
-  const putZones = async (tok) => {
+  const putZones = async (tok, payload) => {
     const base = dbUrl.replace(/\/+$/, "");
     const auth = tok ? `?auth=${encodeURIComponent(tok)}` : "";
-    return fetch(`${base}/zones.json${auth}`, { method: "PUT", body: JSON.stringify(zones) });
+    return fetch(`${base}/zones.json${auth}`, { method: "PUT", body: JSON.stringify(payload || zones) });
+  };
+  const cleaned = () => {
+    const out = {};
+    Object.entries(zones).forEach(([k, v]) => {
+      out[k] = {
+        lat: v.lat, lng: v.lng,
+        rA: typeof v.rA === "number" ? v.rA : 80,
+        rB: typeof v.rB === "number" ? v.rB : 80,
+        rot: typeof v.rot === "number" ? v.rot : 0,
+      };
+    });
+    return out;
   };
   const save = async () => {
-    LS.setJSON("zones", zones);
+    const data = cleaned();
+    LS.setJSON("zones", data);
     if (!dbUrl) { setMsg("✅ 로컬만 저장 (DB 주소 미설정)"); return; }
     setMsg("저장 중…");
     try {
-      let r = await putZones(getAuth && getAuth());
+      let r = await putZones(getAuth && getAuth(), data);
       if ((r.status === 401 || r.status === 403) && refreshAuth) {
         // 토큰 만료 — 재로그인 후 한 번 더 시도
         setMsg("인증 갱신 중…");
         const newTok = await refreshAuth();
-        if (newTok) r = await putZones(newTok);
+        if (newTok) r = await putZones(newTok, data);
       }
       if (r.ok) setMsg("✅ 저장 완료 — 승객 지도 새로고침 시 반영");
       else if (r.status === 401 || r.status === 403) setMsg("⚠ 인증 실패 (HTTP " + r.status + ") — 고급 설정에서 기사 로그인 확인");
@@ -1265,8 +1278,17 @@ function ZoneEditor({ onClose, dbUrl, getAuth, refreshAuth }) {
             const c = z.num % 2 ? "#fb923c" : "#22d65f";
             const v = zones[z.num] || { lat: 0, lng: 0, rA: 80, rB: 80, rot: 0 };
             const update = (key, val) => {
+              // 빈 문자열도 그대로 저장 (지웠다가 다시 입력하는 동안 허용)
+              if (val === "") { setZones((prev) => ({ ...prev, [z.num]: { ...prev[z.num], [key]: "" } })); return; }
               const n = parseFloat(val); if (Number.isNaN(n)) return;
               setZones((prev) => ({ ...prev, [z.num]: { ...prev[z.num], [key]: n } }));
+            };
+            const commitDefault = (key, def) => {
+              setZones((prev) => {
+                const cur = prev[z.num] || {};
+                if (cur[key] === "" || cur[key] == null) return { ...prev, [z.num]: { ...cur, [key]: def } };
+                return prev;
+              });
             };
             return (
               <div key={z.num} className="p-2 rounded-lg" style={{ background: "rgba(255,255,255,0.04)", border: "1px solid #2c3142" }}>
@@ -1278,15 +1300,15 @@ function ZoneEditor({ onClose, dbUrl, getAuth, refreshAuth }) {
                 </div>
                 <div className="flex items-center gap-1 text-[10px]" style={{ color: "#cbd5e1", fontFamily: "'Jua', sans-serif" }}>
                   <span style={{ width: 24, color: "#94a3b8" }}>가로</span>
-                  <input type="number" min="10" step="10" value={v.rA || 80} onChange={(e) => update("rA", e.target.value)}
+                  <input type="number" min="10" step="10" value={v.rA ?? ""} onChange={(e) => update("rA", e.target.value)} onBlur={() => commitDefault("rA", 80)}
                     className="w-14 px-1 py-0.5 rounded" style={{ background: "#0a0b0f", border: "1px solid #3a3f54", color: "#cbd5e1", fontFamily: "'IBM Plex Mono', monospace" }} />
                   <span style={{ color: "#64748b" }}>m</span>
                   <span style={{ width: 24, color: "#94a3b8", marginLeft: 6 }}>세로</span>
-                  <input type="number" min="10" step="10" value={v.rB || 80} onChange={(e) => update("rB", e.target.value)}
+                  <input type="number" min="10" step="10" value={v.rB ?? ""} onChange={(e) => update("rB", e.target.value)} onBlur={() => commitDefault("rB", 80)}
                     className="w-14 px-1 py-0.5 rounded" style={{ background: "#0a0b0f", border: "1px solid #3a3f54", color: "#cbd5e1", fontFamily: "'IBM Plex Mono', monospace" }} />
                   <span style={{ color: "#64748b" }}>m</span>
                   <span style={{ width: 24, color: "#94a3b8", marginLeft: 6 }}>회전</span>
-                  <input type="number" min="0" max="180" step="5" value={v.rot || 0} onChange={(e) => update("rot", e.target.value)}
+                  <input type="number" min="0" max="180" step="5" value={v.rot ?? ""} onChange={(e) => update("rot", e.target.value)} onBlur={() => commitDefault("rot", 0)}
                     className="w-12 px-1 py-0.5 rounded" style={{ background: "#0a0b0f", border: "1px solid #3a3f54", color: "#cbd5e1", fontFamily: "'IBM Plex Mono', monospace" }} />
                   <span style={{ color: "#64748b" }}>°</span>
                 </div>
