@@ -80,7 +80,7 @@
 
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef, useMemo } = React;
-const BUILD = "b179"; /* 화면 우하단 표시 — 최신 배포 확인용 */
+const BUILD = "b180"; /* 화면 우하단 표시 — 최신 배포 확인용 */
 
 /* 실시간 위치 공유용 Firebase DB 주소. 여기에 한 번 넣어두면 승객 링크가 ?view=map 만 남아 깔끔해집니다. */
 const SHARE_DB = "https://innum-bus-default-rtdb.firebaseio.com";
@@ -1106,6 +1106,114 @@ const effectiveVia = (dir, stopName) => {
   return s && Array.isArray(s.approachVia) ? s.approachVia : [];
 };
 
+/* 행사 구역 좌표 편집기 — 운영자 전용. 5개 구역의 lat/lng 텍스트 입력 + Firebase /zones 동기화 */
+function ZoneEditor({ onClose, dbUrl, getAuth }) {
+  const [zones, setZones] = useState(() => {
+    const ls = LS.getJSON("zones", {});
+    const out = {};
+    FESTIVAL_ZONES.forEach((z) => {
+      const o = ls[z.num];
+      out[z.num] = {
+        lat: o && typeof o.lat === "number" ? o.lat : z.lat,
+        lng: o && typeof o.lng === "number" ? o.lng : z.lng,
+      };
+    });
+    return out;
+  });
+  const [msg, setMsg] = useState("");
+  useEffect(() => {
+    if (!dbUrl) return;
+    const base = dbUrl.replace(/\/+$/, "");
+    fetch(`${base}/zones.json`).then((r) => r.json()).then((d) => {
+      if (!d || typeof d !== "object") return;
+      setZones((prev) => {
+        const next = { ...prev };
+        Object.entries(d).forEach(([k, v]) => {
+          if (v && typeof v.lat === "number" && typeof v.lng === "number") next[k] = { lat: v.lat, lng: v.lng };
+        });
+        return next;
+      });
+    }).catch(() => {});
+  }, [dbUrl]);
+  const setCoord = (num, key, val) => {
+    const n = parseFloat(val);
+    if (Number.isNaN(n)) return;
+    setZones((prev) => ({ ...prev, [num]: { ...prev[num], [key]: n } }));
+  };
+  const save = async () => {
+    LS.setJSON("zones", zones);
+    setMsg("로컬 저장 완료. 클라우드 업로드 중…");
+    if (!dbUrl) { setMsg("✅ 로컬만 저장 (DB 주소 미설정)"); return; }
+    const base = dbUrl.replace(/\/+$/, "");
+    const tok = getAuth && getAuth();
+    const auth = tok ? `?auth=${encodeURIComponent(tok)}` : "";
+    try {
+      const r = await fetch(`${base}/zones.json${auth}`, { method: "PUT", body: JSON.stringify(zones) });
+      if (r.ok) setMsg("✅ 저장 완료 — 승객 지도에서 새로고침하면 반영");
+      else setMsg("⚠ Firebase 응답 " + r.status + " — 로컬만 저장됨");
+    } catch (_) { setMsg("⚠ 네트워크 오류 — 로컬만 저장됨"); }
+  };
+  const resetToDefaults = () => {
+    if (!window.confirm("기본 좌표로 되돌립니다. 계속할까요?")) return;
+    const out = {};
+    FESTIVAL_ZONES.forEach((z) => { out[z.num] = { lat: z.lat, lng: z.lng }; });
+    setZones(out);
+    setMsg("기본값으로 되돌림 — 저장 버튼으로 적용");
+  };
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      style={{ background: "rgba(0,0,0,0.7)" }} onClick={onClose}>
+      <div className="w-full max-w-md rounded-2xl border-2 p-4 space-y-3 max-h-[88vh] overflow-y-auto"
+        style={{ background: "#13151c", borderColor: "#3a3f54" }} onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between">
+          <div className="text-sm font-bold" style={{ color: "#fbbf24", fontFamily: "'Jua', sans-serif" }}>
+            행사 주요 구역 좌표
+          </div>
+          <button onClick={onClose} className="text-slate-400 text-lg leading-none px-1">×</button>
+        </div>
+        <div className="text-[10px] text-slate-500">
+          지도 마커 위치. Google 지도에서 우클릭→좌표 복사한 값을 붙여 넣으세요. 저장 시 Firebase /zones에 업로드.
+        </div>
+        {FESTIVAL_ZONES.map((z) => {
+          const c = z.num % 2 ? "#fb923c" : "#22d65f";
+          const v = zones[z.num] || { lat: 0, lng: 0 };
+          return (
+            <div key={z.num} className="flex items-center gap-2 p-2 rounded-lg"
+              style={{ background: "rgba(255,255,255,0.04)", border: "1px solid #2c3142" }}>
+              <span style={{ width: 28, height: 28, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center",
+                background: c, color: "#0a0b0f", borderRadius: 6, fontFamily: "'Jua', sans-serif", fontWeight: 700 }}>{z.num}</span>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div className="text-[11px] font-bold truncate" style={{ color: "#cbd5e1", fontFamily: "'Jua', sans-serif" }}>{z.title}</div>
+                <div className="flex gap-1 mt-1">
+                  <input type="number" step="0.000001" value={v.lat} onChange={(e) => setCoord(z.num, "lat", e.target.value)}
+                    placeholder="lat" className="flex-1 min-w-0 px-1.5 py-0.5 rounded text-[10px]"
+                    style={{ background: "#0a0b0f", border: "1px solid #3a3f54", color: "#cbd5e1", fontFamily: "'IBM Plex Mono', monospace" }} />
+                  <input type="number" step="0.000001" value={v.lng} onChange={(e) => setCoord(z.num, "lng", e.target.value)}
+                    placeholder="lng" className="flex-1 min-w-0 px-1.5 py-0.5 rounded text-[10px]"
+                    style={{ background: "#0a0b0f", border: "1px solid #3a3f54", color: "#cbd5e1", fontFamily: "'IBM Plex Mono', monospace" }} />
+                </div>
+              </div>
+            </div>
+          );
+        })}
+        {msg && <div className="text-[11px]" style={{ color: msg.startsWith("✅") ? "#22d65f" : msg.startsWith("⚠") ? "#fca5a5" : "#fbbf24" }}>{msg}</div>}
+        <div className="grid grid-cols-2 gap-2">
+          <button onClick={resetToDefaults}
+            className="px-3 py-2 rounded-lg text-xs font-bold"
+            style={{ background: "rgba(239,68,68,0.12)", color: "#fca5a5", border: "1px solid rgba(239,68,68,0.3)", fontFamily: "'Jua', sans-serif" }}>
+            기본값 복원
+          </button>
+          <button onClick={save}
+            className="px-3 py-2 rounded-lg text-xs font-bold"
+            style={{ background: "#fbbf24", color: "#0a0b0f", fontFamily: "'Jua', sans-serif" }}>
+            저장
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /* 경유점 편집기 — 운영자 전용. 클릭하면 가장 가까운 구간의 도착 정류장 approachVia 끝에 추가. via 마커 탭하여 제거. */
 function ViaEditor({ onClose, dbUrl, getAuth }) {
   const elRef = useRef(null), mapRef = useRef(null);
@@ -1337,6 +1445,7 @@ function LiveMapView({ dbUrl }) {
   const [status, setStatus] = useState("연결 중…");
   const [viaOverride, setViaOverride] = useState(() => LS.getJSON("viapoints", {}));
   const [coordOverride, setCoordOverride] = useState(() => LS.getJSON("coords", {}));
+  const [zoneOverride, setZoneOverride] = useState(() => LS.getJSON("zones", {}));
   const lineRefsRef = useRef({});
   const stopLayersRef = useRef([]);
   const hasFitRef = useRef(false);
@@ -1381,6 +1490,17 @@ function LiveMapView({ dbUrl }) {
           if (v && typeof v.lat === "number" && typeof v.lng === "number") clean[k] = { lat: v.lat, lng: v.lng };
         });
         if (Object.keys(clean).length) { setCoordOverride(clean); LS.setJSON("coords", { ...LS.getJSON("coords", {}), ...clean }); }
+      })
+      .catch(() => {});
+    fetch(`${base}/zones.json`, { cache: "no-store" })
+      .then((r) => r.ok ? r.json() : null)
+      .then((d) => {
+        if (!d || typeof d !== "object") return;
+        const clean = {};
+        Object.entries(d).forEach(([k, v]) => {
+          if (v && typeof v.lat === "number" && typeof v.lng === "number") clean[k] = { lat: v.lat, lng: v.lng };
+        });
+        if (Object.keys(clean).length) { setZoneOverride(clean); LS.setJSON("zones", clean); }
       })
       .catch(() => {});
   }, [dbUrl]);
@@ -1443,13 +1563,16 @@ function LiveMapView({ dbUrl }) {
         })
         .catch(() => {});
     });
-    // 행사 주요 구역 마커 — 5개 구역 좌표에 번호 박스 + 짧은 라벨, 클릭 시 sub 설명 팝업
+    // 행사 주요 구역 마커 — override(/zones) 우선, 없으면 ROUTES 기본값
     FESTIVAL_ZONES.forEach((z) => {
-      if (z.lat == null || z.lng == null) return;
+      const o = zoneOverride[z.num];
+      const lat = o && typeof o.lat === "number" ? o.lat : z.lat;
+      const lng = o && typeof o.lng === "number" ? o.lng : z.lng;
+      if (lat == null || lng == null) return;
       const c = z.num % 2 ? FT.orange : FT.teal;
       const html = `<div><span class="num" style="background:${c}">${z.num}</span><span>${z.title}</span></div>`;
       const icon = L.divIcon({ className: "fest-zone-marker", html, iconSize: [160, 24], iconAnchor: [80, 12] });
-      const m = L.marker([z.lat, z.lng], { icon }).addTo(map)
+      const m = L.marker([lat, lng], { icon }).addTo(map)
         .bindPopup(`<div style="font-family:'Jua',sans-serif"><b>${z.num}. ${z.title}</b><br><span style="color:#4A4E55;font-size:11px">${z.sub}</span></div>`);
       stopLayersRef.current.push(m);
     });
@@ -1457,7 +1580,7 @@ function LiveMapView({ dbUrl }) {
       map.fitBounds(allCoords, { padding: [80, 30] });
       hasFitRef.current = true;
     }
-  }, [coordOverride, viaOverride]);
+  }, [coordOverride, viaOverride, zoneOverride]);
 
   useEffect(() => {
     if (!dbUrl) { setStatus("공유 주소(db)가 없습니다"); return; }
@@ -2841,6 +2964,7 @@ function App() {
   const [mentMsg, setMentMsg] = useState("");
   const [showTimetable, setShowTimetable] = useState(false);
   const [showViaEditor, setShowViaEditor] = useState(false);
+  const [showZoneEditor, setShowZoneEditor] = useState(false);
   const [showBackup, setShowBackup] = useState(false);
   const openMentBackup = () => { setMentMsg(""); setMentBackup(JSON.stringify(ments, null, 2)); };
   const copyMent = () => {
@@ -4332,6 +4456,12 @@ function App() {
                 fontFamily: "'Jua', sans-serif" }}>
               🗺️ 지도 경유점 편집 (도로 우회 추가)
             </button>
+            <button onClick={() => setShowZoneEditor(true)}
+              className="mt-2 w-full py-1.5 rounded text-[11px] flex items-center justify-center gap-1"
+              style={{ background: "rgba(251,191,36,0.12)", color: "#fbbf24", border: "1px solid rgba(251,191,36,0.3)",
+                fontFamily: "'Jua', sans-serif" }}>
+              🎪 행사 주요 구역 좌표 편집
+            </button>
             <button onClick={() => setShowBackup(true)}
               className="mt-2 w-full py-1.5 rounded text-[11px] flex items-center justify-center gap-1"
               style={{ background: "rgba(251,191,36,0.12)", color: "#fbbf24", border: "1px solid rgba(251,191,36,0.3)",
@@ -4452,6 +4582,7 @@ function App() {
       {showTimetable && <TimetableModal tripsToday={tripsToday} onClose={() => setShowTimetable(false)} />}
       {showStats && <StatsModal counts={counts} dateKey={dateKey} onClose={() => setShowStats(false)} onReset={resetCountsToday} busCapacity={busCapacity} setBusCapacity={setBusCapacity} />}
       {showViaEditor && <ViaEditor onClose={() => setShowViaEditor(false)} dbUrl={shareUrl} getAuth={() => authTokenRef.current} />}
+      {showZoneEditor && <ZoneEditor onClose={() => setShowZoneEditor(false)} dbUrl={shareUrl} getAuth={() => authTokenRef.current} />}
       {showBackup && <BackupModal onClose={() => setShowBackup(false)} counts={counts} dateKey={dateKey} />}
 
       {/* 멘트 편집·백업·복원 모달 */}
