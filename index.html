@@ -45,7 +45,7 @@
 
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef, useMemo } = React;
-const BUILD = "b107"; /* 화면 우하단 표시 — 최신 배포 확인용 */
+const BUILD = "b108"; /* 화면 우하단 표시 — 최신 배포 확인용 */
 
 /* 실시간 위치 공유용 Firebase DB 주소. 여기에 한 번 넣어두면 승객 링크가 ?view=map 만 남아 깔끔해집니다. */
 const SHARE_DB = "https://innum-bus-default-rtdb.firebaseio.com";
@@ -1598,32 +1598,35 @@ function PassengerView({ dbUrl, onAdmin, initialTab = "list" }) {
                       오늘 남은 운행 일정이 없습니다.
                     </div>
                   ) : (
-                    stopArrivals.map((s) => {
-                      // 공유 정류장이면 방향별 한 줄씩, 비공유면 한 줄
-                      const byDir = {};
-                      s.arrivals.forEach((a) => { if (!byDir[a.dir]) byDir[a.dir] = a; });
-                      const dirRows = ["outbound", "inbound"].filter((d) => byDir[d]);
-                      return (
-                        <div key={s.key} style={{ background: "#fff", border: "1.5px solid " + FT.ink, borderRadius: 8, padding: "8px 10px" }}>
-                          <div style={{ fontSize: 13, color: FT.ink, fontFamily: "'Jua', sans-serif", fontWeight: 700, marginBottom: 4 }}>
-                            {s.name}{!s.isShared ? <span style={{ fontSize: 10, color: s.arrivals[0].dir === "outbound" ? FT.orange : FT.teal, marginLeft: 6 }}>{s.dirLabel}</span> : null}
+                    <div style={{ background: "#fff", border: "1.5px solid " + FT.ink, borderRadius: 8, overflow: "hidden" }}>
+                      {stopArrivals.map((s, idx) => {
+                        const byDir = {};
+                        s.arrivals.forEach((a) => { if (!byDir[a.dir]) byDir[a.dir] = a; });
+                        const dirs = ["outbound", "inbound"].filter((d) => byDir[d]);
+                        const dirAbbr = !s.isShared ? (s.arrivals[0].dir === "outbound" ? "↗" : "↙") : null;
+                        return (
+                          <div key={s.key} className="flex items-center gap-2"
+                            style={{ padding: "8px 10px", borderTop: idx ? "1px solid " + FT.mute + "33" : "none", fontFamily: "'Jua', sans-serif" }}>
+                            <span style={{ flex: 1, fontSize: 13, color: FT.ink, fontWeight: 700, minWidth: 0 }} className="truncate">
+                              {s.name}
+                              {dirAbbr && <span style={{ marginLeft: 4, color: s.arrivals[0].dir === "outbound" ? FT.orange : FT.teal }}>{dirAbbr}</span>}
+                            </span>
+                            {dirs.map((d) => {
+                              const a = byDir[d];
+                              const c = d === "outbound" ? FT.orange : FT.teal;
+                              return (
+                                <span key={d} className="flex items-center" style={{ gap: 4 }}>
+                                  {s.isShared && <span style={{ width: 6, height: 6, borderRadius: "50%", background: c, flexShrink: 0 }} />}
+                                  <span style={{ fontSize: 13, color: a.delay > 0 ? "#dc2626" : c, fontWeight: 700, minWidth: 38, textAlign: "right" }}>
+                                    {a.mins === 0 ? "곧" : `${a.mins}분`}
+                                  </span>
+                                </span>
+                              );
+                            })}
                           </div>
-                          {dirRows.map((dir) => {
-                            const a = byDir[dir];
-                            const c = dir === "outbound" ? FT.orange : FT.teal;
-                            const minsText = a.mins === 0 ? "잠시 후" : `약 ${a.mins}분 후`;
-                            const timeText = a.delay > 0 ? `${fromMin(toMin(a.schedAt) + a.delay)} 예상` : `${a.schedAt} 예정`;
-                            return (
-                              <div key={dir} className="flex items-center gap-2" style={{ fontFamily: "'Jua', sans-serif", marginTop: 2 }}>
-                                {s.isShared && <span style={{ width: 7, height: 7, borderRadius: "50%", background: c, flexShrink: 0 }} />}
-                                <span style={{ fontSize: 13, color: a.delay > 0 ? "#dc2626" : c, fontWeight: 700, flex: 1 }}>{minsText}</span>
-                                <span style={{ fontSize: 11, color: FT.mute, fontFamily: "'IBM Plex Mono', monospace" }}>{timeText}</span>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      );
-                    })
+                        );
+                      })}
+                    </div>
                   )
                 ) : (
                   live.map(([id, b]) => <BusCard key={id} id={id} bus={b} agoText={agoText} nowMin={nowMin} tripsToday={tripsToday} />)
