@@ -45,7 +45,7 @@
 
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef, useMemo } = React;
-const BUILD = "b78"; /* 화면 우하단 표시 — 최신 배포 확인용 */
+const BUILD = "b79"; /* 화면 우하단 표시 — 최신 배포 확인용 */
 
 /* 실시간 위치 공유용 Firebase DB 주소. 여기에 한 번 넣어두면 승객 링크가 ?view=map 만 남아 깔끔해집니다. */
 const SHARE_DB = "https://innum-bus-default-rtdb.firebaseio.com";
@@ -525,6 +525,7 @@ const FESTIVAL_PROGRAM = {
   day1: {
     label: "6.13 (토)",
     items: [
+      { time: "10:00~18:00", zone: 1, cat: "상설전시", title: "1187 라이브러리 광주 동네책방 큐레이션" },
       { time: "10:00~10:20", zone: 1, cat: "개막식", title: "무등생각의 동구라미" },
       { time: "10:20~11:30", zone: 1, cat: "인문 토크", title: "내 생각에 이름을 붙인다면" },
       { time: "13:30~14:30", zone: 1, cat: "청소년인문사업", title: "무등생각 청소년시(짧) 백일장" },
@@ -549,6 +550,7 @@ const FESTIVAL_PROGRAM = {
   day2: {
     label: "6.14 (일)",
     items: [
+      { time: "10:00~18:00", zone: 1, cat: "상설전시", title: "1187 라이브러리 광주 동네책방 큐레이션" },
       { time: "10:00~10:30", zone: 1, cat: "사생대회", title: "사생대회 오프닝" },
       { time: "11:00~12:00", zone: 1, cat: "인문다시보기", title: "우리들의 시원한 생각" },
       { time: "13:00~14:30", zone: 1, cat: "북콘서트", title: "생각하는 인간" },
