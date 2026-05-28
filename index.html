@@ -45,7 +45,7 @@
 
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef, useMemo } = React;
-const BUILD = "b72"; /* 화면 우하단 표시 — 최신 배포 확인용 */
+const BUILD = "b73"; /* 화면 우하단 표시 — 최신 배포 확인용 */
 
 /* 실시간 위치 공유용 Firebase DB 주소. 여기에 한 번 넣어두면 승객 링크가 ?view=map 만 남아 깔끔해집니다. */
 const SHARE_DB = "https://innum-bus-default-rtdb.firebaseio.com";
@@ -981,7 +981,7 @@ function LiveMapView({ dbUrl }) {
       const dir = b.dir === "inbound" ? "inbound" : "outbound";
       const bg = dir === "inbound" ? FT.teal : FT.orange;
       const wait = b.waiting === true;
-      const html = `<div style="display:inline-flex;align-items:center;gap:3px;background:${wait ? "#fff" : bg};color:${wait ? FT.ink : "#fff"};border:2.5px solid ${FT.ink};border-radius:999px;padding:3px 9px;box-shadow:2px 2px 0 ${FT.ink};font-family:'Jua',sans-serif;font-weight:700;font-size:12px;white-space:nowrap;">${wait ? "🅿️" : "🚌"} ${id}호차</div>`;
+      const html = `<div style="display:inline-flex;align-items:center;gap:3px;background:${wait ? "#fff" : bg};color:${wait ? FT.ink : "#fff"};border:2.5px solid ${FT.ink};border-radius:999px;padding:3px 9px;box-shadow:2px 2px 0 ${FT.ink};font-family:'Jua',sans-serif;font-weight:700;font-size:12px;white-space:nowrap;">${wait ? "🅿️" : "🚌"} ${id}</div>`;
       return L.divIcon({ className: "", html, iconSize: [120, 28], iconAnchor: [60, 14] });
     };
     const poll = async () => {
@@ -994,7 +994,7 @@ function LiveMapView({ dbUrl }) {
           if (!b || b.lat == null || (b.ts && now - b.ts > 60000)) return;
           n++;
           const dir = b.dir === "inbound" ? "inbound" : "outbound";
-          const label = `${id}호차 · ${ROUTES[dir].label}${b.trip ? ` ${b.trip}회차` : ""}${b.stop ? ` · ${b.stop}` : ""}${b.waiting === true ? " · 출발 대기" : ""}`;
+          const label = `${id} · ${ROUTES[dir].label}${b.trip ? ` ${b.trip}회차` : ""}${b.stop ? ` · ${b.stop}` : ""}${b.waiting === true ? " · 출발 대기" : ""}`;
           let m = markersRef.current[id];
           if (!m) {
             m = L.marker([b.lat, b.lng], { icon: makeIcon(id, b) }).addTo(map);
@@ -1120,7 +1120,7 @@ function BusCard({ id, bus, agoText, nowMin, tripsToday }) {
       <div className="flex items-center justify-between mb-2">
         <div className="flex items-center gap-2 min-w-0">
           <span style={{ fontSize: 20 }}>🚌</span>
-          <span className="flex-shrink-0" style={{ color: FT.ink, fontFamily: "'Jua', sans-serif", fontWeight: 700 }}>{id}호차</span>
+          <span className="flex-shrink-0" style={{ color: FT.ink, fontFamily: "'Jua', sans-serif", fontWeight: 700 }}>{id}</span>
           <span className="truncate" style={{ background: dir === "outbound" ? FT.orange : FT.teal, color: "#fff",
             border: "1.5px solid " + FT.ink, padding: "2px 8px", borderRadius: 999,
             fontSize: 11, fontFamily: "'Jua', sans-serif" }}>
@@ -2687,7 +2687,7 @@ function App() {
                 실시간 위치 공유 {manualWaiting ? "· 대기 표시 중" : ""}
               </div>
               <div className="text-[10px] text-slate-500 truncate">
-                {sharing ? `${busId || "1"}호차 위치 송신 중 · 3초 간격` : shareUrl ? "끄면 승객 지도에서 사라짐" : "고급 설정에서 DB 주소를 먼저 입력"}
+                {sharing ? `${busId || "1"}번 차량 위치 송신 중 · 3초 간격` : shareUrl ? "끄면 승객 지도에서 사라짐" : "고급 설정에서 DB 주소를 먼저 입력"}
               </div>
             </div>
           </div>
