@@ -38,7 +38,7 @@
 
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef, useMemo } = React;
-const BUILD = "b58"; /* 화면 우하단 표시 — 최신 배포 확인용 */
+const BUILD = "b59"; /* 화면 우하단 표시 — 최신 배포 확인용 */
 
 /* 실시간 위치 공유용 Firebase DB 주소. 여기에 한 번 넣어두면 승객 링크가 ?view=map 만 남아 깔끔해집니다. */
 const SHARE_DB = "https://innum-bus-default-rtdb.firebaseio.com";
@@ -394,6 +394,152 @@ function TimetableModal({ tripsToday, onClose }) {
   );
 }
 
+/* 두 점 사이의 거리(평면 근사). 짧은 거리에선 충분 */
+const distLL = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1]);
+/* 점 P가 선분 AB에 떨어진 거리 — 가장 가까운 구간 찾기 */
+const pointSegDist = (p, a, b) => {
+  const dx = b[0] - a[0], dy = b[1] - a[1];
+  if (dx === 0 && dy === 0) return distLL(p, a);
+  const t = Math.max(0, Math.min(1, ((p[0] - a[0]) * dx + (p[1] - a[1]) * dy) / (dx * dx + dy * dy)));
+  return distLL(p, [a[0] + t * dx, a[1] + t * dy]);
+};
+/* 정류장의 approachVia 효과값 — localStorage 오버라이드 우선, 없으면 코드 기본값 */
+const effectiveVia = (dir, stopName) => {
+  const userVia = LS.getJSON("viapoints", {});
+  const key = `${dir}|${stopName}`;
+  if (key in userVia) return userVia[key];
+  const s = ROUTES[dir].stops.find((x) => x.name === stopName);
+  return s && Array.isArray(s.approachVia) ? s.approachVia : [];
+};
+
+/* 경유점 편집기 — 운영자 전용. 클릭하면 가장 가까운 구간의 도착 정류장 approachVia 끝에 추가. via 마커 탭하여 제거. */
+function ViaEditor({ onClose }) {
+  const elRef = useRef(null), mapRef = useRef(null);
+  const [viaMap, setViaMap] = useState(() => LS.getJSON("viapoints", {}));
+  const layersRef = useRef({ lines: [], stops: [], vias: [] });
+
+  /* 방향별 시퀀스: [{kind:'stop'|'via', dir, stopName?, stopKey?, coord}] */
+  const buildSeq = (dir) => {
+    const stops = ROUTES[dir].stops.filter((s) => s.lat != null);
+    const seq = [];
+    stops.forEach((s, i) => {
+      if (i > 0) {
+        const key = `${dir}|${s.name}`;
+        const via = key in viaMap ? viaMap[key] : (Array.isArray(s.approachVia) ? s.approachVia : []);
+        via.forEach((v) => seq.push({ kind: "via", dir, stopKey: key, coord: v }));
+      }
+      seq.push({ kind: "stop", dir, stopName: s.name, coord: [s.lat, s.lng] });
+    });
+    return seq;
+  };
+
+  // 최초 맵 초기화 (의존성 없음 — 한 번만)
+  useEffect(() => {
+    if (!window.L || !elRef.current || mapRef.current) return;
+    const L = window.L;
+    const map = L.map(elRef.current, { zoomControl: true });
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 19, attribution: "© OpenStreetMap" }).addTo(map);
+    const allCoords = [];
+    ["outbound", "inbound"].forEach((dir) => ROUTES[dir].stops.forEach((s) => { if (s.lat != null) allCoords.push([s.lat, s.lng]); }));
+    if (allCoords.length) map.fitBounds(allCoords, { padding: [80, 30] });
+    else map.setView([35.135, 126.94], 14);
+
+    // 클릭으로 경유점 추가 — 가장 가까운 구간의 도착 정류장에 append
+    map.on("click", (e) => {
+      const click = [e.latlng.lat, e.latlng.lng];
+      let best = null;
+      ["outbound", "inbound"].forEach((dir) => {
+        const stops = ROUTES[dir].stops.filter((s) => s.lat != null);
+        for (let i = 0; i < stops.length - 1; i++) {
+          const a = [stops[i].lat, stops[i].lng];
+          const b = [stops[i + 1].lat, stops[i + 1].lng];
+          const d = pointSegDist(click, a, b);
+          if (!best || d < best.d) best = { d, dir, toName: stops[i + 1].name };
+        }
+      });
+      if (!best) return;
+      const key = `${best.dir}|${best.toName}`;
+      setViaMap((prev) => {
+        const cur = key in prev ? prev[key] : (ROUTES[best.dir].stops.find((s) => s.name === best.toName)?.approachVia || []);
+        return { ...prev, [key]: [...cur, click] };
+      });
+    });
+
+    mapRef.current = map;
+    setTimeout(() => map.invalidateSize(), 100);
+    return () => { map.remove(); mapRef.current = null; };
+  }, []);
+
+  // viaMap 변경 시 마커/선 재그리기 (직선 폴리라인 + 정류장/경유점 마커)
+  useEffect(() => {
+    const map = mapRef.current; if (!map) return;
+    const L = window.L;
+    layersRef.current.lines.forEach((l) => map.removeLayer(l)); layersRef.current.lines = [];
+    layersRef.current.stops.forEach((l) => map.removeLayer(l)); layersRef.current.stops = [];
+    layersRef.current.vias.forEach((l) => map.removeLayer(l)); layersRef.current.vias = [];
+
+    ["outbound", "inbound"].forEach((dir) => {
+      const color = dir === "outbound" ? FT.orange : FT.teal;
+      const seq = buildSeq(dir);
+      const lineCoords = seq.map((p) => p.coord);
+      if (lineCoords.length >= 2) {
+        const line = L.polyline(lineCoords, { color, weight: 4, opacity: 0.7, dashArray: dir === "inbound" ? "10,8" : null, lineCap: "round" }).addTo(map);
+        layersRef.current.lines.push(line);
+      }
+      seq.forEach((p) => {
+        if (p.kind === "stop") {
+          const m = L.circleMarker(p.coord, { radius: 6, color: FT.ink, fillColor: "#fff", fillOpacity: 1, weight: 2 })
+            .addTo(map).bindTooltip(p.stopName, { direction: "top" });
+          layersRef.current.stops.push(m);
+        } else {
+          const icon = L.divIcon({
+            className: "",
+            html: `<div style="background:${color};color:#fff;border:2px solid ${FT.ink};border-radius:6px;padding:1px 7px;font-family:'Jua',sans-serif;font-size:11px;font-weight:700;cursor:pointer;box-shadow:1.5px 1.5px 0 ${FT.ink};white-space:nowrap;">via ×</div>`,
+            iconSize: [44, 22], iconAnchor: [22, 11],
+          });
+          const m = L.marker(p.coord, { icon }).addTo(map);
+          m.on("click", (e) => {
+            if (e.originalEvent) { e.originalEvent.stopPropagation(); }
+            setViaMap((prev) => {
+              const cur = p.stopKey in prev ? prev[p.stopKey] : (ROUTES[p.dir].stops.find((s) => `${p.dir}|${s.name}` === p.stopKey)?.approachVia || []);
+              const list = cur.filter((c) => !(c[0] === p.coord[0] && c[1] === p.coord[1]));
+              return { ...prev, [p.stopKey]: list };
+            });
+          });
+          layersRef.current.vias.push(m);
+        }
+      });
+    });
+  }, [viaMap]);
+
+  // 영구 저장
+  useEffect(() => { LS.setJSON("viapoints", viaMap); }, [viaMap]);
+
+  const totalVia = Object.values(viaMap).reduce((n, v) => n + (Array.isArray(v) ? v.length : 0), 0);
+
+  return (
+    <div style={{ position: "fixed", inset: 0, zIndex: 2000, background: "#000" }}>
+      <div ref={elRef} style={{ width: "100%", height: "100%" }} />
+      <div style={{ position: "absolute", top: 10, left: 10, right: 10, zIndex: 2100,
+        display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+        <div style={{ background: "#fff", color: FT.ink, padding: "8px 12px", borderRadius: 10,
+          border: "2px solid " + FT.ink, fontFamily: "'Jua', sans-serif", fontSize: 12, lineHeight: 1.4,
+          boxShadow: "3px 3px 0 " + FT.ink, fontWeight: 700, maxWidth: "70%" }}>
+          경유점 편집 · 클릭=가장 가까운 구간에 추가 · via 박스 탭=제거 <span style={{ color: FT.orange }}>(현재 {totalVia}개)</span>
+        </div>
+        <div style={{ display: "flex", gap: 6 }}>
+          <button onClick={() => { if (window.confirm("저장된 모든 경유점을 초기화할까요? (코드 기본값으로 복귀)")) setViaMap({}); }}
+            style={{ background: "#fff", color: FT.ink, padding: "8px 12px", borderRadius: 10,
+              border: "2px solid " + FT.ink, fontFamily: "'Jua', sans-serif", fontSize: 12, boxShadow: "2px 2px 0 " + FT.ink, fontWeight: 700 }}>초기화</button>
+          <button onClick={onClose}
+            style={{ background: FT.orange, color: "#fff", padding: "8px 14px", borderRadius: 10,
+              border: "2px solid " + FT.ink, fontFamily: "'Jua', sans-serif", fontSize: 12, boxShadow: "2px 2px 0 " + FT.ink, fontWeight: 700 }}>닫기</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /* 승객용 실시간 위치 지도 — ?view=map&db=<DB주소> 로 진입. Firebase RTDB REST 폴링 */
 function LiveMapView({ dbUrl }) {
   const elRef = useRef(null), mapRef = useRef(null), markersRef = useRef({});
@@ -414,10 +560,10 @@ function LiveMapView({ dbUrl }) {
       const stops = ROUTES[dir].stops.filter((s) => s.lat != null);
       if (stops.length < 2) return;
       const stopCoords = stops.map((s) => [s.lat, s.lng]);
-      // OSRM 경로용 — 각 정류장의 approachVia 경유점을 사이사이 끼워넣기
+      // OSRM 경로용 — 각 정류장 approachVia 경유점(저장본 우선) 끼워넣기
       const routePts = [];
       stops.forEach((s, i) => {
-        if (i > 0 && Array.isArray(s.approachVia)) s.approachVia.forEach((v) => routePts.push(v));
+        if (i > 0) effectiveVia(dir, s.name).forEach((v) => routePts.push(v));
         routePts.push([s.lat, s.lng]);
       });
       // 임시 직선(연하게) — fitBounds 영향 최소화 위해 정류장 좌표만 사용
@@ -1379,6 +1525,7 @@ function App() {
   const [mentBackup, setMentBackup] = useState(null);
   const [mentMsg, setMentMsg] = useState("");
   const [showTimetable, setShowTimetable] = useState(false);
+  const [showViaEditor, setShowViaEditor] = useState(false);
   const openMentBackup = () => { setMentMsg(""); setMentBackup(JSON.stringify(ments, null, 2)); };
   const copyMent = () => {
     try { navigator.clipboard.writeText(mentBackup); setMentMsg("클립보드에 복사했어요"); }
@@ -2423,6 +2570,12 @@ function App() {
                 fontFamily: "'Jua', sans-serif" }}>
               안내 멘트 편집·백업·복원
             </button>
+            <button onClick={() => setShowViaEditor(true)}
+              className="mt-2 w-full py-1.5 rounded text-[11px] flex items-center justify-center gap-1"
+              style={{ background: "rgba(96,165,250,0.12)", color: "#60a5fa", border: "1px solid rgba(96,165,250,0.3)",
+                fontFamily: "'Jua', sans-serif" }}>
+              🗺️ 지도 경유점 편집 (도로 우회 추가)
+            </button>
           </div>
 
           {/* 실시간 위치 공유 */}
@@ -2535,6 +2688,7 @@ function App() {
       </div>
 
       {showTimetable && <TimetableModal tripsToday={tripsToday} onClose={() => setShowTimetable(false)} />}
+      {showViaEditor && <ViaEditor onClose={() => setShowViaEditor(false)} />}
 
       {/* 멘트 편집·백업·복원 모달 */}
       {mentBackup !== null && (
