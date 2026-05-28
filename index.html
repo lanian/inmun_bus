@@ -45,7 +45,7 @@
 
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef, useMemo } = React;
-const BUILD = "b88"; /* 화면 우하단 표시 — 최신 배포 확인용 */
+const BUILD = "b89"; /* 화면 우하단 표시 — 최신 배포 확인용 */
 
 /* 실시간 위치 공유용 Firebase DB 주소. 여기에 한 번 넣어두면 승객 링크가 ?view=map 만 남아 깔끔해집니다. */
 const SHARE_DB = "https://innum-bus-default-rtdb.firebaseio.com";
@@ -1263,15 +1263,18 @@ function BusCard({ id, bus, agoText, nowMin, tripsToday }) {
       ) : (
       <React.Fragment>
       <div className="flex items-stretch gap-2 mb-2.5">
-        <div className="flex-1 px-3 py-2" style={{ background: FT.paper, border: "1.5px solid " + FT.ink, borderRadius: 8 }}>
-          <div style={{ fontSize: 9, color: FT.mute, marginBottom: 2 }}>현재 위치</div>
-          <div className="truncate" style={{ fontSize: 14, fontWeight: 700, color: FT.ink, fontFamily: "'Jua', sans-serif" }}>{bus.stop || "운행 중"}</div>
-        </div>
         <div className="flex-1 px-3 py-2" style={{ background: FT.orangeSoft, border: "1.5px solid " + FT.ink, borderRadius: 8 }}>
-          <div style={{ fontSize: 9, color: FT.orangeDark, marginBottom: 2 }}>{nextStop ? "다음 정류장" : "종점"}</div>
+          <div style={{ fontSize: 9, color: FT.orangeDark, marginBottom: 2 }}>곧 도착</div>
+          <div className="truncate" style={{ fontSize: 14, fontWeight: 700, color: FT.ink, fontFamily: "'Jua', sans-serif" }}>
+            {bus.stop || "운행 중"}
+            {sched && ci >= 0 && sched[ci] ? <span style={{ fontSize: 10, color: FT.orangeDark, marginLeft: 4 }}>{sched[ci]} 예정</span> : null}
+          </div>
+        </div>
+        <div className="flex-1 px-3 py-2" style={{ background: FT.paper, border: "1.5px solid " + FT.ink, borderRadius: 8 }}>
+          <div style={{ fontSize: 9, color: FT.mute, marginBottom: 2 }}>{nextStop ? "그 다음" : "종점"}</div>
           <div className="truncate" style={{ fontSize: 14, fontWeight: 700, color: FT.ink, fontFamily: "'Jua', sans-serif" }}>
             {nextStop ? nextStop.name : finalName}
-            {(nextStop ? nextEta : finalEta) ? <span style={{ fontSize: 10, color: FT.orangeDark, marginLeft: 4 }}>{nextStop ? nextEta : finalEta} 예정</span> : null}
+            {(nextStop ? nextEta : finalEta) ? <span style={{ fontSize: 10, color: FT.mute, marginLeft: 4 }}>{nextStop ? nextEta : finalEta} 예정</span> : null}
           </div>
         </div>
       </div>
