@@ -73,7 +73,7 @@
 
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef, useMemo } = React;
-const BUILD = "b158"; /* 화면 우하단 표시 — 최신 배포 확인용 */
+const BUILD = "b159"; /* 화면 우하단 표시 — 최신 배포 확인용 */
 
 /* 실시간 위치 공유용 Firebase DB 주소. 여기에 한 번 넣어두면 승객 링크가 ?view=map 만 남아 깔끔해집니다. */
 const SHARE_DB = "https://innum-bus-default-rtdb.firebaseio.com";
@@ -3632,6 +3632,15 @@ function App() {
               style={{ background: handoffMemo ? "rgba(168, 85, 247, 0.18)" : "rgba(168, 85, 247, 0.08)",
                 color: "#c084fc", border: "1px solid rgba(168, 85, 247, 0.3)", fontFamily: "'Jua', sans-serif" }}>
               📝 인수메모{handoffMemo ? " ●" : ""}
+            </button>
+            <button onClick={() => {
+                if (!document.fullscreenElement) document.documentElement.requestFullscreen?.();
+                else document.exitFullscreen?.();
+              }}
+              className="flex items-center gap-1 text-xs px-3 py-1.5 rounded-full"
+              style={{ background: "rgba(100, 116, 139, 0.12)", color: "#cbd5e1",
+                border: "1px solid #3a3f54", fontFamily: "'Jua', sans-serif" }}>
+              ⛶ 전체화면
             </button>
             <div className="ml-auto text-[10px] text-slate-600 tracking-wider"
               style={{ fontFamily: "'IBM Plex Mono', monospace" }}>
