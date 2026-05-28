@@ -46,6 +46,13 @@
   /* 지도 대기 중 버스 마커 펄스 */
   @keyframes waitMarker { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.07); } }
   .fest-wait-marker > div { animation: waitMarker 1.4s ease-in-out infinite; }
+  /* 행사 구역 마커 — 둥근 사각형, 번호 + 짧은 라벨 */
+  .fest-zone-marker > div { display: inline-flex; align-items: center; gap: 4px;
+    background: #fff; color: #101113; border: 2px solid #101113; border-radius: 10px;
+    padding: 2px 6px 2px 4px; font-family: 'Jua', sans-serif; font-weight: 700; font-size: 11px;
+    white-space: nowrap; box-shadow: 2px 2px 0 #101113; }
+  .fest-zone-marker .num { display: inline-flex; align-items: center; justify-content: center;
+    width: 18px; height: 18px; border-radius: 5px; color: #fff; font-size: 11px; }
   /* 도착 알람 — 카운트 영역에 부드러운 노란 글로우 */
   @keyframes arrivedAlert {
     0% { box-shadow: 0 0 0 0 rgba(251, 191, 36, 0.55); }
@@ -73,7 +80,7 @@
 
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef, useMemo } = React;
-const BUILD = "b178"; /* 화면 우하단 표시 — 최신 배포 확인용 */
+const BUILD = "b179"; /* 화면 우하단 표시 — 최신 배포 확인용 */
 
 /* 실시간 위치 공유용 Firebase DB 주소. 여기에 한 번 넣어두면 승객 링크가 ?view=map 만 남아 깔끔해집니다. */
 const SHARE_DB = "https://innum-bus-default-rtdb.firebaseio.com";
@@ -538,13 +545,13 @@ function BackupModal({ onClose, counts, dateKey }) {
   );
 }
 
-/* 축제 프로그램(행사장 지도의 5개 구역) */
+/* 축제 프로그램(행사장 지도의 5개 구역) — lat/lng는 행사장 지도 기준 추정값(운영자 확인 후 보정) */
 const FESTIVAL_ZONES = [
-  { num: 1, title: "생각을 켜는 광장", sub: "주무대 전다광장 · 1187 라이브러리" },
-  { num: 2, title: "생각을 끄는 숲", sub: "편백숲" },
-  { num: 3, title: "체험존 & 인문팝업스토어", sub: "편백숲 가는 길 · 그늘광장" },
-  { num: 4, title: "생각의 통로", sub: "무등산 진입로" },
-  { num: 5, title: "생각의 확장", sub: "증심사 일원 · 의재로권 미술관 · 5·18 민주광장" },
+  { num: 1, title: "생각을 켜는 광장", sub: "주무대 전다광장 · 1187 라이브러리", lat: 35.1335, lng: 126.9595 },
+  { num: 2, title: "생각을 끄는 숲", sub: "편백숲", lat: 35.1325, lng: 126.9610 },
+  { num: 3, title: "체험존 & 인문팝업스토어", sub: "편백숲 가는 길 · 그늘광장", lat: 35.1330, lng: 126.9602 },
+  { num: 4, title: "생각의 통로", sub: "무등산 진입로", lat: 35.1338, lng: 126.9588 },
+  { num: 5, title: "생각의 확장", sub: "증심사 일원 · 의재로권 미술관 · 5·18 민주광장", lat: 35.1310, lng: 126.9625 },
 ];
 
 /* 일자별 프로그램 — 6.13(토) / 6.14(일). 시간 "상시"는 전 시간대 운영. */
@@ -1436,6 +1443,16 @@ function LiveMapView({ dbUrl }) {
         })
         .catch(() => {});
     });
+    // 행사 주요 구역 마커 — 5개 구역 좌표에 번호 박스 + 짧은 라벨, 클릭 시 sub 설명 팝업
+    FESTIVAL_ZONES.forEach((z) => {
+      if (z.lat == null || z.lng == null) return;
+      const c = z.num % 2 ? FT.orange : FT.teal;
+      const html = `<div><span class="num" style="background:${c}">${z.num}</span><span>${z.title}</span></div>`;
+      const icon = L.divIcon({ className: "fest-zone-marker", html, iconSize: [160, 24], iconAnchor: [80, 12] });
+      const m = L.marker([z.lat, z.lng], { icon }).addTo(map)
+        .bindPopup(`<div style="font-family:'Jua',sans-serif"><b>${z.num}. ${z.title}</b><br><span style="color:#4A4E55;font-size:11px">${z.sub}</span></div>`);
+      stopLayersRef.current.push(m);
+    });
     if (!hasFitRef.current && allCoords.length) {
       map.fitBounds(allCoords, { padding: [80, 30] });
       hasFitRef.current = true;
@@ -1620,6 +1637,11 @@ function LiveMapView({ dbUrl }) {
         <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
           <span style={{ display: "inline-block", width: 12, height: 12, borderRadius: "50%", background: "#fff", border: `2px solid ${FT.ink}` }} />
           공용 정류장
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 2 }}>
+          <span style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: 16, height: 16, borderRadius: 4,
+            background: FT.orange, color: "#fff", fontSize: 10, fontFamily: "'Jua', sans-serif", fontWeight: 700, border: "1.5px solid " + FT.ink }}>1</span>
+          행사 주요 구역
         </div>
       </div>
     </div>
