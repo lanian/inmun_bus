@@ -45,7 +45,7 @@
 
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef, useMemo } = React;
-const BUILD = "b105"; /* 화면 우하단 표시 — 최신 배포 확인용 */
+const BUILD = "b106"; /* 화면 우하단 표시 — 최신 배포 확인용 */
 
 /* 실시간 위치 공유용 Firebase DB 주소. 여기에 한 번 넣어두면 승객 링크가 ?view=map 만 남아 깔끔해집니다. */
 const SHARE_DB = "https://innum-bus-default-rtdb.firebaseio.com";
@@ -1379,7 +1379,7 @@ function PassengerView({ dbUrl, onAdmin, initialTab = "list" }) {
   const [showTimetable, setShowTimetable] = useState(false);
   const [showVenue, setShowVenue] = useState(false);
   const [venueZone, setVenueZone] = useState(0);
-  const [arrivalMode, setArrivalMode] = useState(() => LS.get("amode", "stops")); // stops|buses
+  const [arrivalMode, setArrivalMode] = useState(() => LS.get("amode", "buses")); // buses|stops
   useEffect(() => LS.set("amode", arrivalMode), [arrivalMode]);
   const tapRef = useRef(0), tapTimeRef = useRef(0);
 
@@ -1580,8 +1580,8 @@ function PassengerView({ dbUrl, onAdmin, initialTab = "list" }) {
                 {/* 정류장별/버스별 토글 */}
                 <div className="flex" style={{ border: "2px solid " + FT.ink, borderRadius: 10, overflow: "hidden" }}>
                   {[
-                    { k: "stops", label: "정류장별" },
                     { k: "buses", label: "버스별" },
+                    { k: "stops", label: "정류장별" },
                   ].map((t, i) => (
                     <button key={t.k} onClick={() => setArrivalMode(t.k)}
                       style={{ flex: 1, padding: "7px 0", fontSize: 12, fontFamily: "'Jua', sans-serif", fontWeight: 700,
