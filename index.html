@@ -45,7 +45,7 @@
 
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef, useMemo } = React;
-const BUILD = "b115"; /* 화면 우하단 표시 — 최신 배포 확인용 */
+const BUILD = "b116"; /* 화면 우하단 표시 — 최신 배포 확인용 */
 
 /* 실시간 위치 공유용 Firebase DB 주소. 여기에 한 번 넣어두면 승객 링크가 ?view=map 만 남아 깔끔해집니다. */
 const SHARE_DB = "https://innum-bus-default-rtdb.firebaseio.com";
@@ -2542,26 +2542,32 @@ function App() {
     return () => { stopped = true; clearInterval(timer); };
   }, [sharing, driverEmail, driverPass, apiKey]);
 
-  /* --- 실시간 위치 공유: 켜져 있고 GPS가 있으면 3초마다 Firebase RTDB에 위치 PUT --- */
+  /* --- 실시간 위치 공유: 켜져 있을 때 3초마다 broadcast (GPS 없어도 운행 정보 송신 가능) --- */
+  const [_shareTick, _setShareTick] = useState(0);
   useEffect(() => {
-    if (!sharing || !shareUrl || !userPos) return;
+    if (!sharing) return;
+    const id = setInterval(() => _setShareTick((t) => t + 1), 3000);
+    return () => clearInterval(id);
+  }, [sharing]);
+  useEffect(() => {
+    if (!sharing || !shareUrl) return;
+    if (locShare && !userPos) return; // 좌표 공유 켜져 있을 땐 GPS 필수
     const now = Date.now();
-    if (now - lastShareRef.current < 3000) return;
+    if (now - lastShareRef.current < 2500) return;
     lastShareRef.current = now;
     const base = shareUrl.replace(/\/+$/, "");
     const auth = authTokenRef.current ? `?auth=${encodeURIComponent(authTokenRef.current)}` : "";
-    // bus.stop(=곧 도착할 정류장)까지의 거리 — 30m 이내면 '도착'으로 간주 (좌표 공유 시에만)
-    const distToCur = userPos && curCoord ? distanceMeters(userPos, curCoord) : null;
-    const arrived = locShare && distToCur != null && distToCur < 30 ? true : undefined;
+    const distToCur = locShare && userPos && curCoord ? distanceMeters(userPos, curCoord) : null;
+    const arrived = distToCur != null && distToCur < 30 ? true : undefined;
     const body = JSON.stringify({
-      ...(locShare ? { lat: userPos.lat, lng: userPos.lng } : {}),
+      ...(locShare && userPos ? { lat: userPos.lat, lng: userPos.lng } : {}),
       dir: direction, trip: tripIdx + 1,
       stop: curStop?.name || "", ts: now,
       waiting: manualWaiting || undefined,
       ...(arrived ? { arrived } : {}),
     });
     fetch(`${base}/buses/${encodeURIComponent(busId || "1")}.json${auth}`, { method: "PUT", body }).catch(() => {});
-  }, [userPos, sharing, shareUrl, busId, direction, tripIdx, curStop, curCoord, manualWaiting, locShare]);
+  }, [_shareTick, userPos, sharing, shareUrl, busId, direction, tripIdx, curStop, curCoord, manualWaiting, locShare]);
 
   // 공유를 끄면(켰다가 끈 경우만) 내 위치 노드 삭제 — 지도에서 사라지게
   const wasSharingRef = useRef(false);
@@ -3498,7 +3504,7 @@ function App() {
               쓰기 로그인 테스트 · UID 확인
             </button>
             {authStatus && <div className="text-[10px] break-all" style={{ color: authStatus.startsWith("✅") ? "#22d65f" : authStatus.startsWith("❌") ? "#f87171" : "#94a3b8" }}>{authStatus}</div>}
-            <div className="text-[10px] text-slate-600">GPS 자동이 켜져 있어야 위치가 올라갑니다. 로그인을 채우면 승객은 읽기만 가능(쓰기 차단). 비우면 테스트 모드로 동작합니다.</div>
+            <div className="text-[10px] text-slate-600">좌표 공유(📍 ON)는 GPS 자동이 켜져 있어야 동작. OFF면 GPS 없이 운행 정보(방향·회차·정류장)만 송신. 로그인을 채우면 승객은 읽기만 가능(쓰기 차단).</div>
             <div className="text-[10px] text-slate-600">기사 화면 재진입: 주소 끝에 <span style={{ color: "#fbbf24", fontFamily: "'IBM Plex Mono', monospace" }}>?admin=1</span> 붙여 북마크하거나, 승객 화면 제목을 7번 탭하세요.</div>
             {shareUrl && (() => {
               const norm = (s) => s.replace(/\/+$/, "");
