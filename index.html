@@ -45,7 +45,7 @@
 
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef, useMemo } = React;
-const BUILD = "b118"; /* 화면 우하단 표시 — 최신 배포 확인용 */
+const BUILD = "b119"; /* 화면 우하단 표시 — 최신 배포 확인용 */
 
 /* 실시간 위치 공유용 Firebase DB 주소. 여기에 한 번 넣어두면 승객 링크가 ?view=map 만 남아 깔끔해집니다. */
 const SHARE_DB = "https://innum-bus-default-rtdb.firebaseio.com";
@@ -731,27 +731,42 @@ function VenueModal({ onClose, initialZone = 0 }) {
   );
 }
 
-/* 운행 정보(dir/trip/현재 정류장) + 현재 시간 → 직전 정류장과 현재 정류장 사이를 시간 비율로 보간한 위치 */
-function operationBasedPos(dir, tripIdx, curStopName, nowMin) {
+/* 운행 정보(dir/trip/현재 정류장) + 시간 + 대기 플래그 → 보간 위치 + 상태(phase)
+   phase: waiting/before/approaching/at/passed/end */
+function operationBasedPos(dir, tripIdx, curStopName, nowMin, waiting) {
   const route = ROUTES[dir];
   const sched = route.trips[tripIdx];
   if (!sched) return null;
   const stops = route.stops;
   const i = stops.findIndex((s) => s.name === curStopName);
   if (i < 0) return null;
-  if (i === 0) {
-    return stops[0].lat != null ? { lat: stops[0].lat, lng: stops[0].lng, fromName: stops[0].name, toName: stops[0].name } : null;
+  const at = (idx, phase) => stops[idx] && stops[idx].lat != null ? { lat: stops[idx].lat, lng: stops[idx].lng, fromName: stops[idx].name, toName: stops[idx].name, phase } : null;
+  if (waiting) return at(i, "waiting");
+  const interp = (a, b, t) => ({ lat: a.lat + (b.lat - a.lat) * t, lng: a.lng + (b.lng - a.lng) * t });
+  const tCur = sched[i] ? toMin(sched[i]) : null;
+  const tPrev = i > 0 && sched[i - 1] ? toMin(sched[i - 1]) : null;
+  const tNext = i < stops.length - 1 && sched[i + 1] ? toMin(sched[i + 1]) : null;
+  // 진입 구간(prev → cur)
+  if (i > 0 && tPrev != null && tCur != null && nowMin < tCur) {
+    const prev = stops[i - 1], cur = stops[i];
+    if (prev.lat == null || cur.lat == null) return at(i, "approaching");
+    const t = Math.max(0, Math.min(1, (nowMin - tPrev) / Math.max(1, tCur - tPrev)));
+    const phase = (tCur - nowMin) <= 1 ? "approaching" : "between";
+    return { ...interp(prev, cur, t), fromName: prev.name, toName: cur.name, phase };
   }
-  const prev = stops[i - 1], cur = stops[i];
-  if (prev.lat == null || cur.lat == null || !sched[i - 1] || !sched[i]) return null;
-  const tPrev = toMin(sched[i - 1]), tCur = toMin(sched[i]);
-  let t = (nowMin - tPrev) / Math.max(1, tCur - tPrev);
-  t = Math.max(0, Math.min(1, t));
-  return {
-    lat: prev.lat + (cur.lat - prev.lat) * t,
-    lng: prev.lng + (cur.lng - prev.lng) * t,
-    fromName: prev.name, toName: cur.name,
-  };
+  // 시발지 출발 시각 전 — 정류장에서 대기
+  if (i === 0 && tCur != null && nowMin < tCur) return at(0, "before");
+  // 통과 구간(cur → next)
+  if (tCur != null && tNext != null && nowMin >= tCur && nowMin <= tNext) {
+    const cur = stops[i], nxt = stops[i + 1];
+    if (cur.lat == null || nxt.lat == null) return at(i, "passed");
+    const t = Math.max(0, Math.min(1, (nowMin - tCur) / Math.max(1, tNext - tCur)));
+    const phase = (nowMin - tCur) <= 1 ? "at" : "passed";
+    return { ...interp(cur, nxt, t), fromName: cur.name, toName: nxt.name, phase };
+  }
+  // 종점 또는 다음 정류장도 지나간 경우 — 가장 근접한 정류장에 고정
+  if (i === stops.length - 1) return at(i, "end");
+  return at(i, "at");
 }
 
 /* 시간표 기반 버스 추정 위치 — 운행 중 회차의 두 정류장 사이를 시간 비율로 보간 */
@@ -1175,8 +1190,8 @@ function LiveMapView({ dbUrl }) {
             pos = [b.lat, b.lng];
           } else if (b.stop && b.dir) {
             const dirKey = b.dir === "inbound" ? "inbound" : "outbound";
-            const op = b.trip ? operationBasedPos(dirKey, b.trip - 1, b.stop, nowMinTick) : null;
-            if (op) { pos = [op.lat, op.lng]; noGps = true; }
+            const op = b.trip ? operationBasedPos(dirKey, b.trip - 1, b.stop, nowMinTick, b.waiting === true) : null;
+            if (op) { pos = [op.lat, op.lng]; noGps = true; b._op = op; }
             else {
               const route = ROUTES[dirKey];
               const s = route && route.stops.find((x) => x.name === b.stop);
@@ -1188,7 +1203,18 @@ function LiveMapView({ dbUrl }) {
           validIds.add(id);
           const dir = b.dir === "inbound" ? "inbound" : "outbound";
           if (b.trip) liveTripSet.add(`${dir}|${b.trip}`);
-          const label = `${id} · ${ROUTES[dir].label}${b.trip ? ` ${b.trip}회차` : ""}${b.stop ? ` · ${b.stop}` : ""}${b.waiting === true ? " · 출발 대기" : ""}${noGps ? " · 정류장 기반" : ""}`;
+          let phaseText = "";
+          if (b._op) {
+            const op = b._op;
+            phaseText = op.phase === "waiting" ? "출발 대기"
+              : op.phase === "before" ? `${op.fromName} 출발 시각 전`
+              : op.phase === "approaching" ? `${op.toName} 진입 중`
+              : op.phase === "between" ? `${op.fromName} → ${op.toName} 이동 중`
+              : op.phase === "at" ? `${op.fromName} 도착`
+              : op.phase === "passed" ? `${op.fromName} 통과 · ${op.toName}로`
+              : op.phase === "end" ? "종점 도착" : "";
+          }
+          const label = `${id} · ${ROUTES[dir].label}${b.trip ? ` ${b.trip}회차` : ""}${phaseText ? ` · ${phaseText}` : (b.stop ? ` · ${b.stop}` : "")}${b.waiting === true ? " · 출발 대기" : ""}${noGps ? " · 예상" : ""}`;
           let m = markersRef.current[id];
           if (!m) {
             m = L.marker(pos, { icon: makeIcon(id, b, noGps) }).addTo(map);
