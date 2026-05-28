@@ -38,7 +38,7 @@
 
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef, useMemo } = React;
-const BUILD = "b48"; /* 화면 우하단 표시 — 최신 배포 확인용 */
+const BUILD = "b49"; /* 화면 우하단 표시 — 최신 배포 확인용 */
 
 /* 실시간 위치 공유용 Firebase DB 주소. 여기에 한 번 넣어두면 승객 링크가 ?view=map 만 남아 깔끔해집니다. */
 const SHARE_DB = "https://innum-bus-default-rtdb.firebaseio.com";
@@ -432,8 +432,33 @@ function LiveMapView({ dbUrl }) {
   );
 }
 
+/* 버스가 시발지 출발 전이거나 종점 도착 후 다음 출발 대기 중인지 자동 추론 */
+function inferWaiting(bus, nowMin, tripsToday) {
+  const dir = bus.dir === "inbound" ? "inbound" : "outbound";
+  const route = ROUTES[dir];
+  const stops = route.stops;
+  const trip = (bus.trip || 1) - 1;
+  const sched = route.trips[trip];
+  if (!sched) return null;
+  // 시발지에서 이번 회차 출발 시각 전
+  if (bus.stop === stops[0].name && nowMin < toMin(sched[0])) {
+    return { place: stops[0].name, time: sched[0], tripIdx: trip + 1, dir };
+  }
+  // 종점 도착 후 반대 방향 다음 회차 대기
+  if (bus.stop === stops[stops.length - 1].name) {
+    const opp = dir === "outbound" ? "inbound" : "outbound";
+    const oppTrips = ROUTES[opp].trips.slice(0, tripsToday);
+    for (let i = 0; i < oppTrips.length; i++) {
+      if (toMin(oppTrips[i][0]) >= nowMin) {
+        return { place: stops[stops.length - 1].name, time: oppTrips[i][0], tripIdx: i + 1, dir: opp };
+      }
+    }
+  }
+  return null;
+}
+
 /* 승객 화면 버스 카드 — 진행바를 현재 정류장으로 자동 스크롤, 다음 정류장·도착예정 표시 */
-function BusCard({ id, bus, agoText }) {
+function BusCard({ id, bus, agoText, nowMin, tripsToday }) {
   const stripRef = useRef(null), activeRef = useRef(null);
   const dir = bus.dir === "inbound" ? "inbound" : "outbound";
   const route = ROUTES[dir];
@@ -444,10 +469,13 @@ function BusCard({ id, bus, agoText }) {
   const nextEta = nextStop && sched ? sched[ci + 1] : null;
   const finalName = stops[stops.length - 1].name;
   const finalEta = sched ? sched[sched.length - 1] : null;
+  const autoWait = inferWaiting(bus, nowMin, tripsToday);
+  const waitInfo = bus.waiting === true ? (autoWait || { place: bus.stop || "—", time: null, tripIdx: null, dir }) : autoWait;
   useEffect(() => {
+    if (waitInfo) return;
     const el = activeRef.current, c = stripRef.current;
     if (el && c) c.scrollTo({ left: el.offsetLeft - c.clientWidth / 2 + el.clientWidth / 2, behavior: "smooth" });
-  }, [ci]);
+  }, [ci, waitInfo]);
   return (
     <div className="rounded-2xl p-3 border" style={{ background: "#13151d", borderColor: "#2a2f42" }}>
       <div className="flex items-center justify-between mb-2">
@@ -464,6 +492,20 @@ function BusCard({ id, bus, agoText }) {
         </span>
       </div>
 
+      {waitInfo ? (
+        <div className="rounded-xl px-4 py-4 text-center mb-1"
+          style={{ background: "linear-gradient(180deg, rgba(96,165,250,0.10), rgba(96,165,250,0.04))", border: "1px solid rgba(96,165,250,0.25)" }}>
+          <div className="text-[11px] tracking-widest mb-1" style={{ color: "#93c5fd", fontFamily: "'Jua', sans-serif" }}>
+            🅿️ 출발 대기 중{bus.waiting === true ? " (기사 확인)" : ""}
+          </div>
+          <div className="text-lg font-bold" style={{ color: "#fbbf24", fontFamily: "'Jua', sans-serif" }}>{waitInfo.place}</div>
+          <div className="text-sm mt-2" style={{ color: "#e2e8f0", fontFamily: "'Jua', sans-serif" }}>
+            다음 출발 <b className="text-blue-300">{waitInfo.time || "미정"}</b>
+            {waitInfo.tripIdx ? <span className="text-[11px] text-slate-400 ml-1">({waitInfo.tripIdx}회차 · {ROUTES[waitInfo.dir].label})</span> : null}
+          </div>
+        </div>
+      ) : (
+      <React.Fragment>
       <div className="flex items-stretch gap-2 mb-2.5">
         <div className="flex-1 rounded-xl px-3 py-2" style={{ background: "#0a0b0f" }}>
           <div className="text-[9px] text-slate-500 mb-0.5">현재 위치</div>
@@ -490,6 +532,8 @@ function BusCard({ id, bus, agoText }) {
           </React.Fragment>
         ))}
       </div>
+      </React.Fragment>
+      )}
     </div>
   );
 }
@@ -611,7 +655,7 @@ function PassengerView({ dbUrl, onAdmin }) {
               })}
             </div>
           ) : (
-            live.map(([id, b]) => <BusCard key={id} id={id} bus={b} agoText={agoText} />)
+            live.map(([id, b]) => <BusCard key={id} id={id} bus={b} agoText={agoText} nowMin={nowMin} tripsToday={tripsToday} />)
           )}
 
           <div className="flex gap-2 pt-1">
@@ -683,6 +727,7 @@ function App() {
   const [apiKey, setApiKey] = useState(() => LS.get("apikey", SHARE_API_KEY)); // 웹 API 키(이 기기에만 저장)
   const [authStatus, setAuthStatus] = useState("");
   const [sharing, setSharing] = useState(false);
+  const [manualWaiting, setManualWaiting] = useState(false);
   const lastShareRef = useRef(0);
   const authTokenRef = useRef("");
   const [progTimeBase, setProgTimeBase] = useState(() => LS.get("progbase", "now")); // now|trip
@@ -1373,10 +1418,10 @@ function App() {
     const auth = authTokenRef.current ? `?auth=${encodeURIComponent(authTokenRef.current)}` : "";
     const body = JSON.stringify({
       lat: userPos.lat, lng: userPos.lng, dir: direction, trip: tripIdx + 1,
-      stop: curStop?.name || "", ts: now,
+      stop: curStop?.name || "", ts: now, waiting: manualWaiting || undefined,
     });
     fetch(`${base}/buses/${encodeURIComponent(busId || "1")}.json${auth}`, { method: "PUT", body }).catch(() => {});
-  }, [userPos, sharing, shareUrl, busId, direction, tripIdx, curStop]);
+  }, [userPos, sharing, shareUrl, busId, direction, tripIdx, curStop, manualWaiting]);
 
   // 공유를 끄면(켰다가 끈 경우만) 내 위치 노드 삭제 — 지도에서 사라지게
   const wasSharingRef = useRef(false);
@@ -2208,6 +2253,12 @@ function App() {
                 {sharing ? "● 위치 공유 중 (끄기)" : "내 위치 공유 시작"}
               </button>
             </div>
+            <button onClick={() => setManualWaiting((v) => !v)} disabled={!sharing}
+              className="w-full py-1.5 rounded text-[11px] font-bold disabled:opacity-40"
+              style={{ background: manualWaiting ? "#60a5fa" : "rgba(96,165,250,0.12)", color: manualWaiting ? "#0a0b0f" : "#60a5fa",
+                border: "1px solid rgba(96,165,250,0.3)", fontFamily: "'Jua', sans-serif" }}>
+              {manualWaiting ? "🅿️ 출발 대기 표시 중 (해제)" : "🅿️ 출발 대기 표시"}
+            </button>
             <input type="email" value={driverEmail} onChange={(e) => setDriverEmail(e.target.value)}
               placeholder="(선택) 기사 로그인 이메일 — 비워두면 테스트 모드"
               autoComplete="off"
