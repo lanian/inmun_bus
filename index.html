@@ -43,6 +43,9 @@
   .leaflet-container .leaflet-marker-icon,
   .leaflet-container .leaflet-marker-shadow,
   .leaflet-pane img { max-width: none !important; }
+  /* 지도 대기 중 버스 마커 펄스 */
+  @keyframes waitMarker { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.07); } }
+  .fest-wait-marker > div { animation: waitMarker 1.4s ease-in-out infinite; }
   /* 정류장 상시 라벨 — 무등생각 테마(흰 박스 + 검정 외곽선 + 입체 그림자) */
   .leaflet-tooltip.fest-stop { background: #fff; color: #101113; border: 1.5px solid #101113;
     border-radius: 6px; padding: 1px 7px; font-family: 'Jua', sans-serif; font-size: 11px; font-weight: 700;
@@ -63,7 +66,7 @@
 
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef, useMemo } = React;
-const BUILD = "b127"; /* 화면 우하단 표시 — 최신 배포 확인용 */
+const BUILD = "b128"; /* 화면 우하단 표시 — 최신 배포 확인용 */
 
 /* 실시간 위치 공유용 Firebase DB 주소. 여기에 한 번 넣어두면 승객 링크가 ?view=map 만 남아 깔끔해집니다. */
 const SHARE_DB = "https://innum-bus-default-rtdb.firebaseio.com";
@@ -1179,10 +1182,15 @@ function LiveMapView({ dbUrl }) {
       const dir = b.dir === "inbound" ? "inbound" : "outbound";
       const bg = dir === "inbound" ? FT.teal : FT.orange;
       const wait = b.waiting === true;
+      // 대기 중: 주황소프트 배경 + 펄스 애니메이션 + "대기" 텍스트로 시각 강조
+      if (wait) {
+        const html = `<div style="display:inline-flex;align-items:center;gap:4px;background:${FT.orangeSoft};color:${FT.orangeDark};border:2.5px solid ${FT.ink};border-radius:999px;padding:3px 10px;box-shadow:2px 2px 0 ${FT.ink};font-family:'Jua',sans-serif;font-weight:700;font-size:12px;white-space:nowrap;">🅿️ ${id} 대기 중</div>`;
+        return L.divIcon({ className: "fest-wait-marker", html, iconSize: [160, 28], iconAnchor: [80, 14] });
+      }
       const borderStyle = noGps ? "dashed" : "solid";
       const shadow = noGps ? "" : `box-shadow:2px 2px 0 ${FT.ink};`;
       const trailing = noGps ? " 예상" : "";
-      const html = `<div style="display:inline-flex;align-items:center;gap:3px;background:${wait ? "#fff" : bg};color:${wait ? FT.ink : "#fff"};border:2.5px ${borderStyle} ${FT.ink};border-radius:999px;padding:3px 9px;${shadow}font-family:'Jua',sans-serif;font-weight:700;font-size:12px;white-space:nowrap;">${wait ? "🅿️" : "🚌"} ${id}${trailing}</div>`;
+      const html = `<div style="display:inline-flex;align-items:center;gap:3px;background:${bg};color:#fff;border:2.5px ${borderStyle} ${FT.ink};border-radius:999px;padding:3px 9px;${shadow}font-family:'Jua',sans-serif;font-weight:700;font-size:12px;white-space:nowrap;">🚌 ${id}${trailing}</div>`;
       return L.divIcon({ className: "", html, iconSize: [140, 28], iconAnchor: [70, 14] });
     };
     const schedIcon = (dir, tripNum) => {
@@ -3822,10 +3830,24 @@ function App() {
   );
 }
 
+function Intro() {
+  return (
+    <div className="boot">
+      <img src="logo.png" alt="무등생각" />
+      <div className="slogan">생각을 끄고, 생각을 켜다</div>
+      <div className="who">제4회 동구 무등산 인문축제</div>
+      <div className="accent">&lt;무등생각&gt; 셔틀버스 안내</div>
+      <div className="dots"><span className="dot"></span><span className="dot"></span><span className="dot"></span></div>
+    </div>
+  );
+}
 function Root() {
   const params = new URLSearchParams(window.location.search);
   const [admin, setAdmin] = useState(params.get("admin") === "1");
-  if (admin) return <App />;                                            // 운영자(히든) — ?admin=1 또는 제목 7번 탭
+  const [ready, setReady] = useState(false);
+  useEffect(() => { const t = setTimeout(() => setReady(true), 1400); return () => clearTimeout(t); }, []);
+  if (!ready) return <Intro />;
+  if (admin) return <App />;
   const initialTab = params.get("view") === "map" ? "map" : "list";
   return <PassengerView dbUrl={params.get("db") || SHARE_DB} onAdmin={() => setAdmin(true)} initialTab={initialTab} />;
 }
