@@ -45,7 +45,7 @@
 
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef, useMemo } = React;
-const BUILD = "b87"; /* 화면 우하단 표시 — 최신 배포 확인용 */
+const BUILD = "b88"; /* 화면 우하단 표시 — 최신 배포 확인용 */
 
 /* 실시간 위치 공유용 Firebase DB 주소. 여기에 한 번 넣어두면 승객 링크가 ?view=map 만 남아 깔끔해집니다. */
 const SHARE_DB = "https://innum-bus-default-rtdb.firebaseio.com";
@@ -685,9 +685,9 @@ function VenueModal({ onClose, initialZone = 0 }) {
                           <React.Fragment>
                             <span style={{ fontSize: 11, color: FT.inkSoft, fontFamily: "'Jua', sans-serif" }}>{catName}</span>
                             {loc && (
-                              <span style={{ fontSize: 10, color: FT.ink, fontFamily: "'Jua', sans-serif", fontWeight: 700,
-                                background: FT.paper, border: "1px solid " + FT.mute, borderRadius: 999, padding: "0px 6px" }}>
-                                📍 {loc}
+                              <span style={{ fontSize: 10, color: FT.inkSoft, fontFamily: "'Jua', sans-serif", fontWeight: 700,
+                                background: FT.paper, border: "1px solid " + FT.mute + "80", borderRadius: 5, padding: "1px 6px" }}>
+                                {loc}
                               </span>
                             )}
                           </React.Fragment>
@@ -702,9 +702,9 @@ function VenueModal({ onClose, initialZone = 0 }) {
           })()}
         </div>
         <button onClick={() => setExpandedImg(progSrc)}
-          style={{ width: "100%", padding: "6px 10px", background: "#fff", color: FT.inkSoft, border: "1.5px dashed " + FT.mute, borderRadius: 8,
+          style={{ width: "100%", padding: "6px 10px", background: "#fff", color: FT.inkSoft, border: "1px solid " + FT.mute + "80", borderRadius: 8,
             fontFamily: "'Jua', sans-serif", fontSize: 11, cursor: "pointer" }}>
-          📋 원본 프로그램표 이미지 보기
+          원본 프로그램표 이미지 보기
         </button>
 
         <div style={{ fontSize: 10, color: FT.inkSoft, fontFamily: "'Jua', sans-serif", lineHeight: 1.6, marginTop: 4 }}>
@@ -1438,7 +1438,7 @@ function PassengerView({ dbUrl, onAdmin, initialTab = "list" }) {
             )}
 
             {/* 행사 안내 — 버스 위치 아래 항상 표시 */}
-            <div style={{ marginTop: 8, paddingTop: 12, borderTop: "2px dashed " + FT.mute }}>
+            <div style={{ marginTop: 12, paddingTop: 12, borderTop: "1.5px solid " + FT.mute + "55" }}>
               <div className="flex items-center justify-between mb-2">
                 <div style={{ color: FT.ink, fontFamily: "'Jua', sans-serif", fontWeight: 700, fontSize: 13 }}>
                   🎪 행사 안내 <span style={{ color: FT.orange }}>· 무등생각</span>
