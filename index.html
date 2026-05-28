@@ -80,7 +80,7 @@
 
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef, useMemo } = React;
-const BUILD = "b183"; /* 화면 우하단 표시 — 최신 배포 확인용 */
+const BUILD = "b184"; /* 화면 우하단 표시 — 최신 배포 확인용 */
 
 /* 실시간 위치 공유용 Firebase DB 주소. 여기에 한 번 넣어두면 승객 링크가 ?view=map 만 남아 깔끔해집니다. */
 const SHARE_DB = "https://innum-bus-default-rtdb.firebaseio.com";
@@ -3591,32 +3591,36 @@ function App() {
             </div>
           )}
 
-          {/* Big glanceable status bar */}
-          <div className="px-3 py-2 border-x-2 flex items-center justify-between gap-2"
-            style={{
-              background: isAnnouncing ? "rgba(239,68,68,0.18)"
-                : autoMode ? (userPos ? "rgba(34,214,95,0.15)" : "rgba(251,191,36,0.12)")
-                : "rgba(100,116,139,0.12)",
-              borderColor: "#3a3f54", borderBottom: "1px solid #3a3f54",
-            }}>
-            <div className="flex items-center gap-2 min-w-0">
-              <div className={`w-3 h-3 rounded-full flex-shrink-0 ${isAnnouncing || (autoMode && !userPos) ? "animate-pulse" : ""}`}
-                style={{ background: isAnnouncing ? "#ef4444" : autoMode ? (userPos ? "#22d65f" : "#fbbf24") : "#64748b" }} />
-              <span className="text-base font-bold truncate"
-                style={{ fontFamily: "'Jua', sans-serif",
-                  color: isAnnouncing ? "#fca5a5" : autoMode ? (userPos ? "#22d65f" : "#fbbf24") : "#94a3b8" }}>
-                {isAnnouncing ? "📢 안내 방송 중"
-                  : autoMode ? (userPos ? "GPS 자동 · 위치 정상" : "GPS 자동 · 신호 대기")
-                  : "수동 대기 중"}
-              </span>
-            </div>
-            {autoMode && autoLegSwitch && (
-              <span className="flex-shrink-0 text-[10px] font-bold px-2 py-1 rounded"
-                style={{ background: "rgba(34,214,95,0.2)", color: "#22d65f", fontFamily: "'Jua', sans-serif" }}>
-                자동 전환 ON
-              </span>
-            )}
-          </div>
+          {/* Big glanceable status bar — 우선순위: 송신실패>충돌>안내중>대기>송신중+GPS>송신중>GPS자동>수동 */}
+          {(() => {
+            const st = broadcastStatus === "failing" ? { c: "#ef4444", bg: "rgba(239,68,68,0.18)", t: "⚠ 위치 송신 실패", pulse: true }
+              : busIdConflict ? { c: "#fb923c", bg: "rgba(251,146,60,0.18)", t: "⚠ 버스 번호 충돌", pulse: true }
+              : isAnnouncing ? { c: "#fca5a5", bg: "rgba(239,68,68,0.18)", t: "📢 안내 방송 중", pulse: true }
+              : manualWaiting ? { c: "#60a5fa", bg: "rgba(96,165,250,0.18)", t: "🅿️ 출발 대기 중", pulse: true }
+              : sharing && autoMode && userPos ? { c: "#22d65f", bg: "rgba(34,214,95,0.18)", t: locShare ? "📡 송신 · 위치+운행" : "📡 송신 · 운행만", pulse: false }
+              : sharing && (!autoMode || !userPos) ? { c: "#fbbf24", bg: "rgba(251,191,36,0.18)", t: locShare ? "📡 송신 · GPS 대기" : "📡 송신 · 운행만", pulse: true }
+              : autoMode && userPos ? { c: "#22d65f", bg: "rgba(34,214,95,0.15)", t: "GPS 자동 · 위치 정상", pulse: false }
+              : autoMode ? { c: "#fbbf24", bg: "rgba(251,191,36,0.12)", t: "GPS 자동 · 신호 대기", pulse: true }
+              : { c: "#94a3b8", bg: "rgba(100,116,139,0.12)", t: "수동 대기 중", pulse: false };
+            return (
+              <div className="px-3 py-2 border-x-2 flex items-center justify-between gap-2"
+                style={{ background: st.bg, borderColor: "#3a3f54", borderBottom: "1px solid #3a3f54" }}>
+                <div className="flex items-center gap-2 min-w-0">
+                  <div className={`w-3 h-3 rounded-full flex-shrink-0 ${st.pulse ? "animate-pulse" : ""}`}
+                    style={{ background: st.c }} />
+                  <span className="text-base font-bold truncate" style={{ fontFamily: "'Jua', sans-serif", color: st.c }}>
+                    {st.t}
+                  </span>
+                </div>
+                {autoMode && autoLegSwitch && !isAnnouncing && (
+                  <span className="flex-shrink-0 text-[10px] font-bold px-2 py-1 rounded"
+                    style={{ background: "rgba(34,214,95,0.2)", color: "#22d65f", fontFamily: "'Jua', sans-serif" }}>
+                    자동 전환 ON
+                  </span>
+                )}
+              </div>
+            );
+          })()}
 
           {/* 대기 표시 — 크게 가운데 배너(탭하여 해제) */}
           {manualWaiting && (
