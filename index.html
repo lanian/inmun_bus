@@ -86,7 +86,7 @@
 
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef, useMemo } = React;
-const BUILD = "b201"; /* 화면 우하단 표시 — 최신 배포 확인용 */
+const BUILD = "b202"; /* 화면 우하단 표시 — 최신 배포 확인용 */
 
 /* 실시간 위치 공유용 Firebase DB 주소. 여기에 한 번 넣어두면 승객 링크가 ?view=map 만 남아 깔끔해집니다. */
 const SHARE_DB = "https://innum-bus-default-rtdb.firebaseio.com";
@@ -554,9 +554,9 @@ function BackupModal({ onClose, counts, dateKey }) {
 /* 축제 프로그램(행사장 지도의 5개 구역) — 타원: lat/lng 중심 + rA(가로반경) rB(세로반경) rot(회전°)
    subs: 세부 장소 핀(이름·위치) — 운영자가 ZoneEditor에서 좌표 보정 권장 */
 const FESTIVAL_ZONES = [
-  { num: 1, title: "생각을 켜는 광장", sub: "주무대 전다광장 · 1187 라이브러리", lat: 35.1335, lng: 126.9595, rA: 80, rB: 80, rot: 0,
+  { num: 1, title: "생각을 켜는 광장", sub: "주무대 잔디광장 · 1187 라이브러리", lat: 35.1335, lng: 126.9595, rA: 80, rB: 80, rot: 0,
     subs: [
-      { name: "주무대 전다광장", lat: 35.1335, lng: 126.9594 },
+      { name: "주무대 잔디광장", lat: 35.1335, lng: 126.9594 },
       { name: "1187 라이브러리", lat: 35.1334, lng: 126.9597 },
     ] },
   { num: 2, title: "생각을 끄는 숲", sub: "편백숲", lat: 35.1325, lng: 126.9610, rA: 80, rB: 80, rot: 0 },
