@@ -66,7 +66,7 @@
 
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef, useMemo } = React;
-const BUILD = "b142"; /* 화면 우하단 표시 — 최신 배포 확인용 */
+const BUILD = "b143"; /* 화면 우하단 표시 — 최신 배포 확인용 */
 
 /* 실시간 위치 공유용 Firebase DB 주소. 여기에 한 번 넣어두면 승객 링크가 ?view=map 만 남아 깔끔해집니다. */
 const SHARE_DB = "https://innum-bus-default-rtdb.firebaseio.com";
@@ -804,6 +804,41 @@ function projectOnRoute(pos, stops) {
   return { ci, perpDist: bestDist, routePos };
 }
 
+/* 두 정류장 사이의 폴리라인(앞 정류장→approachVia 경유점→뒤 정류장) 구성 */
+function buildSegmentPolyline(dir, prevStop, curStop) {
+  const points = [{ lat: prevStop.lat, lng: prevStop.lng }];
+  try {
+    const via = effectiveVia(dir, curStop.name) || [];
+    via.forEach((v) => points.push({ lat: v[0], lng: v[1] }));
+  } catch (_) {}
+  points.push({ lat: curStop.lat, lng: curStop.lng });
+  return points;
+}
+/* 폴리라인의 누적 거리 비율 t(0~1)에 해당하는 좌표를 직선 구간 따라 보간 */
+function interpolateAlongPolyline(points, t) {
+  if (!points || points.length === 0) return null;
+  if (points.length === 1) return points[0];
+  const segLens = [];
+  let total = 0;
+  for (let i = 1; i < points.length; i++) {
+    const d = distanceMeters(points[i - 1], points[i]);
+    segLens.push(d); total += d;
+  }
+  if (total < 1e-6) return points[0];
+  let target = Math.max(0, Math.min(1, t)) * total;
+  for (let i = 0; i < segLens.length; i++) {
+    if (target <= segLens[i]) {
+      const f = segLens[i] > 0 ? target / segLens[i] : 0;
+      return {
+        lat: points[i].lat + (points[i + 1].lat - points[i].lat) * f,
+        lng: points[i].lng + (points[i + 1].lng - points[i].lng) * f,
+      };
+    }
+    target -= segLens[i];
+  }
+  return points[points.length - 1];
+}
+
 /* 운행 정보(dir/trip/현재 정류장) + 시간 + 대기 플래그 → 보간 위치 + 상태(phase)
    phase: waiting/before/approaching/at/passed/end */
 function operationBasedPos(dir, tripIdx, curStopName, nowMin, waiting) {
@@ -815,27 +850,28 @@ function operationBasedPos(dir, tripIdx, curStopName, nowMin, waiting) {
   if (i < 0) return null;
   const at = (idx, phase) => stops[idx] && stops[idx].lat != null ? { lat: stops[idx].lat, lng: stops[idx].lng, fromName: stops[idx].name, toName: stops[idx].name, phase } : null;
   if (waiting) return at(i, "waiting");
-  const interp = (a, b, t) => ({ lat: a.lat + (b.lat - a.lat) * t, lng: a.lng + (b.lng - a.lng) * t });
   const tCur = sched[i] ? toMin(sched[i]) : null;
   const tPrev = i > 0 && sched[i - 1] ? toMin(sched[i - 1]) : null;
   const tNext = i < stops.length - 1 && sched[i + 1] ? toMin(sched[i + 1]) : null;
-  // 진입 구간(prev → cur)
+  // 진입 구간(prev → cur) — approachVia 포함 폴리라인 따라 보간
   if (i > 0 && tPrev != null && tCur != null && nowMin < tCur) {
     const prev = stops[i - 1], cur = stops[i];
     if (prev.lat == null || cur.lat == null) return at(i, "approaching");
     const t = Math.max(0, Math.min(1, (nowMin - tPrev) / Math.max(1, tCur - tPrev)));
     const phase = (tCur - nowMin) <= 1 ? "approaching" : "between";
-    return { ...interp(prev, cur, t), fromName: prev.name, toName: cur.name, phase };
+    const p = interpolateAlongPolyline(buildSegmentPolyline(dir, prev, cur), t);
+    return { ...p, fromName: prev.name, toName: cur.name, phase };
   }
   // 시발지 출발 시각 전 — 정류장에서 대기
   if (i === 0 && tCur != null && nowMin < tCur) return at(0, "before");
-  // 통과 구간(cur → next)
+  // 통과 구간(cur → next) — 동일하게 폴리라인 보간
   if (tCur != null && tNext != null && nowMin >= tCur && nowMin <= tNext) {
     const cur = stops[i], nxt = stops[i + 1];
     if (cur.lat == null || nxt.lat == null) return at(i, "passed");
     const t = Math.max(0, Math.min(1, (nowMin - tCur) / Math.max(1, tNext - tCur)));
     const phase = (nowMin - tCur) <= 1 ? "at" : "passed";
-    return { ...interp(cur, nxt, t), fromName: cur.name, toName: nxt.name, phase };
+    const p = interpolateAlongPolyline(buildSegmentPolyline(dir, cur, nxt), t);
+    return { ...p, fromName: cur.name, toName: nxt.name, phase };
   }
   // 종점 또는 다음 정류장도 지나간 경우 — 가장 근접한 정류장에 고정
   if (i === stops.length - 1) return at(i, "end");
@@ -2764,13 +2800,16 @@ function App() {
     // 좌표는 locShare ON 이고 GPS userPos가 있을 때만 첨부. 운행 정보는 항상 송신.
     const hasGps = locShare && userPos;
     const distToCur = hasGps && curCoord ? distanceMeters(userPos, curCoord) : null;
-    // P1: arrived 히스테리시스 + 속도 기반 — 진입<30m & 저속, 해제>50m
+    // P1: arrived 히스테리시스 + 속도 기반 — 진입 & 저속이면 arrived 확정, 해제>50m
     const speed = userPos && typeof userPos.speed === "number" ? userPos.speed : null;
-    const speedSlow = speed == null || speed < 1.5; // m/s (~5.4 km/h)
+    // 속도 정보가 보고되면 1.5 m/s(=5.4km/h) 미만일 때만 정차로 간주, 보고 안되면 더 엄격한 거리(<15m)로 폴백
+    const speedSlow = speed != null && speed < 1.5;
+    const arrivedDist = speed != null ? 30 : 15; // 속도 없을 땐 15m 안일 때만 도착 인정
+    const canEnterArrived = (speed != null ? speedSlow : true);
     const prevArrived = arrivedStateRef.current;
     let arrivedNow = prevArrived;
     if (distToCur != null) {
-      if (!prevArrived && distToCur < 30 && speedSlow) arrivedNow = true;
+      if (!prevArrived && distToCur < arrivedDist && canEnterArrived) arrivedNow = true;
       if (prevArrived && distToCur > 50) arrivedNow = false;
     } else if (prevArrived && (!hasGps)) {
       // GPS 끊기면 잠시 도착 유지하다가 다음 cycle에서 자연 해제
