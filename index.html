@@ -73,7 +73,7 @@
 
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef, useMemo } = React;
-const BUILD = "b157"; /* 화면 우하단 표시 — 최신 배포 확인용 */
+const BUILD = "b158"; /* 화면 우하단 표시 — 최신 배포 확인용 */
 
 /* 실시간 위치 공유용 Firebase DB 주소. 여기에 한 번 넣어두면 승객 링크가 ?view=map 만 남아 깔끔해집니다. */
 const SHARE_DB = "https://innum-bus-default-rtdb.firebaseio.com";
@@ -2193,7 +2193,22 @@ function App() {
   const [festivalDay, setFestivalDay] = useState(() => LS.get("festday", "auto")); // auto|day1|day2
   // 실시간 위치 공유 (Firebase RTDB REST)
   const [shareUrl, setShareUrl] = useState(() => LS.get("shareurl", SHARE_DB));
-  const [busId, setBusId] = useState(() => LS.get("busid", "1"));
+  const [busId, setBusId] = useState(() => {
+    let id = LS.get("busid", "");
+    if (!id) { id = "B" + Math.random().toString(36).slice(2, 5).toUpperCase(); LS.set("busid", id); }
+    return id;
+  });
+  const sessionRef = useRef(Math.random().toString(36).slice(2, 8));
+  const [busIdConflict, setBusIdConflict] = useState(false);
+  // 인수인계 메모 — Firebase /handoff/{busId}, 양방향 동기화
+  const [handoffMemo, setHandoffMemo] = useState("");
+  const [showHandoff, setShowHandoff] = useState(false);
+  // 버스 정원(혼잡도 색 기준) — 운영자가 설정
+  const [busCapacity, setBusCapacity] = useState(() => parseInt(LS.get("capacity", "25"), 10) || 25);
+  useEffect(() => LS.set("capacity", String(busCapacity)), [busCapacity]);
+  // broadcast 실패 추적 (UI 표시용)
+  const broadcastFailRef = useRef(0);
+  const [broadcastStatus, setBroadcastStatus] = useState("ok"); // ok | failing
   const [driverEmail, setDriverEmail] = useState(() => LS.get("driveremail", "")); // 기사 쓰기 로그인(이 기기에만 저장)
   const [driverPass, setDriverPass] = useState(() => LS.get("driverpass", ""));
   const [apiKey, setApiKey] = useState(() => LS.get("apikey", SHARE_API_KEY)); // 웹 API 키(이 기기에만 저장)
@@ -2911,6 +2926,42 @@ function App() {
 
   useEffect(() => { if (!autoMode) { announcedRef.current = new Set(); legSwitchArmedRef.current = false; legDepartCountRef.current = 0; } }, [autoMode]);
 
+  /* 인수인계 메모 동기화 — busId별 한 줄 메모. 마운트 시 fetch, 변경 시 PUT(디바운스) */
+  const handoffWriteRef = useRef(null);
+  useEffect(() => {
+    if (!shareUrl || !busId) return;
+    const base = shareUrl.replace(/\/+$/, "");
+    fetch(`${base}/handoff/${encodeURIComponent(busId)}.json`).then((r) => r.json())
+      .then((d) => { if (typeof d === "string") setHandoffMemo(d); }).catch(() => {});
+  }, [shareUrl, busId]);
+  const saveHandoff = (text) => {
+    setHandoffMemo(text);
+    if (handoffWriteRef.current) clearTimeout(handoffWriteRef.current);
+    handoffWriteRef.current = setTimeout(() => {
+      if (!shareUrl || !busId) return;
+      const base = shareUrl.replace(/\/+$/, "");
+      const auth = authTokenRef.current ? `?auth=${encodeURIComponent(authTokenRef.current)}` : "";
+      fetch(`${base}/handoff/${encodeURIComponent(busId)}.json${auth}`, { method: "PUT", body: JSON.stringify(text) }).catch(() => {});
+    }, 600);
+  };
+
+  /* 같은 busId로 다른 세션이 송신 중인지 검사 — 충돌 경고 */
+  useEffect(() => {
+    if (!sharing || !shareUrl || !busId) { setBusIdConflict(false); return; }
+    const base = shareUrl.replace(/\/+$/, "");
+    const check = () => {
+      fetch(`${base}/buses/${encodeURIComponent(busId)}.json`).then((r) => r.json()).then((data) => {
+        if (!data) return;
+        const fresh = data.ts && Date.now() - data.ts < 30000;
+        const diff = data.session && data.session !== sessionRef.current;
+        if (fresh && diff) setBusIdConflict(true);
+      }).catch(() => {});
+    };
+    check();
+    const id = setInterval(check, 15000);
+    return () => clearInterval(id);
+  }, [sharing, shareUrl, busId]);
+
   /* 승하차 카운트 — 마운트 시 localStorage 먼저 로드, 가능하면 Firebase로 덮어쓰기 */
   useEffect(() => {
     // 1) localStorage 즉시 복원
@@ -3139,11 +3190,20 @@ function App() {
       ...(hasGps ? { lat: userPos.lat, lng: userPos.lng } : {}),
       dir: direction, trip: tripIdx + 1,
       stop: curStop?.name || "", ts: now,
+      session: sessionRef.current,
       waiting: manualWaiting || undefined,
       ...(arrivedNow ? { arrived: true } : {}),
       ...(departedInfo ? { departedFrom: departedInfo.stop, departedAt: departedInfo.at } : {}),
     });
-    fetch(`${base}/buses/${encodeURIComponent(busId || "1")}.json${auth}`, { method: "PUT", body }).catch(() => {});
+    fetch(`${base}/buses/${encodeURIComponent(busId || "1")}.json${auth}`, { method: "PUT", body })
+      .then((r) => {
+        if (!r.ok) throw new Error(String(r.status));
+        if (broadcastFailRef.current !== 0) { broadcastFailRef.current = 0; setBroadcastStatus("ok"); }
+      })
+      .catch(() => {
+        broadcastFailRef.current += 1;
+        if (broadcastFailRef.current >= 3) setBroadcastStatus("failing");
+      });
   }, [_shareTick, userPos, sharing, shareUrl, busId, direction, tripIdx, curStop, curCoord, manualWaiting, locShare]);
 
   // 공유를 끄면(켰다가 끈 경우만) 내 위치 노드 삭제 — 지도에서 사라지게
@@ -3210,6 +3270,16 @@ function App() {
               </button>
             </div>
           </div>
+
+          {/* 경고 배너 — busId 충돌 또는 broadcast 실패 */}
+          {(busIdConflict || broadcastStatus === "failing") && (
+            <div className="px-3 py-2 border-x-2 text-[12px] flex flex-col gap-1"
+              style={{ background: "rgba(239,68,68,0.18)", borderColor: "#3a3f54", borderBottom: "1px solid #3a3f54",
+                color: "#fca5a5", fontFamily: "'Jua', sans-serif", fontWeight: 700 }}>
+              {busIdConflict && <span>⚠ 같은 버스 번호({busId})로 다른 기기가 송신 중. 번호를 변경하세요.</span>}
+              {broadcastStatus === "failing" && <span>⚠ 위치 송신 실패 — 네트워크 또는 권한 확인. 자동 재시도 중.</span>}
+            </div>
+          )}
 
           {/* Big glanceable status bar */}
           <div className="px-3 py-2 border-x-2 flex items-center justify-between gap-2"
@@ -3330,9 +3400,17 @@ function App() {
                     <Cell label="하차" kind="alight" color="#fb923c" />
                   </div>
                   <div className="flex items-center justify-between mt-3 px-1">
-                    <span className="text-[10px] text-slate-400" style={{ fontFamily: "'Jua', sans-serif" }}>
-                      현재 탑승 <span style={{ color: onboardCount > 0 ? "#fbbf24" : "#64748b", fontWeight: 700, fontSize: 13, marginLeft: 4 }}>{onboardCount}명</span>
-                    </span>
+                    {(() => {
+                      const ratio = busCapacity > 0 ? onboardCount / busCapacity : 0;
+                      const c = ratio > 1 ? "#ef4444" : ratio > 0.8 ? "#fb923c" : ratio > 0.5 ? "#fbbf24" : onboardCount > 0 ? "#22d65f" : "#64748b";
+                      const lbl = ratio > 1 ? "만석" : ratio > 0.8 ? "혼잡" : ratio > 0.5 ? "보통" : onboardCount > 0 ? "여유" : null;
+                      return (
+                        <span className="text-[10px] text-slate-400" style={{ fontFamily: "'Jua', sans-serif" }}>
+                          현재 탑승 <span style={{ color: c, fontWeight: 700, fontSize: 13, marginLeft: 4 }}>{onboardCount}명</span>
+                          {lbl && <span style={{ color: c, marginLeft: 6, fontSize: 10 }}>· {lbl} ({busCapacity}석)</span>}
+                        </span>
+                      );
+                    })()}
                     <div className="flex items-center gap-2">
                       {curStop.terminus && onboardCount > 0 && (
                         <button onClick={alightAll}
@@ -3549,6 +3627,12 @@ function App() {
                 border: "1px solid rgba(34, 214, 95, 0.3)", fontFamily: "'Jua', sans-serif" }}>
               승하차 통계
             </button>
+            <button onClick={() => setShowHandoff(true)}
+              className="flex items-center gap-1 text-xs px-3 py-1.5 rounded-full"
+              style={{ background: handoffMemo ? "rgba(168, 85, 247, 0.18)" : "rgba(168, 85, 247, 0.08)",
+                color: "#c084fc", border: "1px solid rgba(168, 85, 247, 0.3)", fontFamily: "'Jua', sans-serif" }}>
+              📝 인수메모{handoffMemo ? " ●" : ""}
+            </button>
             <div className="ml-auto text-[10px] text-slate-600 tracking-wider"
               style={{ fontFamily: "'IBM Plex Mono', monospace" }}>
               {currentIdx + 1}/{stops.length} · {tripsToday}회 · {BUILD}
@@ -3557,6 +3641,32 @@ function App() {
 
           {showTimetable && <TimetableModal tripsToday={tripsToday} onClose={() => setShowTimetable(false)} />}
           {showStats && <StatsModal counts={counts} dateKey={dateKey} onClose={() => setShowStats(false)} onReset={resetCountsToday} />}
+          {showHandoff && (
+            <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4"
+              style={{ background: "rgba(0,0,0,0.7)" }} onClick={() => setShowHandoff(false)}>
+              <div className="w-full max-w-md rounded-2xl border-2 p-4 space-y-3"
+                style={{ background: "#13151c", borderColor: "#3a3f54" }} onClick={(e) => e.stopPropagation()}>
+                <div className="flex items-center justify-between">
+                  <div className="text-sm font-bold" style={{ color: "#c084fc", fontFamily: "'Jua', sans-serif" }}>
+                    📝 인수인계 메모 · {busId}
+                  </div>
+                  <button onClick={() => setShowHandoff(false)} className="text-slate-400 text-lg leading-none px-1">×</button>
+                </div>
+                <div className="text-[10px] text-slate-500">다음 운영자에게 전달할 메모. Firebase에 자동 저장되어 같은 버스 번호의 운영자가 같이 봅니다.</div>
+                <textarea value={handoffMemo} onChange={(e) => saveHandoff(e.target.value)} rows={6}
+                  placeholder="예: 학동에서 정류장 표지판 위치 변경, 16:30 회차 5분 지연 시작…"
+                  className="w-full px-3 py-2 rounded-lg text-sm"
+                  style={{ background: "#0a0b0f", border: "1px solid #3a3f54", color: "#cbd5e1", resize: "vertical" }} />
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-[10px] text-slate-500">정원 (혼잡도 계산용)</span>
+                  <input type="number" min="1" value={busCapacity}
+                    onChange={(e) => setBusCapacity(Math.max(1, parseInt(e.target.value, 10) || 25))}
+                    className="w-20 px-2 py-1 rounded text-sm text-right"
+                    style={{ background: "#0a0b0f", border: "1px solid #3a3f54", color: "#cbd5e1" }} />
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     );
@@ -4247,6 +4357,32 @@ function App() {
 
       {showTimetable && <TimetableModal tripsToday={tripsToday} onClose={() => setShowTimetable(false)} />}
       {showStats && <StatsModal counts={counts} dateKey={dateKey} onClose={() => setShowStats(false)} onReset={resetCountsToday} />}
+          {showHandoff && (
+            <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4"
+              style={{ background: "rgba(0,0,0,0.7)" }} onClick={() => setShowHandoff(false)}>
+              <div className="w-full max-w-md rounded-2xl border-2 p-4 space-y-3"
+                style={{ background: "#13151c", borderColor: "#3a3f54" }} onClick={(e) => e.stopPropagation()}>
+                <div className="flex items-center justify-between">
+                  <div className="text-sm font-bold" style={{ color: "#c084fc", fontFamily: "'Jua', sans-serif" }}>
+                    📝 인수인계 메모 · {busId}
+                  </div>
+                  <button onClick={() => setShowHandoff(false)} className="text-slate-400 text-lg leading-none px-1">×</button>
+                </div>
+                <div className="text-[10px] text-slate-500">다음 운영자에게 전달할 메모. Firebase에 자동 저장되어 같은 버스 번호의 운영자가 같이 봅니다.</div>
+                <textarea value={handoffMemo} onChange={(e) => saveHandoff(e.target.value)} rows={6}
+                  placeholder="예: 학동에서 정류장 표지판 위치 변경, 16:30 회차 5분 지연 시작…"
+                  className="w-full px-3 py-2 rounded-lg text-sm"
+                  style={{ background: "#0a0b0f", border: "1px solid #3a3f54", color: "#cbd5e1", resize: "vertical" }} />
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-[10px] text-slate-500">정원 (혼잡도 계산용)</span>
+                  <input type="number" min="1" value={busCapacity}
+                    onChange={(e) => setBusCapacity(Math.max(1, parseInt(e.target.value, 10) || 25))}
+                    className="w-20 px-2 py-1 rounded text-sm text-right"
+                    style={{ background: "#0a0b0f", border: "1px solid #3a3f54", color: "#cbd5e1" }} />
+                </div>
+              </div>
+            </div>
+          )}
       {showViaEditor && <ViaEditor onClose={() => setShowViaEditor(false)} dbUrl={shareUrl} getAuth={() => authTokenRef.current} />}
       {showBackup && <BackupModal onClose={() => setShowBackup(false)} counts={counts} dateKey={dateKey} />}
 
