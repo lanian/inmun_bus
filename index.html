@@ -38,7 +38,7 @@
 
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef, useMemo } = React;
-const BUILD = "b47"; /* 화면 우하단 표시 — 최신 배포 확인용 */
+const BUILD = "b48"; /* 화면 우하단 표시 — 최신 배포 확인용 */
 
 /* 실시간 위치 공유용 Firebase DB 주소. 여기에 한 번 넣어두면 승객 링크가 ?view=map 만 남아 깔끔해집니다. */
 const SHARE_DB = "https://innum-bus-default-rtdb.firebaseio.com";
@@ -398,7 +398,7 @@ function LiveMapView({ dbUrl }) {
         const map = mapRef.current; if (!map) return;
         const now = Date.now(); let count = 0;
         Object.entries(data || {}).forEach(([id, b]) => {
-          if (!b || b.lat == null || (b.ts && now - b.ts > 90000)) return; // 90초 이상 미갱신 숨김
+          if (!b || b.lat == null || (b.ts && now - b.ts > 60000)) return; // 60초 이상 미갱신 숨김
           count++;
           const label = `${id}호차 · ${b.dir === "inbound" ? "민주광장 방향" : "축제장 방향"} ${b.trip || ""}회차`;
           let m = markersRef.current[id];
@@ -411,7 +411,7 @@ function LiveMapView({ dbUrl }) {
         });
         Object.keys(markersRef.current).forEach((id) => {
           const b = data && data[id];
-          if (!b || (b.ts && now - b.ts > 90000)) { map.removeLayer(markersRef.current[id]); delete markersRef.current[id]; }
+          if (!b || (b.ts && now - b.ts > 60000)) { map.removeLayer(markersRef.current[id]); delete markersRef.current[id]; }
         });
         setStatus(count > 0 ? `운행 중 셔틀 ${count}대 · 실시간` : "운행 중인 셔틀이 없습니다");
       } catch (_) { setStatus("연결 오류 — 잠시 후 다시 시도합니다"); }
@@ -529,7 +529,7 @@ function PassengerView({ dbUrl, onAdmin }) {
   const now = Date.now();
   const agoText = (ts) => { if (!ts) return ""; const s = Math.round((now - ts) / 1000); return s < 5 ? "방금" : s < 60 ? `${s}초 전` : `${Math.floor(s / 60)}분 전`; };
   const live = Object.entries(buses)
-    .filter(([, b]) => b && b.lat != null && (!b.ts || now - b.ts < 90000))
+    .filter(([, b]) => b && b.lat != null && (!b.ts || now - b.ts < 60000))
     .sort((a, b) => a[0].localeCompare(b[0], undefined, { numeric: true }));
 
   // 시간표(승객용) — 일요일(6.14)은 5회차, 그 외 6회차
