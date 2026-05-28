@@ -73,7 +73,7 @@
 
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef, useMemo } = React;
-const BUILD = "b151"; /* 화면 우하단 표시 — 최신 배포 확인용 */
+const BUILD = "b152"; /* 화면 우하단 표시 — 최신 배포 확인용 */
 
 /* 실시간 위치 공유용 Firebase DB 주소. 여기에 한 번 넣어두면 승객 링크가 ?view=map 만 남아 깔끔해집니다. */
 const SHARE_DB = "https://innum-bus-default-rtdb.firebaseio.com";
@@ -901,9 +901,10 @@ function projectOnRoute(pos, stops) {
   const segLen = distanceMeters(stops[bestI], stops[bestI + 1]);
   const routePos = cum[bestI] + bestT * segLen;
   // ci = routePos보다 같거나 큰 cum을 가진 첫 정류장(=다음 도착)
+  // grace를 50m로 — 정류장 막 지났을 때 ci가 즉시 점프하는 것 방지(운영자 화면과 일관 유지)
   let ci = stops.length - 1;
   for (let i = 0; i < stops.length; i++) {
-    if (cum[i] + 5 >= routePos) { ci = i; break; } // 5m grace
+    if (cum[i] + 50 >= routePos) { ci = i; break; }
   }
   return { ci, perpDist: bestDist, routePos };
 }
