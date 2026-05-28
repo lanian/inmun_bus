@@ -51,8 +51,8 @@
     border-radius: 6px; padding: 1px 7px; font-family: 'Jua', sans-serif; font-size: 11px; font-weight: 700;
     box-shadow: 1.5px 1.5px 0 #101113; white-space: nowrap; }
   .leaflet-tooltip.fest-stop::before { display: none; }
-  .leaflet-tooltip.fest-stop.dir-out { border-color: #EE6B2E; box-shadow: 1.5px 1.5px 0 #EE6B2E; }
-  .leaflet-tooltip.fest-stop.dir-in  { border-color: #16A89E; box-shadow: 1.5px 1.5px 0 #16A89E; }
+  .leaflet-tooltip.fest-stop.dir-out { border-color: #EE6B2E; box-shadow: 1.5px 1.5px 0 #EE6B2E; color: #C2521D; }
+  .leaflet-tooltip.fest-stop.dir-in  { border-color: #16A89E; box-shadow: 1.5px 1.5px 0 #16A89E; color: #0F786E; }
 </style>
 </head>
 <body>
@@ -66,7 +66,7 @@
 
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef, useMemo } = React;
-const BUILD = "b145"; /* 화면 우하단 표시 — 최신 배포 확인용 */
+const BUILD = "b146"; /* 화면 우하단 표시 — 최신 배포 확인용 */
 
 /* 실시간 위치 공유용 Firebase DB 주소. 여기에 한 번 넣어두면 승객 링크가 ?view=map 만 남아 깔끔해집니다. */
 const SHARE_DB = "https://innum-bus-default-rtdb.firebaseio.com";
@@ -1261,8 +1261,13 @@ function LiveMapView({ dbUrl }) {
             .addTo(map).bindTooltip(s.name, { permanent: true, direction: "top", offset: [0, -4], className: "fest-stop" });
           stopLayersRef.current.push(m);
         } else {
+          // 축제장행(outbound) 라벨은 마커 아래, 민주광장행(inbound) 라벨은 마커 위 — 방향 화살표 표기
+          const arrow = dir === "outbound" ? "▼" : "▲";
+          const label = `${s.name} ${arrow}`;
           const m = L.circleMarker(c, { radius: 5, color: dirColor, fillColor: "#fff", fillOpacity: 1, weight: 2.5 })
-            .addTo(map).bindTooltip(s.name, { permanent: true, direction: dir === "outbound" ? "top" : "bottom", offset: [0, dir === "outbound" ? -4 : 4],
+            .addTo(map).bindTooltip(label, { permanent: true,
+              direction: dir === "outbound" ? "bottom" : "top",
+              offset: [0, dir === "outbound" ? 4 : -4],
               className: `fest-stop ${dir === "outbound" ? "dir-out" : "dir-in"}` });
           stopLayersRef.current.push(m);
         }
