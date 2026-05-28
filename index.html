@@ -38,7 +38,7 @@
 
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef, useMemo } = React;
-const BUILD = "b53"; /* 화면 우하단 표시 — 최신 배포 확인용 */
+const BUILD = "b54"; /* 화면 우하단 표시 — 최신 배포 확인용 */
 
 /* 실시간 위치 공유용 Firebase DB 주소. 여기에 한 번 넣어두면 승객 링크가 ?view=map 만 남아 깔끔해집니다. */
 const SHARE_DB = "https://innum-bus-default-rtdb.firebaseio.com";
@@ -395,62 +395,131 @@ function TimetableModal({ tripsToday, onClose }) {
 /* 승객용 실시간 위치 지도 — ?view=map&db=<DB주소> 로 진입. Firebase RTDB REST 폴링 */
 function LiveMapView({ dbUrl }) {
   const elRef = useRef(null), mapRef = useRef(null), markersRef = useRef({});
+  const [count, setCount] = useState(0);
   const [status, setStatus] = useState("연결 중…");
+
   useEffect(() => {
     if (!window.L || !elRef.current || mapRef.current) return;
-    const map = window.L.map(elRef.current).setView([35.135, 126.94], 14);
-    window.L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 19, attribution: "© OpenStreetMap" }).addTo(map);
+    const L = window.L;
+    const map = L.map(elRef.current, { zoomControl: true });
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 19, attribution: "© OpenStreetMap" }).addTo(map);
+
+    // 노선 폴리라인 — 축제장행=주황 실선, 민주광장행=청록 점선
+    ["outbound", "inbound"].forEach((dir) => {
+      const coords = ROUTES[dir].stops.filter((s) => s.lat != null).map((s) => [s.lat, s.lng]);
+      if (coords.length < 2) return;
+      L.polyline(coords, {
+        color: dir === "outbound" ? FT.orange : FT.teal,
+        weight: 5, opacity: 0.75, lineCap: "round", lineJoin: "round",
+        dashArray: dir === "inbound" ? "10,8" : null,
+      }).addTo(map);
+    });
+
+    // 정류장 마커 — 흰 원 + 검정 외곽선, 이름 툴팁
     const seen = new Set();
+    const allCoords = [];
     ["outbound", "inbound"].forEach((dir) => ROUTES[dir].stops.forEach((s) => {
-      if (seen.has(s.name) || s.lat == null) return; seen.add(s.name);
-      window.L.circleMarker([s.lat, s.lng], { radius: 4, color: "#fbbf24", fillColor: "#fbbf24", fillOpacity: 0.8, weight: 1 })
+      if (s.lat == null) return;
+      allCoords.push([s.lat, s.lng]);
+      if (seen.has(s.name)) return; seen.add(s.name);
+      L.circleMarker([s.lat, s.lng], { radius: 5, color: FT.ink, fillColor: "#fff", fillOpacity: 1, weight: 2 })
         .addTo(map).bindTooltip(s.name, { direction: "top" });
     }));
+
+    if (allCoords.length) map.fitBounds(allCoords, { padding: [80, 30] });
+    else map.setView([35.135, 126.94], 14);
+
     mapRef.current = map;
     setTimeout(() => map.invalidateSize(), 100);
     return () => { map.remove(); mapRef.current = null; };
   }, []);
+
   useEffect(() => {
     if (!dbUrl) { setStatus("공유 주소(db)가 없습니다"); return; }
     let stopped = false;
     const base = dbUrl.replace(/\/+$/, "");
+    const L = window.L;
+    const makeIcon = (id, b) => {
+      const dir = b.dir === "inbound" ? "inbound" : "outbound";
+      const bg = dir === "inbound" ? FT.teal : FT.orange;
+      const wait = b.waiting === true;
+      const html = `<div style="display:inline-flex;align-items:center;gap:3px;background:${wait ? "#fff" : bg};color:${wait ? FT.ink : "#fff"};border:2.5px solid ${FT.ink};border-radius:999px;padding:3px 9px;box-shadow:2px 2px 0 ${FT.ink};font-family:'Jua',sans-serif;font-weight:700;font-size:12px;white-space:nowrap;">${wait ? "🅿️" : "🚌"} ${id}호차</div>`;
+      return L.divIcon({ className: "", html, iconSize: [120, 28], iconAnchor: [60, 14] });
+    };
     const poll = async () => {
       try {
         const r = await fetch(`${base}/buses.json`, { cache: "no-store" });
         const data = await r.json();
         const map = mapRef.current; if (!map) return;
-        const now = Date.now(); let count = 0;
+        const now = Date.now(); let n = 0;
         Object.entries(data || {}).forEach(([id, b]) => {
-          if (!b || b.lat == null || (b.ts && now - b.ts > 60000)) return; // 60초 이상 미갱신 숨김
-          count++;
-          const label = `${id}호차 · ${b.dir === "inbound" ? "민주광장 방향" : "축제장 방향"} ${b.trip || ""}회차`;
+          if (!b || b.lat == null || (b.ts && now - b.ts > 60000)) return;
+          n++;
+          const dir = b.dir === "inbound" ? "inbound" : "outbound";
+          const label = `${id}호차 · ${ROUTES[dir].label}${b.trip ? ` ${b.trip}회차` : ""}${b.stop ? ` · ${b.stop}` : ""}${b.waiting === true ? " · 출발 대기" : ""}`;
           let m = markersRef.current[id];
           if (!m) {
-            const icon = window.L.divIcon({ className: "", html: '<div style="font-size:26px;line-height:1">🚌</div>', iconSize: [30, 30], iconAnchor: [15, 15] });
-            m = window.L.marker([b.lat, b.lng], { icon }).addTo(map);
+            m = L.marker([b.lat, b.lng], { icon: makeIcon(id, b) }).addTo(map);
             markersRef.current[id] = m;
-          } else m.setLatLng([b.lat, b.lng]);
-          m.bindTooltip(label, { permanent: true, direction: "top", offset: [0, -14] });
+          } else {
+            m.setLatLng([b.lat, b.lng]);
+            m.setIcon(makeIcon(id, b));
+          }
+          m.bindTooltip(label, { direction: "top", offset: [0, -16] });
         });
         Object.keys(markersRef.current).forEach((id) => {
           const b = data && data[id];
           if (!b || (b.ts && now - b.ts > 60000)) { map.removeLayer(markersRef.current[id]); delete markersRef.current[id]; }
         });
-        setStatus(count > 0 ? `운행 중 셔틀 ${count}대 · 실시간` : "운행 중인 셔틀이 없습니다");
-      } catch (_) { setStatus("연결 오류 — 잠시 후 다시 시도합니다"); }
+        setCount(n);
+        setStatus(n > 0 ? "실시간" : "운행 중인 셔틀이 없습니다");
+      } catch (_) { setCount(0); setStatus("연결 오류 — 잠시 후 다시 시도"); }
     };
     poll();
     const id = setInterval(() => { if (!stopped) poll(); }, 4000);
     return () => { stopped = true; clearInterval(id); };
   }, [dbUrl]);
+
   return (
     <div style={{ position: "relative" }}>
       <div ref={elRef} style={{ height: "100vh", width: "100%" }} />
+
+      {/* 제목 + 운행 대수 칩 */}
       <div style={{ position: "absolute", top: 10, left: 10, right: 10, zIndex: 1000,
-        background: FT.teal, color: "#fff", padding: "8px 12px", borderRadius: 10,
-        border: "2px solid " + FT.ink, fontFamily: "'Jua', sans-serif", fontSize: 13, textAlign: "center",
-        boxShadow: "3px 3px 0 " + FT.ink }}>
-        <span style={{ color: FT.orange, fontWeight: 700 }}>무등생각</span> 셔틀 실시간 위치 · {status}
+        display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, pointerEvents: "none" }}>
+        <div style={{ background: "#fff", color: FT.ink, padding: "7px 12px", borderRadius: 10,
+          border: "2px solid " + FT.ink, fontFamily: "'Jua', sans-serif", fontSize: 13,
+          boxShadow: "3px 3px 0 " + FT.ink, fontWeight: 700 }}>
+          <span style={{ color: FT.orange }}>무등생각</span> 실시간 지도
+        </div>
+        <div style={{ display: "inline-flex", alignItems: "center", gap: 6,
+          background: count > 0 ? FT.tealSoft : "#EEEFF1",
+          border: "2px solid " + FT.ink, color: count > 0 ? FT.tealDark : FT.inkSoft,
+          padding: "6px 10px", borderRadius: 10, fontFamily: "'Jua', sans-serif", fontSize: 12,
+          boxShadow: "3px 3px 0 " + FT.ink, fontWeight: 700 }}>
+          <span className={count > 0 ? "animate-pulse" : ""}
+            style={{ width: 8, height: 8, borderRadius: "50%", background: count > 0 ? FT.teal : FT.mute }} />
+          {count > 0 ? `운행 중 ${count}대` : status}
+        </div>
+      </div>
+
+      {/* 범례 (좌하단) */}
+      <div style={{ position: "absolute", bottom: 80, left: 10, zIndex: 1000,
+        background: "#fff", border: "2px solid " + FT.ink, borderRadius: 10, boxShadow: "3px 3px 0 " + FT.ink,
+        padding: "8px 10px", fontFamily: "'Jua', sans-serif", fontSize: 11, color: FT.ink, lineHeight: 1.6 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <span style={{ display: "inline-block", width: 22, height: 3, background: FT.orange, borderRadius: 2 }} />
+          축제장 방향
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <span style={{ display: "inline-block", width: 22, height: 3,
+            background: `repeating-linear-gradient(90deg, ${FT.teal} 0 5px, transparent 5px 9px)` }} />
+          민주광장 방향
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 4 }}>
+          <span style={{ display: "inline-block", width: 12, height: 12, borderRadius: "50%", background: "#fff", border: `2px solid ${FT.ink}` }} />
+          정류장
+        </div>
       </div>
     </div>
   );
