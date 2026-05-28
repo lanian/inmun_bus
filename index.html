@@ -66,7 +66,7 @@
 
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef, useMemo } = React;
-const BUILD = "b137"; /* 화면 우하단 표시 — 최신 배포 확인용 */
+const BUILD = "b138"; /* 화면 우하단 표시 — 최신 배포 확인용 */
 
 /* 실시간 위치 공유용 Firebase DB 주소. 여기에 한 번 넣어두면 승객 링크가 ?view=map 만 남아 깔끔해집니다. */
 const SHARE_DB = "https://innum-bus-default-rtdb.firebaseio.com";
@@ -2347,10 +2347,12 @@ function App() {
           if (audioElRef.current) { audioElRef.current.pause(); audioElRef.current = null; }
           const a = new Audio(`audio/${audioKey}.mp3`);
           audioElRef.current = a;
+          let fallen = false;
+          const fallback = () => { if (fallen) return; fallen = true; audioElRef.current = null; speak(text); };
           a.onplay = () => setIsAnnouncing(true);
           a.onended = () => { setIsAnnouncing(false); audioElRef.current = null; };
-          a.onerror = () => { audioElRef.current = null; speak(text); }; // 파일 없으면 TTS
-          a.play().catch(() => { audioElRef.current = null; speak(text); });
+          a.onerror = fallback; // 파일 없으면 TTS (가드: 단 한 번만)
+          a.play().catch(fallback);
         } catch (_) { speak(text); }
       } else {
         speak(text);
