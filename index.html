@@ -45,7 +45,7 @@
 
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef, useMemo } = React;
-const BUILD = "b111"; /* 화면 우하단 표시 — 최신 배포 확인용 */
+const BUILD = "b112"; /* 화면 우하단 표시 — 최신 배포 확인용 */
 
 /* 실시간 위치 공유용 Firebase DB 주소. 여기에 한 번 넣어두면 승객 링크가 ?view=map 만 남아 깔끔해집니다. */
 const SHARE_DB = "https://innum-bus-default-rtdb.firebaseio.com";
@@ -731,6 +731,31 @@ function VenueModal({ onClose, initialZone = 0 }) {
   );
 }
 
+/* 시간표 기반 버스 추정 위치 — 운행 중 회차의 두 정류장 사이를 시간 비율로 보간 */
+function scheduledBusPos(dir, tripIdx, nowMin) {
+  const route = ROUTES[dir];
+  const sched = route.trips[tripIdx];
+  if (!sched) return null;
+  const startMin = toMin(sched[0]);
+  const endMin = toMin(sched[sched.length - 1]);
+  if (nowMin < startMin || nowMin > endMin) return null;
+  for (let i = 0; i < sched.length - 1; i++) {
+    const a = toMin(sched[i]), b = toMin(sched[i + 1]);
+    if (nowMin >= a && nowMin <= b) {
+      const sa = route.stops[i], sb = route.stops[i + 1];
+      if (sa.lat == null || sb.lat == null) return null;
+      const t = b > a ? (nowMin - a) / (b - a) : 0;
+      return {
+        lat: sa.lat + (sb.lat - sa.lat) * t,
+        lng: sa.lng + (sb.lng - sa.lng) * t,
+        fromName: sa.name, toName: sb.name,
+        nearIdx: t < 0.5 ? i : i + 1,
+      };
+    }
+  }
+  return null;
+}
+
 /* 두 점 사이의 거리(평면 근사). 짧은 거리에선 충분 */
 const distLL = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1]);
 /* 점 P가 선분 AB에 떨어진 거리 — 가장 가까운 구간 찾기 */
@@ -975,7 +1000,7 @@ function ViaEditor({ onClose, dbUrl, getAuth }) {
 
 /* 승객용 실시간 위치 지도 — ?view=map&db=<DB주소> 로 진입. Firebase RTDB REST 폴링 */
 function LiveMapView({ dbUrl }) {
-  const elRef = useRef(null), mapRef = useRef(null), markersRef = useRef({});
+  const elRef = useRef(null), mapRef = useRef(null), markersRef = useRef({}), schedMarkersRef = useRef({});
   const [count, setCount] = useState(0);
   const [status, setStatus] = useState("연결 중…");
   const [viaOverride, setViaOverride] = useState(() => LS.getJSON("viapoints", {}));
@@ -1101,16 +1126,23 @@ function LiveMapView({ dbUrl }) {
       const html = `<div style="display:inline-flex;align-items:center;gap:3px;background:${wait ? "#fff" : bg};color:${wait ? FT.ink : "#fff"};border:2.5px solid ${FT.ink};border-radius:999px;padding:3px 9px;box-shadow:2px 2px 0 ${FT.ink};font-family:'Jua',sans-serif;font-weight:700;font-size:12px;white-space:nowrap;">${wait ? "🅿️" : "🚌"} ${id}</div>`;
       return L.divIcon({ className: "", html, iconSize: [120, 28], iconAnchor: [60, 14] });
     };
+    const schedIcon = (dir, tripNum) => {
+      const c = dir === "inbound" ? FT.teal : FT.orange;
+      const html = `<div style="display:inline-flex;align-items:center;gap:3px;background:#fff;color:${FT.ink};border:2px dashed ${c};border-radius:999px;padding:3px 9px;font-family:'Jua',sans-serif;font-weight:700;font-size:11px;white-space:nowrap;opacity:0.92;">📅 ${tripNum}</div>`;
+      return L.divIcon({ className: "", html, iconSize: [90, 26], iconAnchor: [45, 13] });
+    };
     const poll = async () => {
       try {
         const r = await fetch(`${base}/buses.json`, { cache: "no-store" });
         const data = await r.json();
         const map = mapRef.current; if (!map) return;
         const now = Date.now(); let n = 0;
+        const liveTripSet = new Set();
         Object.entries(data || {}).forEach(([id, b]) => {
           if (!b || b.lat == null || (b.ts && now - b.ts > 60000)) return;
           n++;
           const dir = b.dir === "inbound" ? "inbound" : "outbound";
+          if (b.trip) liveTripSet.add(`${dir}|${b.trip}`);
           const label = `${id} · ${ROUTES[dir].label}${b.trip ? ` ${b.trip}회차` : ""}${b.stop ? ` · ${b.stop}` : ""}${b.waiting === true ? " · 출발 대기" : ""}`;
           let m = markersRef.current[id];
           if (!m) {
@@ -1126,8 +1158,43 @@ function LiveMapView({ dbUrl }) {
           const b = data && data[id];
           if (!b || (b.ts && now - b.ts > 60000)) { map.removeLayer(markersRef.current[id]); delete markersRef.current[id]; }
         });
+
+        // 시간표 기반 추정 위치 — 라이브로 커버되지 않는 운행 중 회차
+        const today = new Date();
+        const tripsToday = today.getMonth() === 5 && today.getDate() === 14 ? 5 : ROUTES.outbound.trips.length;
+        const nowMin = today.getHours() * 60 + today.getMinutes();
+        const schedKeys = new Set();
+        let nSched = 0;
+        ["outbound", "inbound"].forEach((dir) => {
+          for (let ti = 0; ti < tripsToday; ti++) {
+            const tripNum = ti + 1;
+            if (liveTripSet.has(`${dir}|${tripNum}`)) continue;
+            const pos = scheduledBusPos(dir, ti, nowMin);
+            if (!pos) continue;
+            const key = `${dir}|${tripNum}`;
+            schedKeys.add(key); nSched++;
+            const lbl = `예정 · ${ROUTES[dir].label} ${tripNum}회차 · ${pos.fromName} → ${pos.toName}`;
+            let m = schedMarkersRef.current[key];
+            if (!m) {
+              m = L.marker([pos.lat, pos.lng], { icon: schedIcon(dir, tripNum) }).addTo(map);
+              schedMarkersRef.current[key] = m;
+            } else {
+              m.setLatLng([pos.lat, pos.lng]);
+              m.setIcon(schedIcon(dir, tripNum));
+            }
+            m.bindTooltip(lbl, { direction: "top", offset: [0, -16] });
+          }
+        });
+        Object.keys(schedMarkersRef.current).forEach((k) => {
+          if (!schedKeys.has(k)) { map.removeLayer(schedMarkersRef.current[k]); delete schedMarkersRef.current[k]; }
+        });
+
         setCount(n);
-        setStatus(n > 0 ? "실시간" : "운행 중인 셔틀이 없습니다");
+        const totalShown = n + nSched;
+        setStatus(n > 0 && nSched > 0 ? `실시간 ${n}대 · 예정 ${nSched}대`
+          : n > 0 ? "실시간"
+          : nSched > 0 ? `시간표 기준 ${nSched}대`
+          : "운행 중인 셔틀이 없습니다");
       } catch (_) { setCount(0); setStatus("연결 오류 — 잠시 후 다시 시도"); }
     };
     poll();
