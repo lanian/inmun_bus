@@ -73,7 +73,7 @@
 
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef, useMemo } = React;
-const BUILD = "b173"; /* 화면 우하단 표시 — 최신 배포 확인용 */
+const BUILD = "b174"; /* 화면 우하단 표시 — 최신 배포 확인용 */
 
 /* 실시간 위치 공유용 Firebase DB 주소. 여기에 한 번 넣어두면 승객 링크가 ?view=map 만 남아 깔끔해집니다. */
 const SHARE_DB = "https://innum-bus-default-rtdb.firebaseio.com";
@@ -3126,6 +3126,27 @@ function App() {
   const distToNext = autoMode && userPos && nextCoord ? distanceMeters(userPos, nextCoord) : null;
   const fmtDist = (m) => (m == null ? null : m < 1000 ? `${Math.round(m)}m` : `${(m / 1000).toFixed(2)}km`);
 
+  /* 위치 공유 토글 — 켜는 순간 로그인 사전 검증해 즉시 실패 피드백 */
+  const toggleSharing = () => {
+    if (!shareUrl) { setGpsError("먼저 DB 주소를 입력하세요(고급)"); setMode("advanced"); return; }
+    if (sharing) { setSharing(false); return; }
+    if (driverEmail && driverPass) {
+      setGpsError("로그인 확인 중…");
+      authTokenRef.current = "";
+      authRetryAtRef.current = 0;
+      firebaseSignIn().then(() => {
+        if (!authTokenRef.current) { setGpsError("⚠ 로그인 실패 — 기사 이메일/비번 확인"); return; }
+        setGpsError(null);
+        if (!autoMode) primeTTS();
+        broadcastFailRef.current = 0; setBroadcastStatus("ok"); setLastBroadcastStatus(null);
+        setSharing(true);
+      }).catch(() => setGpsError("⚠ 로그인 오류 — 네트워크 확인"));
+      return;
+    }
+    if (!autoMode) primeTTS();
+    setSharing(true);
+  };
+
   /* --- 기사 쓰기 로그인(선택): 이메일/비밀번호가 있으면 로그인해 토큰 발급(50분마다 갱신). 없으면 인증 없이 공개 쓰기. --- */
   const firebaseSignIn = async () => {
     const key = apiKey || SHARE_API_KEY;
@@ -3644,11 +3665,7 @@ function App() {
               <Navigation size={12} />
               GPS 자동 {autoMode ? (userPos ? (gpsStale ? "· 신호 약함" : `· ${triggerRadius}m`) : "· 신호 대기") : "OFF"}
             </button>
-            <button onClick={() => {
-                if (!shareUrl) { setGpsError("먼저 DB 주소를 입력하세요(고급)"); setMode("advanced"); return; }
-                if (!sharing && !autoMode) primeTTS();
-                setSharing(!sharing);
-              }}
+            <button onClick={toggleSharing}
               className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-full"
               style={{
                 background: sharing ? "rgba(96,165,250,0.18)" : "rgba(100, 116, 139, 0.1)",
@@ -3989,11 +4006,7 @@ function App() {
                 대기 {manualWaiting ? "ON" : "OFF"}
               </button>
             )}
-            <button onClick={() => {
-                if (!shareUrl) { setGpsError("먼저 DB 주소를 입력하세요"); return; }
-                if (!sharing && !autoMode) primeTTS();
-                setSharing(!sharing);
-              }}
+            <button onClick={toggleSharing}
               disabled={!shareUrl}
               className="relative w-12 h-7 rounded-full disabled:opacity-40"
               style={{ background: sharing ? "#60a5fa" : "#3a3f54" }}>
@@ -4305,7 +4318,7 @@ function App() {
               <input type="text" value={busId} onChange={(e) => setBusId(e.target.value)}
                 className="w-16 px-2 py-1 rounded text-[11px]"
                 style={{ background: "#0a0b0f", border: "1px solid #3a3f54", color: "#cbd5e1", fontFamily: "'IBM Plex Mono', monospace" }} />
-              <button onClick={() => { if (!shareUrl) { setGpsError("먼저 DB 주소를 입력하세요"); return; } if (!sharing && !autoMode) primeTTS(); setSharing(!sharing); }}
+              <button onClick={toggleSharing}
                 disabled={!shareUrl}
                 className="flex-1 py-1.5 rounded text-[11px] font-bold disabled:opacity-40"
                 style={{ background: sharing ? "#22d65f" : "rgba(34,214,95,0.12)", color: sharing ? "#0a0b0f" : "#22d65f",
