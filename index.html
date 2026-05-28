@@ -45,7 +45,7 @@
 
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef, useMemo } = React;
-const BUILD = "b113"; /* 화면 우하단 표시 — 최신 배포 확인용 */
+const BUILD = "b114"; /* 화면 우하단 표시 — 최신 배포 확인용 */
 
 /* 실시간 위치 공유용 Firebase DB 주소. 여기에 한 번 넣어두면 승객 링크가 ?view=map 만 남아 깔끔해집니다. */
 const SHARE_DB = "https://innum-bus-default-rtdb.firebaseio.com";
@@ -1173,32 +1173,34 @@ function LiveMapView({ dbUrl }) {
           if (!validIds.has(id)) { map.removeLayer(markersRef.current[id]); delete markersRef.current[id]; }
         });
 
-        // 시간표 기반 추정 위치 — 라이브로 커버되지 않는 운행 중 회차
-        const today = new Date();
-        const tripsToday = today.getMonth() === 5 && today.getDate() === 14 ? 5 : ROUTES.outbound.trips.length;
-        const nowMin = today.getHours() * 60 + today.getMinutes();
+        // 시간표 기반 추정 위치 — 라이브 운행 정보가 들어올 때만 보조 표시
         const schedKeys = new Set();
         let nSched = 0;
-        ["outbound", "inbound"].forEach((dir) => {
-          for (let ti = 0; ti < tripsToday; ti++) {
-            const tripNum = ti + 1;
-            if (liveTripSet.has(`${dir}|${tripNum}`)) continue;
-            const pos = scheduledBusPos(dir, ti, nowMin);
-            if (!pos) continue;
-            const key = `${dir}|${tripNum}`;
-            schedKeys.add(key); nSched++;
-            const lbl = `예정 · ${ROUTES[dir].label} ${tripNum}회차 · ${pos.fromName} → ${pos.toName}`;
-            let m = schedMarkersRef.current[key];
-            if (!m) {
-              m = L.marker([pos.lat, pos.lng], { icon: schedIcon(dir, tripNum) }).addTo(map);
-              schedMarkersRef.current[key] = m;
-            } else {
-              m.setLatLng([pos.lat, pos.lng]);
-              m.setIcon(schedIcon(dir, tripNum));
+        if (validIds.size > 0) {
+          const today = new Date();
+          const tripsToday = today.getMonth() === 5 && today.getDate() === 14 ? 5 : ROUTES.outbound.trips.length;
+          const nowMin = today.getHours() * 60 + today.getMinutes();
+          ["outbound", "inbound"].forEach((dir) => {
+            for (let ti = 0; ti < tripsToday; ti++) {
+              const tripNum = ti + 1;
+              if (liveTripSet.has(`${dir}|${tripNum}`)) continue;
+              const pos = scheduledBusPos(dir, ti, nowMin);
+              if (!pos) continue;
+              const key = `${dir}|${tripNum}`;
+              schedKeys.add(key); nSched++;
+              const lbl = `예정 · ${ROUTES[dir].label} ${tripNum}회차 · ${pos.fromName} → ${pos.toName}`;
+              let m = schedMarkersRef.current[key];
+              if (!m) {
+                m = L.marker([pos.lat, pos.lng], { icon: schedIcon(dir, tripNum) }).addTo(map);
+                schedMarkersRef.current[key] = m;
+              } else {
+                m.setLatLng([pos.lat, pos.lng]);
+                m.setIcon(schedIcon(dir, tripNum));
+              }
+              m.bindTooltip(lbl, { direction: "top", offset: [0, -16] });
             }
-            m.bindTooltip(lbl, { direction: "top", offset: [0, -16] });
-          }
-        });
+          });
+        }
         Object.keys(schedMarkersRef.current).forEach((k) => {
           if (!schedKeys.has(k)) { map.removeLayer(schedMarkersRef.current[k]); delete schedMarkersRef.current[k]; }
         });
