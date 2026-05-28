@@ -38,7 +38,10 @@
 
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef, useMemo } = React;
-const BUILD = "b39"; /* 화면 우하단 표시 — 최신 배포 확인용 */
+const BUILD = "b40"; /* 화면 우하단 표시 — 최신 배포 확인용 */
+
+/* 실시간 위치 공유용 Firebase DB 주소. 여기에 한 번 넣어두면 승객 링크가 ?view=map 만 남아 깔끔해집니다. */
+const SHARE_DB = "";
 
 /* Icons */
 const Svg = ({ size = 16, children, ...rest }) => (
@@ -470,7 +473,7 @@ function App() {
   const [autoLegSwitch, setAutoLegSwitch] = useState(() => LS.get("autoleg", "0") === "1");
   const [festivalDay, setFestivalDay] = useState(() => LS.get("festday", "auto")); // auto|day1|day2
   // 실시간 위치 공유 (Firebase RTDB REST)
-  const [shareUrl, setShareUrl] = useState(() => LS.get("shareurl", ""));
+  const [shareUrl, setShareUrl] = useState(() => LS.get("shareurl", SHARE_DB));
   const [busId, setBusId] = useState(() => LS.get("busid", "1"));
   const [sharing, setSharing] = useState(false);
   const lastShareRef = useRef(0);
@@ -1958,13 +1961,18 @@ function App() {
             </div>
             <div className="text-[10px] text-slate-600">GPS 자동이 켜져 있어야 위치가 올라갑니다. 끄면 내 위치는 지도에서 사라집니다.</div>
             {shareUrl && (() => {
-              const purl = `${location.origin}${location.pathname}?view=map&db=${encodeURIComponent(shareUrl)}`;
+              const norm = (s) => s.replace(/\/+$/, "");
+              const baked = SHARE_DB && norm(shareUrl) === norm(SHARE_DB);
+              const purl = baked
+                ? `${location.origin}${location.pathname}?view=map`
+                : `${location.origin}${location.pathname}?view=map&db=${encodeURIComponent(shareUrl)}`;
               return (
                 <div className="flex items-center gap-2 pt-1">
                   <img alt="QR" width="72" height="72" style={{ borderRadius: 6, background: "#fff", padding: 2 }}
                     src={`https://api.qrserver.com/v1/create-qr-code/?size=120x120&data=${encodeURIComponent(purl)}`} />
                   <div className="flex-1 min-w-0">
-                    <div className="text-[10px] text-slate-500 mb-1">승객용 실시간 지도 링크</div>
+                    <div className="text-[10px] text-slate-500 mb-1">{baked ? "승객용 실시간 지도 링크" : "승객용 링크 (DB 주소 포함)"}</div>
+                    {!baked && <div className="text-[10px] text-amber-500/70 mb-1 leading-tight">코드의 SHARE_DB에 같은 주소를 넣고 배포하면 링크가 ?view=map 로 짧아집니다.</div>}
                     <button onClick={() => { try { navigator.clipboard.writeText(purl); setGpsError(""); } catch (_) {} }}
                       className="w-full py-1.5 rounded text-[11px] font-bold"
                       style={{ background: "rgba(251,191,36,0.15)", color: "#fbbf24", border: "1px solid rgba(251,191,36,0.3)", fontFamily: "'Jua', sans-serif" }}>
@@ -2181,7 +2189,7 @@ function App() {
 
 (function () {
   const p = new URLSearchParams(window.location.search);
-  const Root = p.get("view") === "map" ? () => <LiveMapView dbUrl={p.get("db")} /> : App;
+  const Root = p.get("view") === "map" ? () => <LiveMapView dbUrl={p.get("db") || SHARE_DB} /> : App;
   ReactDOM.createRoot(document.getElementById('root')).render(<Root />);
 })();
 </script>
