@@ -80,7 +80,7 @@
 
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef, useMemo } = React;
-const BUILD = "b190"; /* 화면 우하단 표시 — 최신 배포 확인용 */
+const BUILD = "b191"; /* 화면 우하단 표시 — 최신 배포 확인용 */
 
 /* 실시간 위치 공유용 Firebase DB 주소. 여기에 한 번 넣어두면 승객 링크가 ?view=map 만 남아 깔끔해집니다. */
 const SHARE_DB = "https://innum-bus-default-rtdb.firebaseio.com";
@@ -2448,13 +2448,13 @@ function App() {
   const [broadcastStatus, setBroadcastStatus] = useState("ok"); // ok | failing
   const [lastBroadcastStatus, setLastBroadcastStatus] = useState(null); // 마지막 실패 코드/메시지
   const [broadcastStats, setBroadcastStats] = useState({ lastAt: 0, count: 0, failCount: 0 });
-  const [_statsTick, _setStatsTick] = useState(0); // "N초 전" 갱신용 1초 tick
-  useEffect(() => { if (!sharing) return; const id = setInterval(() => _setStatsTick((t) => t + 1), 1000); return () => clearInterval(id); }, [sharing]);
+  const [_statsTick, _setStatsTick] = useState(0); // "N초 전" 갱신용 1초 tick — sharing 선언 이후에 effect 등록
   const [driverEmail, setDriverEmail] = useState(() => LS.get("driveremail", "")); // 기사 쓰기 로그인(이 기기에만 저장)
   const [driverPass, setDriverPass] = useState(() => LS.get("driverpass", ""));
   const [apiKey, setApiKey] = useState(() => LS.get("apikey", SHARE_API_KEY)); // 웹 API 키(이 기기에만 저장)
   const [authStatus, setAuthStatus] = useState("");
   const [sharing, setSharing] = useState(false);
+  useEffect(() => { if (!sharing) return; const id = setInterval(() => _setStatsTick((t) => t + 1), 1000); return () => clearInterval(id); }, [sharing]);
   const [manualWaiting, setManualWaiting] = useState(false);
   // 승하차 카운트 — { "dir|trip|stop": { board: N, alight: N } }. Firebase /counts/{date}/dir/trip/stopName 에 저장.
   const [counts, setCounts] = useState({});
