@@ -38,7 +38,7 @@
 
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef, useMemo } = React;
-const BUILD = "b55"; /* 화면 우하단 표시 — 최신 배포 확인용 */
+const BUILD = "b56"; /* 화면 우하단 표시 — 최신 배포 확인용 */
 
 /* 실시간 위치 공유용 Firebase DB 주소. 여기에 한 번 넣어두면 승객 링크가 ?view=map 만 남아 깔끔해집니다. */
 const SHARE_DB = "https://innum-bus-default-rtdb.firebaseio.com";
@@ -404,15 +404,26 @@ function LiveMapView({ dbUrl }) {
     const map = L.map(elRef.current, { zoomControl: true });
     L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 19, attribution: "© OpenStreetMap" }).addTo(map);
 
-    // 노선 폴리라인 — 축제장행=주황 실선, 민주광장행=청록 점선
+    // 노선 폴리라인 — 우선 직선으로 먼저 그리고, OSRM 라우팅 결과를 받으면 도로 따라가는 선으로 교체
+    const lineRefs = {};
     ["outbound", "inbound"].forEach((dir) => {
+      const color = dir === "outbound" ? FT.orange : FT.teal;
+      const dash = dir === "inbound" ? "10,8" : null;
       const coords = ROUTES[dir].stops.filter((s) => s.lat != null).map((s) => [s.lat, s.lng]);
       if (coords.length < 2) return;
-      L.polyline(coords, {
-        color: dir === "outbound" ? FT.orange : FT.teal,
-        weight: 5, opacity: 0.75, lineCap: "round", lineJoin: "round",
-        dashArray: dir === "inbound" ? "10,8" : null,
-      }).addTo(map);
+      // 임시 직선(연하게)
+      lineRefs[dir] = L.polyline(coords, { color, weight: 5, opacity: 0.45, dashArray: dash, lineCap: "round", lineJoin: "round" }).addTo(map);
+      // OSRM에서 도로 따라가는 경로 받아 교체 (실패해도 직선 유지)
+      const path = coords.map(([la, ln]) => `${ln},${la}`).join(";");
+      fetch(`https://router.project-osrm.org/route/v1/driving/${path}?overview=full&geometries=geojson&continue_straight=false`)
+        .then((r) => r.ok ? r.json() : null)
+        .then((d) => {
+          if (!d || d.code !== "Ok" || !d.routes || !d.routes[0]) return;
+          const road = d.routes[0].geometry.coordinates.map(([ln, la]) => [la, ln]);
+          if (lineRefs[dir]) map.removeLayer(lineRefs[dir]);
+          lineRefs[dir] = L.polyline(road, { color, weight: 5, opacity: 0.85, dashArray: dash, lineCap: "round", lineJoin: "round" }).addTo(map);
+        })
+        .catch(() => {});
     });
 
     // 정류장 마커 — 흰 원 + 검정 외곽선, 이름 툴팁
