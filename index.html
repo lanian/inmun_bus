@@ -45,7 +45,7 @@
 
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef, useMemo } = React;
-const BUILD = "b70"; /* 화면 우하단 표시 — 최신 배포 확인용 */
+const BUILD = "b71"; /* 화면 우하단 표시 — 최신 배포 확인용 */
 
 /* 실시간 위치 공유용 Firebase DB 주소. 여기에 한 번 넣어두면 승객 링크가 ?view=map 만 남아 깔끔해집니다. */
 const SHARE_DB = "https://innum-bus-default-rtdb.firebaseio.com";
@@ -597,14 +597,17 @@ function VenueModal({ onClose }) {
       </div>
 
       {expandedImg && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center p-2"
-          style={{ background: "rgba(0,0,0,0.94)", overflow: "auto" }} onClick={() => setExpandedImg(null)}>
-          <img src={expandedImg} alt="확대"
-            style={{ maxWidth: "none", width: "min(180%, 1400px)", height: "auto", borderRadius: 8 }}
-            onClick={(e) => e.stopPropagation()} />
+        <div className="fixed inset-0 z-[60] p-3"
+          style={{ background: "rgba(15,15,18,0.92)", overflow: "auto" }} onClick={() => setExpandedImg(null)}>
+          <div onClick={(e) => e.stopPropagation()}
+            style={{ margin: "0 auto", width: "min(180%, 1400px)", background: "#fff",
+              border: "2.5px solid " + FT.ink, borderRadius: 12, boxShadow: "4px 4px 0 " + FT.ink, padding: 10 }}>
+            <img src={expandedImg} alt="확대" style={{ display: "block", width: "100%", height: "auto", borderRadius: 6 }} />
+          </div>
           <button onClick={() => setExpandedImg(null)} aria-label="닫기"
-            style={{ position: "fixed", top: 12, right: 12, width: 36, height: 36, borderRadius: 10,
-              border: "2px solid " + FT.ink, background: "#fff", color: FT.ink, fontWeight: 700, fontFamily: "'Jua', sans-serif" }}>×</button>
+            style={{ position: "fixed", top: 12, right: 12, width: 38, height: 38, borderRadius: 10,
+              border: "2px solid " + FT.ink, background: "#fff", color: FT.ink, fontWeight: 700, fontFamily: "'Jua', sans-serif",
+              boxShadow: "2px 2px 0 " + FT.ink, zIndex: 70 }}>×</button>
         </div>
       )}
     </div>
@@ -1248,11 +1251,11 @@ function PassengerView({ dbUrl, onAdmin, initialTab = "list" }) {
   }
 
   return (
-    <div className="w-full p-3 sm:p-5 flex justify-center items-start"
+    <div className="w-full p-3 sm:p-5 flex flex-col items-center"
       style={{ minHeight: "100dvh", background: FT.paper,
         backgroundImage: "radial-gradient(circle at 15% -10%, rgba(22,168,158,0.18), transparent 45%), radial-gradient(circle at 85% 110%, rgba(238,107,46,0.14), transparent 45%)" }}>
-      <div className="w-full max-w-md">
-        <div style={{ background: "#fff", border: "2.5px solid " + FT.ink, borderRadius: 18, boxShadow: "4px 4px 0 " + FT.ink, overflow: "hidden" }}>
+      <div className="w-full max-w-md flex flex-col" style={{ flex: 1, minHeight: 0 }}>
+        <div className="flex flex-col" style={{ flex: 1, minHeight: 0, background: "#fff", border: "2.5px solid " + FT.ink, borderRadius: 18, boxShadow: "4px 4px 0 " + FT.ink, overflow: "hidden" }}>
           {/* header */}
           <div style={{ padding: "16px 18px 14px 18px", borderBottom: "2.5px solid " + FT.ink, background: "#fff", display: "flex", gap: 14, alignItems: "flex-start" }}>
             <FestivalLogo size={44} />
@@ -1285,7 +1288,7 @@ function PassengerView({ dbUrl, onAdmin, initialTab = "list" }) {
           </div>
 
           {/* body */}
-          <div className="space-y-3" style={{ background: FT.paper, padding: 12 }}>
+          <div className="space-y-3" style={{ background: FT.paper, padding: 12, flex: 1, minHeight: 0, overflowY: "auto" }}>
             {live.length === 0 ? (
               <div className="py-2">
                 <div style={{ textAlign: "center", color: FT.inkSoft, fontFamily: "'Jua', sans-serif", fontSize: 13, lineHeight: 1.5, marginBottom: 14 }}>
