@@ -80,7 +80,7 @@
 
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef, useMemo } = React;
-const BUILD = "b191"; /* 화면 우하단 표시 — 최신 배포 확인용 */
+const BUILD = "b192"; /* 화면 우하단 표시 — 최신 배포 확인용 */
 
 /* 실시간 위치 공유용 Firebase DB 주소. 여기에 한 번 넣어두면 승객 링크가 ?view=map 만 남아 깔끔해집니다. */
 const SHARE_DB = "https://innum-bus-default-rtdb.firebaseio.com";
@@ -3432,9 +3432,9 @@ function App() {
   useEffect(() => {
     if (!sharing || !shareUrl) return;
     const now = Date.now();
-    // 실패 누적 시 지수 백오프 — 최소 간격을 늘려 서버 부하/오류 폭주 완화
+    // 송신 주기: 기본 5초. 실패 누적 시 지수 백오프(최대 60초)
     const fails = broadcastFailRef.current;
-    const minGap = Math.min(60000, 4500 * Math.pow(1.5, Math.min(fails, 6))); // 4.5s → 최대 60s
+    const minGap = Math.min(60000, 5000 * Math.pow(1.5, Math.min(fails, 6)));
     if (now - lastShareRef.current < minGap) return;
     lastShareRef.current = now;
     const base = shareUrl.replace(/\/+$/, "");
