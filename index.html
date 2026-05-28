@@ -45,7 +45,7 @@
 
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef, useMemo } = React;
-const BUILD = "b102"; /* 화면 우하단 표시 — 최신 배포 확인용 */
+const BUILD = "b103"; /* 화면 우하단 표시 — 최신 배포 확인용 */
 
 /* 실시간 위치 공유용 Firebase DB 주소. 여기에 한 번 넣어두면 승객 링크가 ?view=map 만 남아 깔끔해집니다. */
 const SHARE_DB = "https://innum-bus-default-rtdb.firebaseio.com";
@@ -100,6 +100,7 @@ function distanceMeters(a, b) {
 
 /* Time helper: HH:MM → minutes since midnight */
 const toMin = (hm) => { const [h, m] = hm.split(":").map(Number); return h * 60 + m; };
+const fromMin = (m) => { const x = ((m % (24 * 60)) + 24 * 60) % (24 * 60); return `${String(Math.floor(x / 60)).padStart(2, "0")}:${String(x % 60).padStart(2, "0")}`; };
 
 /* Spoken-name helper — TTS reads "5·18" oddly, normalize before speaking */
 const spokenName = (name) => (name || "").replace(/5·18/g, "오일팔");
@@ -1317,7 +1318,9 @@ function BusCard({ id, bus, agoText, nowMin, tripsToday }) {
                 <span style={{ fontSize: 12, color: etaColor, fontFamily: "'Jua', sans-serif", fontWeight: 700 }}>{etaLabel}</span>
               )}
               {schedAt && (
-                <span style={{ fontSize: 10, color: etaColor, fontFamily: "'IBM Plex Mono', monospace", opacity: 0.85 }}>{schedAt} 예정</span>
+                <span style={{ fontSize: 10, color: etaColor, fontFamily: "'IBM Plex Mono', monospace", opacity: 0.85 }}>
+                  {delayed ? `${fromMin(toMin(schedAt) + (-mins))} 예상` : `${schedAt} 예정`}
+                </span>
               )}
             </span>
           </div>
@@ -1353,8 +1356,8 @@ function BusCard({ id, bus, agoText, nowMin, tripsToday }) {
                   <span style={{ color: delay > 0 ? "#dc2626" : FT.inkSoft, fontWeight: 700, minWidth: 56, textAlign: "right" }}>
                     {r.mins === 0 ? "곧" : `${r.mins}분 후`}
                   </span>
-                  <span style={{ color: FT.mute, fontFamily: "'IBM Plex Mono', monospace", minWidth: 38, textAlign: "right" }}>
-                    {r.time}
+                  <span style={{ color: FT.mute, fontFamily: "'IBM Plex Mono', monospace", minWidth: 44, textAlign: "right" }}>
+                    {delay > 0 ? fromMin(toMin(r.time) + delay) : r.time}
                   </span>
                 </div>
               ))}
@@ -1625,7 +1628,9 @@ function PassengerView({ dbUrl, onAdmin, initialTab = "list" }) {
                                   <span style={{ fontSize: 13, color: next.delay > 0 ? "#dc2626" : dirColor, fontWeight: 700, marginLeft: "auto" }}>
                                     {next.mins === 0 ? "잠시 후" : `약 ${next.mins}분 후`}
                                   </span>
-                                  <span style={{ fontSize: 11, color: FT.mute, fontFamily: "'IBM Plex Mono', monospace" }}>{next.schedAt} 예정</span>
+                                  <span style={{ fontSize: 11, color: FT.mute, fontFamily: "'IBM Plex Mono', monospace" }}>
+                                    {next.delay > 0 ? `${fromMin(toMin(next.schedAt) + next.delay)} 예상` : `${next.schedAt} 예정`}
+                                  </span>
                                 </div>
                                 {dirArr.length > 1 && (
                                   <div style={{ marginTop: 2, fontSize: 10, color: FT.mute, fontFamily: "'Jua', sans-serif" }}>
