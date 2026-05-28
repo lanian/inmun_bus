@@ -19,7 +19,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Black+Han+Sans&family=Gowun+Dodum&family=Jua&family=IBM+Plex+Mono:wght@400;500;700&display=swap" rel="stylesheet" />
 
 <style>
-  html, body { margin: 0; padding: 0; background: #050608; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; padding: 0; background: #050608; -webkit-tap-highlight-color: transparent; overflow-x: hidden; }
   body { font-family: 'Gowun Dodum', system-ui, sans-serif; }
   .boot { min-height: 100vh; display: flex; align-items: center; justify-content: center;
     color: #fbbf24; font-family: 'Black Han Sans', sans-serif; font-size: 1.25rem; letter-spacing: 0.1em; }
@@ -45,7 +45,7 @@
 
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef, useMemo } = React;
-const BUILD = "b66"; /* 화면 우하단 표시 — 최신 배포 확인용 */
+const BUILD = "b67"; /* 화면 우하단 표시 — 최신 배포 확인용 */
 
 /* 실시간 위치 공유용 Firebase DB 주소. 여기에 한 번 넣어두면 승객 링크가 ?view=map 만 남아 깔끔해집니다. */
 const SHARE_DB = "https://innum-bus-default-rtdb.firebaseio.com";
@@ -890,7 +890,7 @@ function LiveMapView({ dbUrl }) {
       } catch (_) { setCount(0); setStatus("연결 오류 — 잠시 후 다시 시도"); }
     };
     poll();
-    const id = setInterval(() => { if (!stopped) poll(); }, 4000);
+    const id = setInterval(() => { if (!stopped) poll(); }, 3000);
     return () => { stopped = true; clearInterval(id); };
   }, [dbUrl]);
 
@@ -1079,7 +1079,7 @@ function PassengerView({ dbUrl, onAdmin, initialTab = "list" }) {
       } catch (_) { setConn("error"); }
     };
     poll();
-    const id = setInterval(() => { if (!stopped) poll(); }, 4000);
+    const id = setInterval(() => { if (!stopped) poll(); }, 3000);
     return () => { stopped = true; clearInterval(id); };
   }, [dbUrl]);
 
@@ -1126,8 +1126,8 @@ function PassengerView({ dbUrl, onAdmin, initialTab = "list" }) {
   }
 
   return (
-    <div className="min-h-screen w-full p-4 sm:p-6 flex justify-center"
-      style={{ background: FT.paper,
+    <div className="w-full p-3 sm:p-5 flex justify-center items-start"
+      style={{ minHeight: "100dvh", background: FT.paper,
         backgroundImage: "radial-gradient(circle at 15% -10%, rgba(22,168,158,0.18), transparent 45%), radial-gradient(circle at 85% 110%, rgba(238,107,46,0.14), transparent 45%)" }}>
       <div className="w-full max-w-md">
         <div style={{ background: "#fff", border: "2.5px solid " + FT.ink, borderRadius: 18, boxShadow: "4px 4px 0 " + FT.ink, overflow: "hidden" }}>
@@ -1210,7 +1210,7 @@ function PassengerView({ dbUrl, onAdmin, initialTab = "list" }) {
         </div>
 
         <div style={{ textAlign: "center", marginTop: 12, fontSize: 10, color: FT.mute, fontFamily: "'Jua', sans-serif" }}>
-          실시간 위치는 약 4초마다 갱신됩니다
+          실시간 위치는 약 3초마다 갱신됩니다
         </div>
       </div>
       {showTimetable && <TimetableModal tripsToday={tripsToday} onClose={() => setShowTimetable(false)} />}
