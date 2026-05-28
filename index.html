@@ -66,7 +66,7 @@
 
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef, useMemo } = React;
-const BUILD = "b139"; /* 화면 우하단 표시 — 최신 배포 확인용 */
+const BUILD = "b140"; /* 화면 우하단 표시 — 최신 배포 확인용 */
 
 /* 실시간 위치 공유용 Firebase DB 주소. 여기에 한 번 넣어두면 승객 링크가 ?view=map 만 남아 깔끔해집니다. */
 const SHARE_DB = "https://innum-bus-default-rtdb.firebaseio.com";
@@ -1622,23 +1622,28 @@ function PassengerView({ dbUrl, onAdmin, initialTab = "list" }) {
     .filter(([, b]) => b && (b.lat != null || b.stop) && (!b.ts || now - b.ts < 60000))
     .sort((a, b) => a[0].localeCompare(b[0], undefined, { numeric: true }));
 
-  // 이전 도착 상태 추적 — arrived TRUE → FALSE 전환 시점에서 정류장명 기록(이탈 직후 90초간 표시)
-  const prevArrivedRef = useRef({}); // { [busId]: { arrived: bool, stop: string } }
-  const departedRef = useRef({});    // { [busId]: { stopName, at } }
+  // 이탈 정보 — 운영자가 departedFrom/departedAt을 직접 송신하면 우선 사용, 없으면 폴백 추적
+  const prevArrivedRef = useRef({});
+  const departedFallbackRef = useRef({});
   useEffect(() => {
     Object.entries(buses).forEach(([id, b]) => {
       if (!b) return;
       const prev = prevArrivedRef.current[id];
       if (prev && prev.arrived && !b.arrived) {
-        departedRef.current[id] = { stopName: prev.stop || b.stop, at: Date.now() };
+        departedFallbackRef.current[id] = { stopName: prev.stop || b.stop, at: Date.now() };
       }
       if (prev && prev.stop && b.stop && prev.stop !== b.stop) {
-        // 정류장 이동 — 이전 departed 기록 정리(다음 도착이 더 우선)
-        delete departedRef.current[id];
+        delete departedFallbackRef.current[id];
       }
       prevArrivedRef.current[id] = { arrived: !!b.arrived, stop: b.stop };
     });
   }, [buses]);
+  const getDepartedInfo = (id, b) => {
+    if (b && b.departedFrom && b.departedAt && Date.now() - b.departedAt < 90000) {
+      return { stopName: b.departedFrom, at: b.departedAt };
+    }
+    return departedFallbackRef.current[id] || null;
+  };
 
   // 시간표(승객용) — 일요일(6.14)은 5회차, 그 외 6회차
   const d = new Date();
@@ -1856,7 +1861,7 @@ function PassengerView({ dbUrl, onAdmin, initialTab = "list" }) {
                     </div>
                   );
                 })()}
-                {live.map(([id, b]) => <BusCard key={id} id={id} bus={b} agoText={agoText} nowMin={nowMin} tripsToday={tripsToday} departedInfo={departedRef.current[id]} />)}
+                {live.map(([id, b]) => <BusCard key={id} id={id} bus={b} agoText={agoText} nowMin={nowMin} tripsToday={tripsToday} departedInfo={getDepartedInfo(id, b)} />)}
               </React.Fragment>
             )}
 
@@ -1978,6 +1983,13 @@ function App() {
   const [locShare, setLocShare] = useState(() => LS.get("locshare", "1") === "1"); // 위치 좌표 공유(끄면 운행 정보만 송신)
   useEffect(() => LS.set("locshare", locShare ? "1" : "0"), [locShare]);
   const lastShareRef = useRef(0);
+  // P1-a: arrived 히스테리시스 (진입<30m, 해제>50m, 속도 느릴 때만 진입 확정)
+  const arrivedStateRef = useRef(false);
+  // P2-a: 이탈 명시 — arrived TRUE→FALSE 전환 시 정류장명/시각 기록(90초 유지)
+  const departedFromRef = useRef(null);
+  // P3-a: GPS stale — userPos 마지막 갱신 시각 추적
+  const gpsLastUpdateRef = useRef(0);
+  const [gpsStale, setGpsStale] = useState(false);
   const authTokenRef = useRef("");
   const [progTimeBase, setProgTimeBase] = useState(() => LS.get("progbase", "now")); // now|trip
 
@@ -2569,7 +2581,9 @@ function App() {
     setGpsError(null);
     watchIdRef.current = navigator.geolocation.watchPosition(
       (pos) => {
-        setUserPos({ lat: pos.coords.latitude, lng: pos.coords.longitude, accuracy: pos.coords.accuracy });
+        const speed = pos.coords.speed; // m/s, null on some devices
+        gpsLastUpdateRef.current = Date.now();
+        setUserPos({ lat: pos.coords.latitude, lng: pos.coords.longitude, accuracy: pos.coords.accuracy, speed });
         setGpsError(null);
         if (permissionState !== "granted") setPermissionState("granted");
       },
@@ -2583,6 +2597,17 @@ function App() {
     );
     return () => { if (watchIdRef.current !== null) { navigator.geolocation.clearWatch(watchIdRef.current); watchIdRef.current = null; } };
   }, [autoMode, permissionState, sharing, locShare]);
+
+  /* GPS stale 감지 — 30초 이상 갱신 없으면 경고 (autoMode 또는 좌표 공유 켜져 있을 때만) */
+  useEffect(() => {
+    const wantGps = autoMode || (sharing && locShare);
+    if (!wantGps) { setGpsStale(false); return; }
+    const id = setInterval(() => {
+      if (gpsLastUpdateRef.current === 0) return; // 아직 첫 신호 안 들어옴
+      setGpsStale(Date.now() - gpsLastUpdateRef.current > 30000);
+    }, 5000);
+    return () => clearInterval(id);
+  }, [autoMode, sharing, locShare]);
 
   const retryPermission = () => {
     setGpsError(null);
@@ -2709,13 +2734,31 @@ function App() {
     // 좌표는 locShare ON 이고 GPS userPos가 있을 때만 첨부. 운행 정보는 항상 송신.
     const hasGps = locShare && userPos;
     const distToCur = hasGps && curCoord ? distanceMeters(userPos, curCoord) : null;
-    const arrived = distToCur != null && distToCur < 30 ? true : undefined;
+    // P1: arrived 히스테리시스 + 속도 기반 — 진입<30m & 저속, 해제>50m
+    const speed = userPos && typeof userPos.speed === "number" ? userPos.speed : null;
+    const speedSlow = speed == null || speed < 1.5; // m/s (~5.4 km/h)
+    const prevArrived = arrivedStateRef.current;
+    let arrivedNow = prevArrived;
+    if (distToCur != null) {
+      if (!prevArrived && distToCur < 30 && speedSlow) arrivedNow = true;
+      if (prevArrived && distToCur > 50) arrivedNow = false;
+    } else if (prevArrived && (!hasGps)) {
+      // GPS 끊기면 잠시 도착 유지하다가 다음 cycle에서 자연 해제
+    }
+    // P2: 이탈 전환 시 정류장명 기록 (90초 유지)
+    if (prevArrived && !arrivedNow && curStop?.name) {
+      departedFromRef.current = { stop: curStop.name, at: now };
+    }
+    arrivedStateRef.current = arrivedNow;
+    const dep = departedFromRef.current;
+    const departedInfo = dep && (now - dep.at < 90000) ? dep : null;
     const body = JSON.stringify({
       ...(hasGps ? { lat: userPos.lat, lng: userPos.lng } : {}),
       dir: direction, trip: tripIdx + 1,
       stop: curStop?.name || "", ts: now,
       waiting: manualWaiting || undefined,
-      ...(arrived ? { arrived } : {}),
+      ...(arrivedNow ? { arrived: true } : {}),
+      ...(departedInfo ? { departedFrom: departedInfo.stop, departedAt: departedInfo.at } : {}),
     });
     fetch(`${base}/buses/${encodeURIComponent(busId || "1")}.json${auth}`, { method: "PUT", body }).catch(() => {});
   }, [_shareTick, userPos, sharing, shareUrl, busId, direction, tripIdx, curStop, curCoord, manualWaiting, locShare]);
@@ -3014,7 +3057,7 @@ function App() {
                 fontFamily: "'Jua', sans-serif",
               }}>
               <Navigation size={12} />
-              GPS 자동 {autoMode ? (userPos ? `· ${triggerRadius}m` : "· 신호 대기") : "OFF"}
+              GPS 자동 {autoMode ? (userPos ? (gpsStale ? "· 신호 약함" : `· ${triggerRadius}m`) : "· 신호 대기") : "OFF"}
             </button>
             <button onClick={() => {
                 if (!shareUrl) { setGpsError("먼저 DB 주소를 입력하세요(고급)"); setMode("advanced"); return; }
