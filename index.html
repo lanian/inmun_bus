@@ -73,7 +73,7 @@
 
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef, useMemo } = React;
-const BUILD = "b159"; /* 화면 우하단 표시 — 최신 배포 확인용 */
+const BUILD = "b160"; /* 화면 우하단 표시 — 최신 배포 확인용 */
 
 /* 실시간 위치 공유용 Firebase DB 주소. 여기에 한 번 넣어두면 승객 링크가 ?view=map 만 남아 깔끔해집니다. */
 const SHARE_DB = "https://innum-bus-default-rtdb.firebaseio.com";
@@ -601,7 +601,7 @@ const programTimeKey = (t) => /^\d/.test(t) ? t : "ZZ:ZZ";
 
 /* 행사장 지도 + 프로그램 안내 모달 */
 /* 운영자 전용 — 오늘 일자 승하차 카운트 통계 모달 (회차별·정류장별 합계 + CSV 추출) */
-function StatsModal({ counts, dateKey, onClose, onReset }) {
+function StatsModal({ counts, dateKey, onClose, onReset, busCapacity, setBusCapacity }) {
   const rows = Object.entries(counts).map(([k, v]) => {
     const [dir, trip, stop] = k.split("|");
     return { dir, trip: Number(trip), stop, board: v.board || 0, alight: v.alight || 0 };
@@ -685,6 +685,15 @@ function StatsModal({ counts, dateKey, onClose, onReset }) {
             );
           })}
         </div>
+        {typeof busCapacity === "number" && setBusCapacity && (
+          <div className="flex items-center justify-between gap-2 pt-2 border-t border-slate-700">
+            <span className="text-[11px] text-slate-400" style={{ fontFamily: "'Jua', sans-serif" }}>버스 정원 (혼잡도 색 기준)</span>
+            <input type="number" min="1" value={busCapacity}
+              onChange={(e) => setBusCapacity(Math.max(1, parseInt(e.target.value, 10) || 25))}
+              className="w-20 px-2 py-1 rounded text-sm text-right"
+              style={{ background: "#0a0b0f", border: "1px solid #3a3f54", color: "#cbd5e1" }} />
+          </div>
+        )}
         <button onClick={exportCsv}
           className="w-full px-3 py-2 rounded-lg text-xs font-bold"
           style={{ background: "#22d65f", color: "#0a0b0f", fontFamily: "'Jua', sans-serif" }}>
@@ -2200,9 +2209,6 @@ function App() {
   });
   const sessionRef = useRef(Math.random().toString(36).slice(2, 8));
   const [busIdConflict, setBusIdConflict] = useState(false);
-  // 인수인계 메모 — Firebase /handoff/{busId}, 양방향 동기화
-  const [handoffMemo, setHandoffMemo] = useState("");
-  const [showHandoff, setShowHandoff] = useState(false);
   // 버스 정원(혼잡도 색 기준) — 운영자가 설정
   const [busCapacity, setBusCapacity] = useState(() => parseInt(LS.get("capacity", "25"), 10) || 25);
   useEffect(() => LS.set("capacity", String(busCapacity)), [busCapacity]);
@@ -2926,25 +2932,6 @@ function App() {
 
   useEffect(() => { if (!autoMode) { announcedRef.current = new Set(); legSwitchArmedRef.current = false; legDepartCountRef.current = 0; } }, [autoMode]);
 
-  /* 인수인계 메모 동기화 — busId별 한 줄 메모. 마운트 시 fetch, 변경 시 PUT(디바운스) */
-  const handoffWriteRef = useRef(null);
-  useEffect(() => {
-    if (!shareUrl || !busId) return;
-    const base = shareUrl.replace(/\/+$/, "");
-    fetch(`${base}/handoff/${encodeURIComponent(busId)}.json`).then((r) => r.json())
-      .then((d) => { if (typeof d === "string") setHandoffMemo(d); }).catch(() => {});
-  }, [shareUrl, busId]);
-  const saveHandoff = (text) => {
-    setHandoffMemo(text);
-    if (handoffWriteRef.current) clearTimeout(handoffWriteRef.current);
-    handoffWriteRef.current = setTimeout(() => {
-      if (!shareUrl || !busId) return;
-      const base = shareUrl.replace(/\/+$/, "");
-      const auth = authTokenRef.current ? `?auth=${encodeURIComponent(authTokenRef.current)}` : "";
-      fetch(`${base}/handoff/${encodeURIComponent(busId)}.json${auth}`, { method: "PUT", body: JSON.stringify(text) }).catch(() => {});
-    }, 600);
-  };
-
   /* 같은 busId로 다른 세션이 송신 중인지 검사 — 충돌 경고 */
   useEffect(() => {
     if (!sharing || !shareUrl || !busId) { setBusIdConflict(false); return; }
@@ -3627,12 +3614,6 @@ function App() {
                 border: "1px solid rgba(34, 214, 95, 0.3)", fontFamily: "'Jua', sans-serif" }}>
               승하차 통계
             </button>
-            <button onClick={() => setShowHandoff(true)}
-              className="flex items-center gap-1 text-xs px-3 py-1.5 rounded-full"
-              style={{ background: handoffMemo ? "rgba(168, 85, 247, 0.18)" : "rgba(168, 85, 247, 0.08)",
-                color: "#c084fc", border: "1px solid rgba(168, 85, 247, 0.3)", fontFamily: "'Jua', sans-serif" }}>
-              📝 인수메모{handoffMemo ? " ●" : ""}
-            </button>
             <button onClick={() => {
                 if (!document.fullscreenElement) document.documentElement.requestFullscreen?.();
                 else document.exitFullscreen?.();
@@ -3649,33 +3630,7 @@ function App() {
           </div>
 
           {showTimetable && <TimetableModal tripsToday={tripsToday} onClose={() => setShowTimetable(false)} />}
-          {showStats && <StatsModal counts={counts} dateKey={dateKey} onClose={() => setShowStats(false)} onReset={resetCountsToday} />}
-          {showHandoff && (
-            <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4"
-              style={{ background: "rgba(0,0,0,0.7)" }} onClick={() => setShowHandoff(false)}>
-              <div className="w-full max-w-md rounded-2xl border-2 p-4 space-y-3"
-                style={{ background: "#13151c", borderColor: "#3a3f54" }} onClick={(e) => e.stopPropagation()}>
-                <div className="flex items-center justify-between">
-                  <div className="text-sm font-bold" style={{ color: "#c084fc", fontFamily: "'Jua', sans-serif" }}>
-                    📝 인수인계 메모 · {busId}
-                  </div>
-                  <button onClick={() => setShowHandoff(false)} className="text-slate-400 text-lg leading-none px-1">×</button>
-                </div>
-                <div className="text-[10px] text-slate-500">다음 운영자에게 전달할 메모. Firebase에 자동 저장되어 같은 버스 번호의 운영자가 같이 봅니다.</div>
-                <textarea value={handoffMemo} onChange={(e) => saveHandoff(e.target.value)} rows={6}
-                  placeholder="예: 학동에서 정류장 표지판 위치 변경, 16:30 회차 5분 지연 시작…"
-                  className="w-full px-3 py-2 rounded-lg text-sm"
-                  style={{ background: "#0a0b0f", border: "1px solid #3a3f54", color: "#cbd5e1", resize: "vertical" }} />
-                <div className="flex items-center justify-between gap-2">
-                  <span className="text-[10px] text-slate-500">정원 (혼잡도 계산용)</span>
-                  <input type="number" min="1" value={busCapacity}
-                    onChange={(e) => setBusCapacity(Math.max(1, parseInt(e.target.value, 10) || 25))}
-                    className="w-20 px-2 py-1 rounded text-sm text-right"
-                    style={{ background: "#0a0b0f", border: "1px solid #3a3f54", color: "#cbd5e1" }} />
-                </div>
-              </div>
-            </div>
-          )}
+          {showStats && <StatsModal counts={counts} dateKey={dateKey} onClose={() => setShowStats(false)} onReset={resetCountsToday} busCapacity={busCapacity} setBusCapacity={setBusCapacity} />}
         </div>
       </div>
     );
@@ -4365,33 +4320,7 @@ function App() {
       </div>
 
       {showTimetable && <TimetableModal tripsToday={tripsToday} onClose={() => setShowTimetable(false)} />}
-      {showStats && <StatsModal counts={counts} dateKey={dateKey} onClose={() => setShowStats(false)} onReset={resetCountsToday} />}
-          {showHandoff && (
-            <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4"
-              style={{ background: "rgba(0,0,0,0.7)" }} onClick={() => setShowHandoff(false)}>
-              <div className="w-full max-w-md rounded-2xl border-2 p-4 space-y-3"
-                style={{ background: "#13151c", borderColor: "#3a3f54" }} onClick={(e) => e.stopPropagation()}>
-                <div className="flex items-center justify-between">
-                  <div className="text-sm font-bold" style={{ color: "#c084fc", fontFamily: "'Jua', sans-serif" }}>
-                    📝 인수인계 메모 · {busId}
-                  </div>
-                  <button onClick={() => setShowHandoff(false)} className="text-slate-400 text-lg leading-none px-1">×</button>
-                </div>
-                <div className="text-[10px] text-slate-500">다음 운영자에게 전달할 메모. Firebase에 자동 저장되어 같은 버스 번호의 운영자가 같이 봅니다.</div>
-                <textarea value={handoffMemo} onChange={(e) => saveHandoff(e.target.value)} rows={6}
-                  placeholder="예: 학동에서 정류장 표지판 위치 변경, 16:30 회차 5분 지연 시작…"
-                  className="w-full px-3 py-2 rounded-lg text-sm"
-                  style={{ background: "#0a0b0f", border: "1px solid #3a3f54", color: "#cbd5e1", resize: "vertical" }} />
-                <div className="flex items-center justify-between gap-2">
-                  <span className="text-[10px] text-slate-500">정원 (혼잡도 계산용)</span>
-                  <input type="number" min="1" value={busCapacity}
-                    onChange={(e) => setBusCapacity(Math.max(1, parseInt(e.target.value, 10) || 25))}
-                    className="w-20 px-2 py-1 rounded text-sm text-right"
-                    style={{ background: "#0a0b0f", border: "1px solid #3a3f54", color: "#cbd5e1" }} />
-                </div>
-              </div>
-            </div>
-          )}
+      {showStats && <StatsModal counts={counts} dateKey={dateKey} onClose={() => setShowStats(false)} onReset={resetCountsToday} busCapacity={busCapacity} setBusCapacity={setBusCapacity} />}
       {showViaEditor && <ViaEditor onClose={() => setShowViaEditor(false)} dbUrl={shareUrl} getAuth={() => authTokenRef.current} />}
       {showBackup && <BackupModal onClose={() => setShowBackup(false)} counts={counts} dateKey={dateKey} />}
 
