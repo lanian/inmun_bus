@@ -45,7 +45,7 @@
 
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef, useMemo } = React;
-const BUILD = "b104"; /* 화면 우하단 표시 — 최신 배포 확인용 */
+const BUILD = "b105"; /* 화면 우하단 표시 — 최신 배포 확인용 */
 
 /* 실시간 위치 공유용 Firebase DB 주소. 여기에 한 번 넣어두면 승객 링크가 ?view=map 만 남아 깔끔해집니다. */
 const SHARE_DB = "https://innum-bus-default-rtdb.firebaseio.com";
@@ -1472,23 +1472,24 @@ function PassengerView({ dbUrl, onAdmin, initialTab = "list" }) {
       if (!map.has(key)) map.set(key, []);
       map.get(key).push(it);
     });
-    // 노선 순 위치 인덱스 — outbound 우선, 이후 inbound에 새로 등장한 정류장
+    // 노선 순 루프 위치 인덱스 — 광장→축제장(outbound) → 축제장→광장(inbound) 순서로 키를 정렬
     const routePos = {};
     let p = 0;
-    ROUTES.outbound.stops.forEach((s) => { if (!(s.name in routePos)) routePos[s.name] = p++; });
-    ROUTES.inbound.stops.forEach((s) => { if (!(s.name in routePos)) routePos[s.name] = p++; });
+    const outLabel = ROUTES.outbound.label, inLabel = ROUTES.inbound.label;
+    ROUTES.outbound.stops.forEach((s) => {
+      const k = SHARED_STOPS.has(s.name) ? s.name : `${s.name} (${outLabel})`;
+      if (!(k in routePos)) routePos[k] = p++;
+    });
+    ROUTES.inbound.stops.forEach((s) => {
+      const k = SHARED_STOPS.has(s.name) ? s.name : `${s.name} (${inLabel})`;
+      if (!(k in routePos)) routePos[k] = p++;
+    });
     const out = [];
     map.forEach((arr, key) => {
       arr.sort((a, b) => a.mins - b.mins);
       out.push({ key, name: arr[0].name, dirLabel: arr[0].dirLabel, isShared: SHARED_STOPS.has(arr[0].name), arrivals: arr });
     });
-    // 노선 순으로 정렬 — 동일 정류장(다른 방향)은 outbound 먼저
-    out.sort((a, b) => {
-      const pa = routePos[a.name] ?? 999, pb = routePos[b.name] ?? 999;
-      if (pa !== pb) return pa - pb;
-      const da = a.arrivals[0].dir, db = b.arrivals[0].dir;
-      return da === "outbound" ? -1 : db === "outbound" ? 1 : 0;
-    });
+    out.sort((a, b) => (routePos[a.key] ?? 999) - (routePos[b.key] ?? 999));
     return out;
   })();
   const nextDep = (dir) => {
