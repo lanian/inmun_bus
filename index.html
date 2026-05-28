@@ -73,7 +73,7 @@
 
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef, useMemo } = React;
-const BUILD = "b164"; /* 화면 우하단 표시 — 최신 배포 확인용 */
+const BUILD = "b165"; /* 화면 우하단 표시 — 최신 배포 확인용 */
 
 /* 실시간 위치 공유용 Firebase DB 주소. 여기에 한 번 넣어두면 승객 링크가 ?view=map 만 남아 깔끔해집니다. */
 const SHARE_DB = "https://innum-bus-default-rtdb.firebaseio.com";
@@ -881,13 +881,14 @@ function VenueModal({ onClose, initialZone = 0 }) {
         const cardBg = isDay1 ? FT.orange : isDay2 ? FT.teal : "#fff";
         return (
           <div className="fixed inset-0 z-[60] p-3"
-            style={{ background: "rgba(15,15,18,0.92)", overflow: "auto" }} onClick={() => setExpandedImg(null)}>
+            style={{ background: "rgba(15,15,18,0.92)", overflow: "auto" }}
+            onClick={(e) => { e.stopPropagation(); setExpandedImg(null); }}>
             <div onClick={(e) => e.stopPropagation()}
               style={{ margin: "0 auto", width: "min(180%, 1400px)", background: cardBg,
                 border: "2.5px solid " + FT.ink, borderRadius: 12, boxShadow: "4px 4px 0 " + FT.ink, padding: 10 }}>
               <img src={expandedImg} alt="확대" style={{ display: "block", width: "100%", height: "auto", borderRadius: 6 }} />
             </div>
-            <button onClick={() => setExpandedImg(null)} aria-label="닫기"
+            <button onClick={(e) => { e.stopPropagation(); setExpandedImg(null); }} aria-label="닫기"
               style={{ position: "fixed", top: 12, right: 12, width: 38, height: 38, borderRadius: 10,
                 border: "2px solid " + FT.ink, background: "#fff", color: FT.ink, fontWeight: 700, fontFamily: "'Jua', sans-serif",
                 boxShadow: "2px 2px 0 " + FT.ink, zIndex: 70 }}>×</button>
