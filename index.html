@@ -45,7 +45,7 @@
 
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef, useMemo } = React;
-const BUILD = "b98"; /* 화면 우하단 표시 — 최신 배포 확인용 */
+const BUILD = "b99"; /* 화면 우하단 표시 — 최신 배포 확인용 */
 
 /* 실시간 위치 공유용 Firebase DB 주소. 여기에 한 번 넣어두면 승객 링크가 ?view=map 만 남아 깔끔해집니다. */
 const SHARE_DB = "https://innum-bus-default-rtdb.firebaseio.com";
@@ -1324,44 +1324,40 @@ function BusCard({ id, bus, agoText, nowMin, tripsToday }) {
         );
       })()}
 
-      {/* 남은 정류장 — 각 도착 예정 시각/카운트다운 */}
+      {/* 남은 정류장 — 각 도착 예정 시각 (지연 누적 반영) */}
       {(() => {
-        const upcomingStart = (bus.arrived ? ci + 1 : ci + 1); // ci 자체는 곧 도착 박스에 이미 노출됨
+        const ciSched = sched && ci >= 0 ? sched[ci] : null;
+        if (!ciSched) return null;
+        const ciSchedMin = toMin(ciSched);
+        const delay = Math.max(0, nowMin - ciSchedMin); // 지연(분)
         const remaining = [];
-        for (let i = upcomingStart; i < stops.length; i++) {
+        for (let i = ci + 1; i < stops.length; i++) {
           const t = sched && sched[i] ? sched[i] : null;
-          remaining.push({ name: stops[i].name, time: t, isFinal: i === stops.length - 1 });
+          if (!t) continue;
+          const adj = (toMin(t) - ciSchedMin) + Math.max(0, ciSchedMin - nowMin);
+          remaining.push({ name: stops[i].name, time: t, mins: adj, isFinal: i === stops.length - 1 });
         }
         if (remaining.length === 0) return null;
         return (
-          <div style={{ marginTop: 8, padding: "8px 10px", background: FT.paper, border: "1.5px solid " + FT.mute + "55",
-            borderRadius: 8 }}>
-            <div style={{ fontSize: 10, color: FT.inkSoft, fontFamily: "'Jua', sans-serif", fontWeight: 700, marginBottom: 6 }}>
-              남은 정류장
+          <div style={{ marginTop: 8, padding: "8px 10px", background: FT.paper, border: "1.5px solid " + FT.mute + "55", borderRadius: 8 }}>
+            <div className="flex items-center justify-between mb-1">
+              <span style={{ fontSize: 10, color: FT.inkSoft, fontFamily: "'Jua', sans-serif", fontWeight: 700 }}>남은 정류장</span>
+              {delay > 0 && <span style={{ fontSize: 10, color: "#dc2626", fontFamily: "'Jua', sans-serif", fontWeight: 700 }}>🔴 +{delay}분 지연</span>}
             </div>
             <div className="space-y-1">
-              {remaining.map((r) => {
-                const m = r.time ? toMin(r.time) - nowMin : null;
-                const late = m != null && m < 0;
-                const tagColor = late ? "#dc2626" : FT.inkSoft;
-                return (
-                  <div key={r.name} className="flex items-center gap-2" style={{ fontSize: 11, fontFamily: "'Jua', sans-serif" }}>
-                    <span style={{ flex: 1, color: FT.ink, fontWeight: r.isFinal ? 700 : 400 }}>
-                      {r.name}{r.isFinal ? " (종점)" : ""}
-                    </span>
-                    {m != null && (
-                      <span style={{ color: tagColor, fontWeight: 700, minWidth: 56, textAlign: "right" }}>
-                        {late ? `${-m}분 지연` : m === 0 ? "곧" : `${m}분 후`}
-                      </span>
-                    )}
-                    {r.time && (
-                      <span style={{ color: FT.mute, fontFamily: "'IBM Plex Mono', monospace", minWidth: 38, textAlign: "right" }}>
-                        {r.time}
-                      </span>
-                    )}
-                  </div>
-                );
-              })}
+              {remaining.map((r) => (
+                <div key={r.name} className="flex items-center gap-2" style={{ fontSize: 11, fontFamily: "'Jua', sans-serif" }}>
+                  <span style={{ flex: 1, color: FT.ink, fontWeight: r.isFinal ? 700 : 400 }}>
+                    {r.name}{r.isFinal ? " (종점)" : ""}
+                  </span>
+                  <span style={{ color: delay > 0 ? "#dc2626" : FT.inkSoft, fontWeight: 700, minWidth: 56, textAlign: "right" }}>
+                    {r.mins === 0 ? "곧" : `${r.mins}분 후`}
+                  </span>
+                  <span style={{ color: FT.mute, fontFamily: "'IBM Plex Mono', monospace", minWidth: 38, textAlign: "right" }}>
+                    {r.time}
+                  </span>
+                </div>
+              ))}
             </div>
           </div>
         );
@@ -1380,6 +1376,8 @@ function PassengerView({ dbUrl, onAdmin, initialTab = "list" }) {
   const [showTimetable, setShowTimetable] = useState(false);
   const [showVenue, setShowVenue] = useState(false);
   const [venueZone, setVenueZone] = useState(0);
+  const [arrivalMode, setArrivalMode] = useState(() => LS.get("amode", "stops")); // stops|buses
+  useEffect(() => LS.set("amode", arrivalMode), [arrivalMode]);
   const tapRef = useRef(0), tapTimeRef = useRef(0);
 
   useEffect(() => {
@@ -1416,6 +1414,50 @@ function PassengerView({ dbUrl, onAdmin, initialTab = "list" }) {
   const d = new Date();
   const tripsToday = d.getMonth() === 5 && d.getDate() === 14 ? 5 : ROUTES.outbound.trips.length;
   const nowMin = d.getHours() * 60 + d.getMinutes();
+
+  // 정류장 기준 도착 예상 계산 — 운행 중인 모든 버스의 남은 정류장을 집계 (지연 누적 반영)
+  const stopArrivals = (() => {
+    const items = [];
+    for (const [busId, b] of live) {
+      const dir = b.dir === "inbound" ? "inbound" : "outbound";
+      const route = ROUTES[dir];
+      const stops = route.stops;
+      const ci = stops.findIndex((s) => s.name === b.stop);
+      if (ci < 0) continue;
+      const sched = route.trips[(b.trip || 1) - 1];
+      if (!sched || !sched[ci]) continue;
+      const ciSchedMin = toMin(sched[ci]);
+      // 곧 도착 정류장의 지연(분). 시간표보다 늦으면 양수, 빠르면 0.
+      const delay = Math.max(0, nowMin - ciSchedMin);
+      const start = b.arrived ? ci + 1 : ci;
+      for (let i = start; i < stops.length; i++) {
+        const t = sched[i]; if (!t) continue;
+        // 남은 정류장 ETA = (i까지의 시간표 누적 이동시간) + (ci에서 출발하는 시점)
+        // 곧 도착에 도달하는 예상 시각 = max(now, sched[ci]).
+        const adjMins = (toMin(t) - ciSchedMin) + Math.max(0, ciSchedMin - nowMin);
+        items.push({
+          busId, dir, dirLabel: route.label,
+          name: stops[i].name, schedAt: t,
+          mins: adjMins, delay,
+          isFinal: i === stops.length - 1,
+        });
+      }
+    }
+    // 정류장(이름+방향)별로 그룹핑, 같은 정류장에는 다음 도착 1개만 우선 표시
+    const map = new Map();
+    items.forEach((it) => {
+      const key = SHARED_STOPS.has(it.name) ? it.name : `${it.name} (${it.dirLabel})`;
+      if (!map.has(key)) map.set(key, []);
+      map.get(key).push(it);
+    });
+    const out = [];
+    map.forEach((arr, key) => {
+      arr.sort((a, b) => a.mins - b.mins);
+      out.push({ key, name: arr[0].name, dirLabel: arr[0].dirLabel, isShared: SHARED_STOPS.has(arr[0].name), arrivals: arr });
+    });
+    out.sort((a, b) => a.arrivals[0].mins - b.arrivals[0].mins);
+    return out;
+  })();
   const nextDep = (dir) => {
     const ts = ROUTES[dir].trips.slice(0, tripsToday);
     for (let i = 0; i < ts.length; i++) { if (toMin(ts[i][0]) >= nowMin) return { idx: i, time: ts[i][0] }; }
@@ -1500,7 +1542,65 @@ function PassengerView({ dbUrl, onAdmin, initialTab = "list" }) {
                 })}
               </div>
             ) : (
-              live.map(([id, b]) => <BusCard key={id} id={id} bus={b} agoText={agoText} nowMin={nowMin} tripsToday={tripsToday} />)
+              <React.Fragment>
+                {/* 정류장별/버스별 토글 */}
+                <div className="flex" style={{ border: "2px solid " + FT.ink, borderRadius: 10, overflow: "hidden" }}>
+                  {[
+                    { k: "stops", label: "정류장별" },
+                    { k: "buses", label: "버스별" },
+                  ].map((t, i) => (
+                    <button key={t.k} onClick={() => setArrivalMode(t.k)}
+                      style={{ flex: 1, padding: "7px 0", fontSize: 12, fontFamily: "'Jua', sans-serif", fontWeight: 700,
+                        background: arrivalMode === t.k ? FT.orange : "#fff",
+                        color: arrivalMode === t.k ? "#fff" : FT.ink,
+                        borderLeft: i ? "2px solid " + FT.ink : "none" }}>
+                      {t.label}
+                    </button>
+                  ))}
+                </div>
+                {arrivalMode === "stops" ? (
+                  stopArrivals.length === 0 ? (
+                    <div style={{ textAlign: "center", padding: "16px 0", fontSize: 12, color: FT.inkSoft, fontFamily: "'Jua', sans-serif" }}>
+                      예정된 도착이 없습니다.
+                    </div>
+                  ) : (
+                    stopArrivals.map((s) => {
+                      const dirColor = s.isShared ? FT.ink : (s.arrivals[0].dir === "outbound" ? FT.orange : FT.teal);
+                      const next = s.arrivals[0];
+                      return (
+                        <div key={s.key} style={{ background: "#fff", border: "1.5px solid " + FT.ink, borderRadius: 10, padding: "8px 10px", boxShadow: "1.5px 1.5px 0 " + FT.ink }}>
+                          <div className="flex items-center gap-2 mb-1">
+                            <span style={{ display: "inline-block", width: 7, height: 7, borderRadius: "50%", background: dirColor, flexShrink: 0 }} />
+                            <span className="truncate" style={{ flex: 1, fontSize: 13, color: FT.ink, fontFamily: "'Jua', sans-serif", fontWeight: 700 }}>
+                              {s.name}
+                            </span>
+                            {!s.isShared && (
+                              <span style={{ fontSize: 10, color: FT.inkSoft, fontFamily: "'Jua', sans-serif" }}>{s.dirLabel}</span>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-2" style={{ fontFamily: "'Jua', sans-serif" }}>
+                            <span style={{ fontSize: 11, color: FT.inkSoft }}>{next.busId}번 버스</span>
+                            {next.delay > 0 && (
+                              <span style={{ fontSize: 10, color: "#dc2626", fontWeight: 700 }}>+{next.delay}분 지연</span>
+                            )}
+                            <span style={{ fontSize: 13, color: next.delay > 0 ? "#dc2626" : FT.orangeDark, fontWeight: 700, marginLeft: "auto" }}>
+                              {next.mins === 0 ? "잠시 후" : `약 ${next.mins}분 후`}
+                            </span>
+                            <span style={{ fontSize: 11, color: FT.mute, fontFamily: "'IBM Plex Mono', monospace" }}>{next.schedAt} 예정</span>
+                          </div>
+                          {s.arrivals.length > 1 && (
+                            <div style={{ marginTop: 4, fontSize: 10, color: FT.mute, fontFamily: "'Jua', sans-serif" }}>
+                              다음: {s.arrivals.slice(1, 3).map((a) => `${a.busId}번 ${a.mins === 0 ? "곧" : `${a.mins}분 후`}`).join(" · ")}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })
+                  )
+                ) : (
+                  live.map(([id, b]) => <BusCard key={id} id={id} bus={b} agoText={agoText} nowMin={nowMin} tripsToday={tripsToday} />)
+                )}
+              </React.Fragment>
             )}
 
             {/* 행사 안내 — 버스 위치 아래 항상 표시 */}
