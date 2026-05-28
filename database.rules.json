@@ -1,0 +1,56 @@
+{
+  "rules": {
+    ".read": true,
+    ".write": false,
+
+    "buses": {
+      ".read": true,
+      "$busId": {
+        ".write": "auth != null && (root.child('drivers').child(auth.uid).exists() || root.child('admins').child(auth.uid).exists())",
+        ".validate": "newData.hasChildren(['dir','trip','ts']) || newData.val() == null"
+      }
+    },
+
+    "coords": {
+      ".read": true,
+      ".write": "auth != null && (root.child('drivers').child(auth.uid).exists() || root.child('admins').child(auth.uid).exists())"
+    },
+
+    "viapoints": {
+      ".read": true,
+      ".write": "auth != null && (root.child('drivers').child(auth.uid).exists() || root.child('admins').child(auth.uid).exists())"
+    },
+
+    "zones": {
+      ".read": true,
+      ".write": "auth != null && root.child('admins').child(auth.uid).exists()"
+    },
+
+    "notice": {
+      ".read": true,
+      ".write": "auth != null && root.child('admins').child(auth.uid).exists()"
+    },
+
+    "counts": {
+      ".read": true,
+      "$date": {
+        ".write": "auth != null && (root.child('drivers').child(auth.uid).exists() || root.child('admins').child(auth.uid).exists())"
+      }
+    },
+
+    "handoff": {
+      ".read": true,
+      ".write": "auth != null && (root.child('drivers').child(auth.uid).exists() || root.child('admins').child(auth.uid).exists())"
+    },
+
+    "drivers": {
+      ".read": "auth != null && root.child('admins').child(auth.uid).exists()",
+      ".write": "auth != null && root.child('admins').child(auth.uid).exists()"
+    },
+
+    "admins": {
+      ".read": "auth != null && root.child('admins').child(auth.uid).exists()",
+      ".write": "auth != null && root.child('admins').child(auth.uid).exists()"
+    }
+  }
+}

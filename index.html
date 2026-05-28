@@ -86,7 +86,7 @@
 
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef, useMemo } = React;
-const BUILD = "b203"; /* 화면 우하단 표시 — 최신 배포 확인용 */
+const BUILD = "b204"; /* 화면 우하단 표시 — 최신 배포 확인용 */
 
 /* 실시간 위치 공유용 Firebase DB 주소. 여기에 한 번 넣어두면 승객 링크가 ?view=map 만 남아 깔끔해집니다. */
 const SHARE_DB = "https://innum-bus-default-rtdb.firebaseio.com";
@@ -1157,6 +1157,115 @@ const effectiveVia = (dir, stopName) => {
   return s && Array.isArray(s.approachVia) ? s.approachVia : [];
 };
 
+/* P1-2: 운영자 공지/재난 안내 편집기 — /notice 노드에 PUT, 승객 페이지 상단에 빨간/노란 띠로 표시 */
+function NoticeEditor({ onClose, dbUrl, getAuth, refreshAuth }) {
+  const [cur, setCur] = useState(null);
+  const [msg, setMsg] = useState("");
+  const [level, setLevel] = useState("warn"); // info|warn|danger
+  const [text, setText] = useState("");
+  const [active, setActive] = useState(true);
+  const [status, setStatus] = useState("");
+  useEffect(() => {
+    if (!dbUrl) return;
+    const base = dbUrl.replace(/\/+$/, "");
+    fetch(`${base}/notice.json`).then((r) => r.json()).then((d) => {
+      if (d && typeof d === "object") {
+        setCur(d);
+        setText(d.message || "");
+        setLevel(d.level || "warn");
+        setActive(d.active !== false);
+      }
+    }).catch(() => {});
+  }, [dbUrl]);
+  const put = async (tok, body) => {
+    const base = dbUrl.replace(/\/+$/, "");
+    const auth = tok ? `?auth=${encodeURIComponent(tok)}` : "";
+    return fetch(`${base}/notice.json${auth}`, { method: "PUT", body: JSON.stringify(body) });
+  };
+  const save = async (publish) => {
+    const body = { message: text.trim(), level, active: !!publish, ts: Date.now() };
+    if (publish && !body.message) { setStatus("⚠ 공지 내용을 입력하세요"); return; }
+    if (!dbUrl) { setStatus("⚠ DB 주소 없음"); return; }
+    setStatus("저장 중…");
+    try {
+      let r = await put(getAuth && getAuth(), body);
+      if ((r.status === 401 || r.status === 403) && refreshAuth) {
+        setStatus("인증 갱신 중…");
+        const tok = await refreshAuth();
+        if (tok) r = await put(tok, body);
+      }
+      if (r.ok) { setStatus(publish ? "✅ 공지 발송 — 전 승객 화면 상단에 표시됨" : "✅ 공지 해제됨"); setCur(body); setActive(!!publish); }
+      else if (r.status === 401 || r.status === 403) setStatus("⚠ 인증 실패");
+      else setStatus("⚠ Firebase 응답 " + r.status);
+    } catch (_) { setStatus("⚠ 네트워크 오류"); }
+  };
+  const presets = [
+    { label: "🌧 우천 지연", lv: "warn", t: "우천으로 셔틀 운행이 지연되고 있습니다. 잠시만 기다려 주세요." },
+    { label: "🚧 노선 변경", lv: "warn", t: "교통 통제로 일부 노선이 변경되었습니다. 안내방송을 확인해 주세요." },
+    { label: "⛔ 운행 중단", lv: "danger", t: "안전상의 이유로 셔틀 운행이 일시 중단되었습니다. 추후 안내 드리겠습니다." },
+    { label: "ⓘ 정상 운행", lv: "info", t: "셔틀이 정상 운행 중입니다." },
+  ];
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      style={{ background: "rgba(0,0,0,0.7)" }} onClick={onClose}>
+      <div className="w-full max-w-md rounded-2xl border-2 p-4 space-y-3 max-h-[92vh] overflow-y-auto"
+        style={{ background: "#13151c", borderColor: "#3a3f54" }} onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between">
+          <div className="text-sm font-bold" style={{ color: "#fbbf24", fontFamily: "'Jua', sans-serif" }}>
+            📢 공지·재난 안내
+          </div>
+          <button onClick={onClose} className="text-slate-400 text-lg leading-none px-1" aria-label="닫기">×</button>
+        </div>
+        <div className="text-[10px] text-slate-500">
+          모든 승객 화면 상단에 빨간/노란 띠로 표시됩니다. 새 공지는 ts 가 갱신돼 이전에 닫은 사용자에게도 다시 나타납니다.
+        </div>
+        {cur && cur.active && (
+          <div className="text-[10px]" style={{ color: "#22d65f" }}>
+            ● 현재 표시 중: <span style={{ color: "#cbd5e1" }}>{cur.message}</span>
+          </div>
+        )}
+        <div className="grid grid-cols-4 gap-1">
+          {presets.map((p) => (
+            <button key={p.label} onClick={() => { setText(p.t); setLevel(p.lv); }}
+              className="px-1.5 py-1 rounded text-[10px]"
+              style={{ background: "#1c2030", color: "#cbd5e1", border: "1px solid #3a3f54", fontFamily: "'Jua', sans-serif" }}>
+              {p.label}
+            </button>
+          ))}
+        </div>
+        <textarea value={text} onChange={(e) => setText(e.target.value)} rows={4}
+          placeholder="공지 내용을 입력하세요"
+          className="w-full px-2 py-1.5 rounded text-[12px]"
+          style={{ background: "#0a0b0f", border: "1px solid #3a3f54", color: "#cbd5e1", fontFamily: "'Jua', sans-serif" }} />
+        <div className="flex items-center gap-2 text-[11px]" style={{ fontFamily: "'Jua', sans-serif" }}>
+          <span style={{ color: "#94a3b8" }}>중요도</span>
+          {[{ v: "info", t: "정보", c: "#fb923c" }, { v: "warn", t: "경고", c: "#f59e0b" }, { v: "danger", t: "위험", c: "#dc2626" }].map((o) => (
+            <button key={o.v} onClick={() => setLevel(o.v)}
+              className="px-2 py-0.5 rounded font-bold"
+              style={{ background: level === o.v ? o.c : "rgba(255,255,255,0.04)", color: level === o.v ? "#fff" : "#cbd5e1",
+                border: "1px solid " + (level === o.v ? o.c : "#3a3f54") }}>
+              {o.t}
+            </button>
+          ))}
+        </div>
+        {status && <div className="text-[11px]" style={{ color: status.startsWith("✅") ? "#22d65f" : status.startsWith("⚠") ? "#fca5a5" : "#fbbf24" }}>{status}</div>}
+        <div className="grid grid-cols-2 gap-2">
+          <button onClick={() => save(false)}
+            className="px-3 py-2 rounded-lg text-xs font-bold"
+            style={{ background: "rgba(100,116,139,0.18)", color: "#cbd5e1", border: "1px solid #3a3f54", fontFamily: "'Jua', sans-serif" }}>
+            공지 해제
+          </button>
+          <button onClick={() => save(true)}
+            className="px-3 py-2 rounded-lg text-xs font-bold"
+            style={{ background: "#dc2626", color: "#fff", fontFamily: "'Jua', sans-serif" }}>
+            발송
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /* 행사 구역 좌표 편집기 — 운영자 전용. 지도에서 드래그로 위치 설정 + Firebase /zones 동기화 */
 function ZoneEditor({ onClose, dbUrl, getAuth, refreshAuth }) {
   const elRef = useRef(null);
@@ -1712,6 +1821,9 @@ function LiveMapView({ dbUrl }) {
     const L = window.L;
     const map = L.map(elRef.current, { zoomControl: true });
     L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 19, attribution: "© OpenStreetMap" }).addTo(map);
+    // P1-6: 명시적 pane 분리 — 아래에서 위로 zone(390) → route(395) → stops(400 기본) → markers(600 기본)
+    map.createPane("zonePane"); map.getPane("zonePane").style.zIndex = 390;
+    map.createPane("routePane"); map.getPane("routePane").style.zIndex = 395;
     map.setView([35.135, 126.94], 14);
     mapRef.current = map;
     setTimeout(() => map.invalidateSize(), 100);
@@ -1842,17 +1954,23 @@ function LiveMapView({ dbUrl }) {
         if (i > 0) getVia(dir, s.name).forEach((v) => routePts.push(v));
         routePts.push(c);
       });
-      lineRefsRef.current[dir] = L.polyline(stopCoords, { color: dirColor, weight: 5, opacity: 0.45, dashArray: dash, lineCap: "round", lineJoin: "round" }).addTo(map);
-      lineRefsRef.current[dir].bringToBack(); // 정류장 마커 아래로
+      lineRefsRef.current[dir] = L.polyline(stopCoords, { pane: "routePane", color: dirColor, weight: 5, opacity: 0.45, dashArray: dash, lineCap: "round", lineJoin: "round" }).addTo(map);
       const path = routePts.map(([la, ln]) => `${ln},${la}`).join(";");
+      // P0-4: OSRM 결과 localStorage 캐시(path 해시 기준) — OSRM 장애·rate-limit 시 즉시 노선 표시
+      const cacheKey = `osrm:${dir}:${path}`;
+      const drawRoad = (road) => {
+        if (lineRefsRef.current[dir]) map.removeLayer(lineRefsRef.current[dir]);
+        lineRefsRef.current[dir] = L.polyline(road, { pane: "routePane", color: dirColor, weight: 5, opacity: 0.85, dashArray: dash, lineCap: "round", lineJoin: "round" }).addTo(map);
+      };
+      const cached = LS.getJSON(cacheKey, null);
+      if (Array.isArray(cached) && cached.length) drawRoad(cached); // 즉시 캐시로 그림
       fetch(`https://router.project-osrm.org/route/v1/driving/${path}?overview=full&geometries=geojson&continue_straight=false`)
         .then((r) => r.ok ? r.json() : null)
         .then((d) => {
           if (!d || d.code !== "Ok" || !d.routes || !d.routes[0]) return;
           const road = d.routes[0].geometry.coordinates.map(([ln, la]) => [la, ln]);
-          if (lineRefsRef.current[dir]) map.removeLayer(lineRefsRef.current[dir]);
-          lineRefsRef.current[dir] = L.polyline(road, { color: dirColor, weight: 5, opacity: 0.85, dashArray: dash, lineCap: "round", lineJoin: "round" }).addTo(map);
-          lineRefsRef.current[dir].bringToBack(); // 도로 폴리라인도 마커 아래로
+          LS.setJSON(cacheKey, road);
+          drawRoad(road);
         })
         .catch(() => {});
     });
@@ -1895,9 +2013,9 @@ function LiveMapView({ dbUrl }) {
       // 타원 영역 폴리곤
       if (rA > 0 && rB > 0) {
         const poly = L.polygon(ellipsePolygon(lat, lng, rA, rB, rot), {
+          pane: "zonePane",
           color: c, weight: 2, opacity: 0.85, fillColor: c, fillOpacity: 0.18, lineCap: "round", lineJoin: "round",
         }).addTo(map);
-        poly.bringToBack();
         zoneLayersRef.current.push(poly);
       }
       const badge = liveItems.length > 0 ? `<span style="display:inline-flex;align-items:center;justify-content:center;min-width:14px;height:14px;border-radius:7px;background:#dc2626;color:#fff;font-size:9px;padding:0 4px;margin-left:3px">${liveItems.length}</span>` : "";
@@ -2243,7 +2361,7 @@ function BusCard({ id, bus, agoText, nowMin, tripsToday, departedInfo }) {
                   width: isCur ? 14 : 11, height: isCur ? 14 : 11, borderRadius: "50%",
                   background: dotBg, border: "2px solid " + dotBorder,
                   boxShadow: isCur && phase !== "arrived" ? `0 0 0 3px ${FT.orangeSoft}` : "none" }} />
-                <span style={{ fontSize: 8, marginTop: 2, whiteSpace: "nowrap", padding: "0 4px",
+                <span style={{ fontSize: 10, marginTop: 2, whiteSpace: "nowrap", padding: "0 4px",
                   color: isCur ? (phase === "arrived" ? FT.tealDark : FT.orangeDark) : isPast ? FT.tealDark : FT.mute,
                   fontWeight: isCur ? 700 : 400 }}>{s.name}</span>
               </div>
@@ -2352,6 +2470,8 @@ function PassengerView({ dbUrl, onAdmin, initialTab = "list" }) {
   const [showTimetable, setShowTimetable] = useState(false);
   const [showVenue, setShowVenue] = useState(false);
   const [venueZone, setVenueZone] = useState(0);
+  const [notice, setNotice] = useState(null); // P1-2: 운영자 공지/재난 안내
+  const [noticeDismissedAt, setNoticeDismissedAt] = useState(() => parseInt(LS.get("noticeDismissedAt", "0"), 10) || 0);
   const tapRef = useRef(0), tapTimeRef = useRef(0);
 
   useEffect(() => {
@@ -2370,6 +2490,30 @@ function PassengerView({ dbUrl, onAdmin, initialTab = "list" }) {
     const id = setInterval(() => { if (!stopped) poll(); }, 3000);
     return () => { stopped = true; clearInterval(id); };
   }, [dbUrl]);
+
+  // P1-2: 공지(notice) 폴링 — 30초 간격
+  useEffect(() => {
+    if (!dbUrl) return;
+    const base = dbUrl.replace(/\/+$/, "");
+    let stopped = false;
+    const fetchNotice = async () => {
+      try {
+        const r = await fetch(`${base}/notice.json`, { cache: "no-store" });
+        const d = await r.json();
+        if (d && d.active && d.message) setNotice(d); else setNotice(null);
+      } catch (_) {}
+    };
+    fetchNotice();
+    const id = setInterval(() => { if (!stopped) fetchNotice(); }, 30000);
+    return () => { stopped = true; clearInterval(id); };
+  }, [dbUrl]);
+
+  const dismissNotice = () => {
+    if (!notice) return;
+    LS.set("noticeDismissedAt", String(notice.ts || Date.now()));
+    setNoticeDismissedAt(notice.ts || Date.now());
+  };
+  const showNotice = notice && (notice.ts || 0) > noticeDismissedAt;
 
   const onTitleTap = () => {
     const t = Date.now();
@@ -2543,9 +2687,9 @@ function PassengerView({ dbUrl, onAdmin, initialTab = "list" }) {
                 &lt;무등생각&gt; 셔틀버스 안내
               </div>
             </div>
-            <div title={statusText}
+            <div title={statusText} role="status" aria-live="polite" aria-label={statusText}
               className={live.length > 0 ? "animate-pulse" : ""}
-              style={{ position: "absolute", top: 12, right: 12, width: 10, height: 10, borderRadius: "50%",
+              style={{ position: "absolute", top: 12, right: 12, width: 12, height: 12, borderRadius: "50%",
                 background: conn === "error" ? "#B91C1C" : live.length > 0 ? FT.teal : FT.mute,
                 border: "1.5px solid " + FT.ink, boxShadow: "1px 1px 0 " + FT.ink }} />
           </div>
@@ -2553,6 +2697,24 @@ function PassengerView({ dbUrl, onAdmin, initialTab = "list" }) {
 
           {/* body */}
           <div className="space-y-3" style={{ background: FT.paper, padding: 12, flex: 1, minHeight: 0, overflowY: "auto" }}>
+            {/* P1-2: 운영자 공지/재난 띠 — 새 공지가 오면 상단에 빨간/노란 배너 */}
+            {showNotice && (() => {
+              const lv = notice.level || "info";
+              const bg = lv === "danger" ? "#dc2626" : lv === "warn" ? "#f59e0b" : FT.orange;
+              const ic = lv === "danger" ? "⛔" : lv === "warn" ? "⚠" : "ⓘ";
+              return (
+                <div role="alert" aria-live="assertive"
+                  style={{ background: bg, color: "#fff", border: "2px solid " + FT.ink, borderRadius: 10,
+                    padding: "9px 12px", display: "flex", alignItems: "flex-start", gap: 8,
+                    boxShadow: "2px 2px 0 " + FT.ink, fontFamily: "'Jua', sans-serif" }}>
+                  <span style={{ fontSize: 18, lineHeight: "20px", flexShrink: 0 }}>{ic}</span>
+                  <div style={{ fontSize: 13, fontWeight: 700, flex: 1, lineHeight: 1.35, whiteSpace: "pre-wrap" }}>{notice.message}</div>
+                  <button onClick={dismissNotice} aria-label="공지 닫기"
+                    style={{ background: "rgba(255,255,255,0.25)", border: "1.5px solid #fff", color: "#fff",
+                      width: 28, height: 28, borderRadius: 6, fontSize: 14, fontWeight: 700, flexShrink: 0, cursor: "pointer" }}>×</button>
+                </div>
+              );
+            })()}
             {live.length === 0 ? (
               <div className="py-2 space-y-2">
                 <div style={{ textAlign: "center", color: FT.inkSoft, fontFamily: "'Jua', sans-serif", fontSize: 13, lineHeight: 1.5, marginBottom: 6 }}>
@@ -2636,9 +2798,11 @@ function PassengerView({ dbUrl, onAdmin, initialTab = "list" }) {
               </div>
               <div className="space-y-2">
                 {FESTIVAL_ZONES.map((z) => (
-                  <div key={z.num} onClick={() => { setVenueZone(z.num); setShowVenue(true); }}
-                    style={{ display: "flex", alignItems: "stretch", gap: 10, background: "#fff",
-                      border: "1.5px solid " + FT.ink, borderRadius: 10, padding: "8px 10px", cursor: "pointer" }}>
+                  <button key={z.num} type="button" onClick={() => { setVenueZone(z.num); setShowVenue(true); }}
+                    aria-label={`${z.num}번 구역 ${z.title} 상세 보기`}
+                    style={{ width: "100%", minHeight: 48, display: "flex", alignItems: "stretch", gap: 10, background: "#fff",
+                      border: "1.5px solid " + FT.ink, borderRadius: 10, padding: "8px 10px", cursor: "pointer",
+                      textAlign: "left", font: "inherit" }}>
                     <div style={{ width: 26, height: 26, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center",
                       background: z.num % 2 ? FT.orange : FT.teal, color: "#fff", border: "2px solid " + FT.ink, borderRadius: 7,
                       fontFamily: "'Jua', sans-serif", fontWeight: 700, fontSize: 13 }}>{z.num}</div>
@@ -2646,7 +2810,7 @@ function PassengerView({ dbUrl, onAdmin, initialTab = "list" }) {
                       <div style={{ color: FT.ink, fontFamily: "'Jua', sans-serif", fontWeight: 700, fontSize: 12 }}>{z.title}</div>
                       <div style={{ color: FT.inkSoft, fontFamily: "'Jua', sans-serif", fontSize: 10, marginTop: 1 }}>{z.sub}</div>
                     </div>
-                  </div>
+                  </button>
                 ))}
               </div>
               <div style={{ marginTop: 8, fontSize: 10, color: FT.inkSoft, fontFamily: "'Jua', sans-serif" }}>
@@ -2759,11 +2923,15 @@ function App() {
   useEffect(() => LS.set("countsenabled", countsEnabled ? "1" : "0"), [countsEnabled]);
   const fmtDateKey = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
   const [dateKey, setDateKey] = useState(() => fmtDateKey(new Date()));
-  // 자정 경계 대응: 매 분 dateKey 재계산해 새 일자로 자연 전환
+  // 자정 경계 대응: 매 30초 dateKey 재계산. 변경 직전 디바운스 큐 flush(P0-6)는 flushCountsWritesRef 로 처리.
+  const flushCountsWritesRef = useRef(() => {});
   useEffect(() => {
     const id = setInterval(() => {
       const nk = fmtDateKey(new Date());
-      setDateKey((prev) => prev !== nk ? nk : prev);
+      setDateKey((prev) => {
+        if (prev !== nk) flushCountsWritesRef.current && flushCountsWritesRef.current();
+        return prev !== nk ? nk : prev;
+      });
     }, 30000);
     return () => clearInterval(id);
   }, []);
@@ -2779,6 +2947,7 @@ function App() {
   const gpsLastUpdateRef = useRef(0);
   const [gpsStale, setGpsStale] = useState(false);
   const authTokenRef = useRef("");
+  const tokenIssuedAtRef = useRef(0); // P0-1: 토큰 발급 시각 — visibilitychange 시 사전 재발급 판단
   const [progTimeBase, setProgTimeBase] = useState(() => LS.get("progbase", "now")); // now|trip
 
   // TTS
@@ -3335,6 +3504,7 @@ function App() {
   const [showTimetable, setShowTimetable] = useState(false);
   const [showViaEditor, setShowViaEditor] = useState(false);
   const [showZoneEditor, setShowZoneEditor] = useState(false);
+  const [showNoticeEditor, setShowNoticeEditor] = useState(false);
   const [showBackup, setShowBackup] = useState(false);
   const openMentBackup = () => { setMentMsg(""); setMentBackup(JSON.stringify(ments, null, 2)); };
   const copyMent = () => {
@@ -3380,8 +3550,11 @@ function App() {
     watchIdRef.current = navigator.geolocation.watchPosition(
       (pos) => {
         const speed = pos.coords.speed; // m/s, null on some devices
+        const accuracy = pos.coords.accuracy;
+        // P0-2: 정확도 가드 — 80m 이상 노이즈는 무시 (단 최근 30초 안에 양호한 fix가 있을 때만)
+        if (accuracy > 80 && gpsLastUpdateRef.current && Date.now() - gpsLastUpdateRef.current < 30000) return;
         gpsLastUpdateRef.current = Date.now();
-        setUserPos({ lat: pos.coords.latitude, lng: pos.coords.longitude, accuracy: pos.coords.accuracy, speed });
+        setUserPos({ lat: pos.coords.latitude, lng: pos.coords.longitude, accuracy, speed });
         setGpsError(null);
         if (permissionState !== "granted") setPermissionState("granted");
       },
@@ -3426,6 +3599,7 @@ function App() {
          지나친 정류장은 passed 처리해 건너뜀에서 복구 가능하도록 함 --- */
   useEffect(() => {
     if (!autoMode || !userPos) return;
+    if (manualWaiting) return; // P1-1: 일시정지(대기) 중에는 자동 안내 잠금
     // 최대 3 정류장 앞까지만 검색 — 테스트/노이즈로 인한 큰 점프 방지
     const searchLimit = Math.min(currentIdx + 4, stops.length);
     let nearestIdx = -1, nearestDist = Infinity;
@@ -3464,6 +3638,7 @@ function App() {
   /* --- Auto leg-switch: 종점 도착 후, 연속으로 반경*1.5를 벗어나면 전환 (GPS 노이즈 히스테리시스) --- */
   useEffect(() => {
     if (!autoMode || !autoLegSwitch || !userPos) return;
+    if (manualWaiting) return; // P1-1: 일시정지(대기) 중에는 자동 회차 전환 잠금
     if (!isAtTerminus || !nextLeg || !legSwitchArmedRef.current) return;
     const tc = coords[coordKey(direction, stops[stops.length - 1].name)];
     if (!tc) return;
@@ -3473,7 +3648,7 @@ function App() {
     } else {
       legDepartCountRef.current = 0; // 다시 반경 안이면 리셋
     }
-  }, [userPos, autoMode, autoLegSwitch, isAtTerminus, nextLeg, triggerRadius, coords]);
+  }, [userPos, autoMode, autoLegSwitch, isAtTerminus, nextLeg, triggerRadius, coords, manualWaiting]);
 
   useEffect(() => { if (!autoMode) { announcedRef.current = new Set(); legSwitchArmedRef.current = false; legDepartCountRef.current = 0; } }, [autoMode]);
 
@@ -3500,11 +3675,11 @@ function App() {
 
   /* 승하차 카운트 — 마운트 시 localStorage 먼저 로드, 가능하면 Firebase로 덮어쓰기 */
   useEffect(() => {
-    // 1) localStorage 즉시 복원
+    // 1) localStorage 즉시 복원 — P0-6: 새 날짜로 바뀌면 빈 객체로 초기화(이전 일자 잔존 방지)
     const lsKey = `counts:${dateKey}`;
     const stored = LS.getJSON(lsKey, null);
-    if (stored && typeof stored === "object") setCounts(stored);
-    // 2) Firebase 동기화(가능하면)
+    setCounts(stored && typeof stored === "object" ? stored : {});
+    // 2) Firebase 동기화(가능하면) — 서버 응답으로 완전 교체
     if (!shareUrl) return;
     const base = shareUrl.replace(/\/+$/, "");
     fetch(`${base}/counts/${dateKey}.json`).then((r) => r.json()).then((data) => {
@@ -3520,7 +3695,7 @@ function App() {
           });
         });
       });
-      setCounts((prev) => ({ ...prev, ...flat }));
+      setCounts(flat);
     }).catch(() => {});
   }, [shareUrl, dateKey]);
   /* counts 상태가 바뀌면 localStorage에 즉시 저장(새로고침 후에도 복원) */
@@ -3532,7 +3707,8 @@ function App() {
     const base = shareUrl.replace(/\/+$/, "");
     const auth = authTokenRef.current ? `?auth=${encodeURIComponent(authTokenRef.current)}` : "";
     const path = `${base}/counts/${dateKey}/${dir}/${trip}/${encodeURIComponent(stop)}.json${auth}`;
-    fetch(path, { method: "PUT", body: JSON.stringify(data) }).catch(() => {});
+    // P1-5: keepalive=true — pagehide/탭 종료 직전 호출돼도 OS가 살려 보냄
+    fetch(path, { method: "PUT", body: JSON.stringify(data), keepalive: true }).catch(() => {});
   };
 
   /* 이전 정류장(현 정류장 제외)까지의 누적 (탑승 합 − 하차 합) = 도착 시점 탑승 인원. 음수 0 캡. */
@@ -3638,6 +3814,18 @@ function App() {
     });
   };
   useEffect(() => () => flushCountsWrites(), []); // unmount 시 강제 flush
+  // P0-6: ref 로 노출해 자정 롤오버 인터벌에서도 호출 가능
+  useEffect(() => { flushCountsWritesRef.current = flushCountsWrites; });
+  /* P1-5: pagehide/freeze 시점에 디바운스 큐 즉시 flush — keepalive=true 로 OS 가 살려 보냄 */
+  useEffect(() => {
+    const onHide = () => flushCountsWrites();
+    window.addEventListener("pagehide", onHide);
+    document.addEventListener("freeze", onHide);
+    return () => {
+      window.removeEventListener("pagehide", onHide);
+      document.removeEventListener("freeze", onHide);
+    };
+  }, []);
 
   /* 현재 회차의 누적 탑승 인원 (탑승합계 - 하차합계) */
   const onboardCount = (() => {
@@ -3668,6 +3856,7 @@ function App() {
       firebaseSignIn().then((d) => {
         if (d && d.idToken) {
           authTokenRef.current = d.idToken; // 토큰 즉시 저장 (이전 버전 빠뜨려 401 발생)
+          tokenIssuedAtRef.current = Date.now();
           setGpsError(null);
           if (!autoMode) primeTTS();
           broadcastFailRef.current = 0; setBroadcastStatus("ok"); setLastBroadcastStatus(null);
@@ -3709,13 +3898,35 @@ function App() {
     const signIn = async () => {
       try {
         const d = await firebaseSignIn();
-        if (d.idToken) { authTokenRef.current = d.idToken; setGpsError(""); }
+        if (d.idToken) {
+          authTokenRef.current = d.idToken;
+          tokenIssuedAtRef.current = Date.now();
+          setGpsError("");
+        }
         else { authTokenRef.current = ""; setGpsError("쓰기 로그인 실패: " + ((d.error && d.error.message) || "정보 확인")); }
       } catch (_) { setGpsError("쓰기 로그인 네트워크 오류"); }
     };
     signIn();
     timer = setInterval(() => { if (!stopped) signIn(); }, 30 * 60 * 1000);
-    return () => { stopped = true; clearInterval(timer); };
+    // P0-1: 포커스 복귀 시 토큰 잔여 시간 짧으면 사전 재발급 + GPS 재요청
+    const onVis = () => {
+      if (document.visibilityState !== "visible" || stopped) return;
+      const ageMin = (Date.now() - tokenIssuedAtRef.current) / 60000;
+      if (!authTokenRef.current || ageMin > 25) signIn();
+      // GPS 60초 이상 stale이면 한 번 강제 refresh
+      if (gpsLastUpdateRef.current && Date.now() - gpsLastUpdateRef.current > 60000 && navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(
+          (pos) => {
+            gpsLastUpdateRef.current = Date.now();
+            setUserPos({ lat: pos.coords.latitude, lng: pos.coords.longitude, accuracy: pos.coords.accuracy, speed: pos.coords.speed });
+          },
+          () => {},
+          { enableHighAccuracy: true, maximumAge: 0, timeout: 8000 }
+        );
+      }
+    };
+    document.addEventListener("visibilitychange", onVis);
+    return () => { stopped = true; clearInterval(timer); document.removeEventListener("visibilitychange", onVis); };
   }, [sharing, driverEmail, driverPass, apiKey]);
 
   /* --- 실시간 위치 공유: 켜져 있을 때 3초마다 broadcast (GPS 없어도 운행 정보 송신 가능) --- */
@@ -3746,7 +3957,10 @@ function App() {
     const canEnterArrived = (speed != null ? speedSlow : true);
     const prevArrived = arrivedStateRef.current;
     let arrivedNow = prevArrived;
-    if (distToCur != null) {
+    // P1-1: 일시정지(대기) 중에는 도착 히스테리시스/자동 출발 TTS 잠금
+    if (manualWaiting) {
+      arrivedNow = false;
+    } else if (distToCur != null) {
       if (!prevArrived && distToCur < arrivedDist && canEnterArrived) arrivedNow = true;
       if (prevArrived && distToCur > 50) arrivedNow = false;
     } else if (prevArrived && (!hasGps)) {
@@ -3784,7 +3998,7 @@ function App() {
           if (!authRetryAtRef.current || now2 - authRetryAtRef.current > 60000) {
             authRetryAtRef.current = now2;
             authTokenRef.current = "";
-            firebaseSignIn().then((d) => { if (d && d.idToken) authTokenRef.current = d.idToken; }).catch(() => {});
+            firebaseSignIn().then((d) => { if (d && d.idToken) { authTokenRef.current = d.idToken; tokenIssuedAtRef.current = Date.now(); } }).catch(() => {});
           }
         }
         if (!r.ok) throw new Error(String(r.status));
@@ -3792,8 +4006,10 @@ function App() {
         setBroadcastStats((p) => ({ lastAt: Date.now(), count: p.count + 1, failCount: 0 }));
       })
       .catch((err) => {
-        broadcastFailRef.current += 1;
         const msg = String(err && err.message || err || "");
+        // P0-1: 401/403(인증)은 broadcast 백오프에 포함하지 않음 — 토큰 재발급 경로(별도)에서 처리
+        const isAuthErr = msg === "401" || msg === "403";
+        if (!isAuthErr) broadcastFailRef.current += 1;
         // HTTP 숫자 코드인지, 네트워크 오류인지 구분
         const code = /^\d{3}$/.test(msg) ? msg : (typeof navigator !== "undefined" && navigator.onLine === false ? "오프라인" : "네트워크");
         setLastBroadcastStatus(code);
@@ -4859,6 +5075,12 @@ function App() {
                 fontFamily: "'Jua', sans-serif" }}>
               🎪 행사 주요 구역 좌표 편집
             </button>
+            <button onClick={() => setShowNoticeEditor(true)}
+              className="mt-2 w-full py-1.5 rounded text-[11px] flex items-center justify-center gap-1"
+              style={{ background: "rgba(220,38,38,0.12)", color: "#fca5a5", border: "1px solid rgba(220,38,38,0.3)",
+                fontFamily: "'Jua', sans-serif" }}>
+              📢 공지·재난 안내 발송
+            </button>
             <button onClick={() => setShowBackup(true)}
               className="mt-2 w-full py-1.5 rounded text-[11px] flex items-center justify-center gap-1"
               style={{ background: "rgba(251,191,36,0.12)", color: "#fbbf24", border: "1px solid rgba(251,191,36,0.3)",
@@ -4980,7 +5202,9 @@ function App() {
       {showStats && <StatsModal counts={counts} dateKey={dateKey} onClose={() => setShowStats(false)} onReset={resetCountsToday} busCapacity={busCapacity} setBusCapacity={setBusCapacity} countsEnabled={countsEnabled} setCountsEnabled={setCountsEnabled} />}
       {showViaEditor && <ViaEditor onClose={() => setShowViaEditor(false)} dbUrl={shareUrl} getAuth={() => authTokenRef.current} />}
       {showZoneEditor && <ZoneEditor onClose={() => setShowZoneEditor(false)} dbUrl={shareUrl} getAuth={() => authTokenRef.current}
-        refreshAuth={async () => { try { const d = await firebaseSignIn(); if (d && d.idToken) { authTokenRef.current = d.idToken; return d.idToken; } } catch (_) {} return null; }} />}
+        refreshAuth={async () => { try { const d = await firebaseSignIn(); if (d && d.idToken) { authTokenRef.current = d.idToken; tokenIssuedAtRef.current = Date.now(); return d.idToken; } } catch (_) {} return null; }} />}
+      {showNoticeEditor && <NoticeEditor onClose={() => setShowNoticeEditor(false)} dbUrl={shareUrl} getAuth={() => authTokenRef.current}
+        refreshAuth={async () => { try { const d = await firebaseSignIn(); if (d && d.idToken) { authTokenRef.current = d.idToken; tokenIssuedAtRef.current = Date.now(); return d.idToken; } } catch (_) {} return null; }} />}
       {showBackup && <BackupModal onClose={() => setShowBackup(false)} counts={counts} dateKey={dateKey} />}
 
       {/* 멘트 편집·백업·복원 모달 */}
