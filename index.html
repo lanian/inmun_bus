@@ -66,7 +66,7 @@
 
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef, useMemo } = React;
-const BUILD = "b132"; /* 화면 우하단 표시 — 최신 배포 확인용 */
+const BUILD = "b133"; /* 화면 우하단 표시 — 최신 배포 확인용 */
 
 /* 실시간 위치 공유용 Firebase DB 주소. 여기에 한 번 넣어두면 승객 링크가 ?view=map 만 남아 깔끔해집니다. */
 const SHARE_DB = "https://innum-bus-default-rtdb.firebaseio.com";
@@ -1833,7 +1833,38 @@ function PassengerView({ dbUrl, onAdmin, initialTab = "list" }) {
                 })}
               </div>
             ) : (
-              live.map(([id, b]) => <BusCard key={id} id={id} bus={b} agoText={agoText} nowMin={nowMin} tripsToday={tripsToday} departedInfo={departedRef.current[id]} />)
+              <React.Fragment>
+                {/* 컴팩트 다음 출발 안내 — 항상 한 줄로 노출 */}
+                {(() => {
+                  const ndOut = nextDep("outbound");
+                  const ndIn = nextDep("inbound");
+                  if (!ndOut && !ndIn) {
+                    return (
+                      <div style={{ padding: "6px 10px", background: FT.paper, border: "1.5px solid " + FT.mute + "66", borderRadius: 8,
+                        fontSize: 11, color: FT.inkSoft, fontFamily: "'Jua', sans-serif", fontWeight: 700, textAlign: "center" }}>
+                        오늘 운행 종료
+                      </div>
+                    );
+                  }
+                  const part = (nd, c, arrow) => nd ? (
+                    <span style={{ display: "inline-flex", alignItems: "center", gap: 4, fontFamily: "'Jua', sans-serif" }}>
+                      <span style={{ color: c, fontWeight: 700, fontSize: 11 }}>{arrow}</span>
+                      <span style={{ color: FT.ink, fontFamily: "'IBM Plex Mono', monospace", fontWeight: 700, fontSize: 12 }}>{nd.time}</span>
+                      <span style={{ color: c, fontSize: 11 }}>({Math.max(0, toMin(nd.time) - nowMin)}분)</span>
+                    </span>
+                  ) : (
+                    <span style={{ color: FT.mute, fontSize: 11, fontFamily: "'Jua', sans-serif" }}>{arrow} 종료</span>
+                  );
+                  return (
+                    <div className="flex items-center gap-3" style={{ padding: "6px 10px", background: FT.paper, border: "1.5px solid " + FT.mute + "66", borderRadius: 8, flexWrap: "wrap" }}>
+                      <span style={{ fontSize: 10, color: FT.inkSoft, fontFamily: "'Jua', sans-serif", fontWeight: 700, flexShrink: 0 }}>다음 출발</span>
+                      {part(ndOut, FT.orange, "↗")}
+                      {part(ndIn, FT.teal, "↙")}
+                    </div>
+                  );
+                })()}
+                {live.map(([id, b]) => <BusCard key={id} id={id} bus={b} agoText={agoText} nowMin={nowMin} tripsToday={tripsToday} departedInfo={departedRef.current[id]} />)}
+              </React.Fragment>
             )}
 
             {/* 행사 안내 — 버스 위치 아래 항상 표시 */}
