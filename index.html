@@ -45,7 +45,7 @@
 
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef, useMemo } = React;
-const BUILD = "b96"; /* 화면 우하단 표시 — 최신 배포 확인용 */
+const BUILD = "b97"; /* 화면 우하단 표시 — 최신 배포 확인용 */
 
 /* 실시간 위치 공유용 Firebase DB 주소. 여기에 한 번 넣어두면 승객 링크가 ?view=map 만 남아 깔끔해집니다. */
 const SHARE_DB = "https://innum-bus-default-rtdb.firebaseio.com";
@@ -1427,13 +1427,6 @@ function PassengerView({ dbUrl, onAdmin, initialTab = "list" }) {
             </div>
           </div>
 
-          {/* tabs */}
-          <div className="flex" style={{ borderBottom: "2.5px solid " + FT.ink }}>
-            <button onClick={() => setTab("list")} className="flex-1 py-2.5 text-sm"
-              style={{ background: FT.orange, color: "#fff", fontFamily: "'Jua', sans-serif", fontWeight: 700, borderRight: "2.5px solid " + FT.ink }}>목록</button>
-            <button onClick={() => setTab("map")} className="flex-1 py-2.5 text-sm"
-              style={{ background: "#fff", color: FT.ink, fontFamily: "'Jua', sans-serif", fontWeight: 700 }}>지도 보기</button>
-          </div>
 
           {/* body */}
           <div className="space-y-3" style={{ background: FT.paper, padding: 12, flex: 1, minHeight: 0, overflowY: "auto" }}>
