@@ -38,7 +38,7 @@
 
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef, useMemo } = React;
-const BUILD = "b64"; /* 화면 우하단 표시 — 최신 배포 확인용 */
+const BUILD = "b65"; /* 화면 우하단 표시 — 최신 배포 확인용 */
 
 /* 실시간 위치 공유용 Firebase DB 주소. 여기에 한 번 넣어두면 승객 링크가 ?view=map 만 남아 깔끔해집니다. */
 const SHARE_DB = "https://innum-bus-default-rtdb.firebaseio.com";
@@ -635,10 +635,24 @@ function ViaEditor({ onClose, dbUrl, getAuth }) {
         } else {
           const icon = L.divIcon({
             className: "",
-            html: `<div style="background:${color};color:#fff;border:2px solid ${FT.ink};border-radius:6px;padding:1px 7px;font-family:'Jua',sans-serif;font-size:11px;font-weight:700;cursor:pointer;box-shadow:1.5px 1.5px 0 ${FT.ink};white-space:nowrap;">via ×</div>`,
-            iconSize: [44, 22], iconAnchor: [22, 11],
+            html: `<div style="background:${color};color:#fff;border:2px solid ${FT.ink};border-radius:6px;padding:1px 7px;font-family:'Jua',sans-serif;font-size:11px;font-weight:700;cursor:move;box-shadow:1.5px 1.5px 0 ${FT.ink};white-space:nowrap;">⠿ via ×</div>`,
+            iconSize: [56, 22], iconAnchor: [28, 11],
           });
-          const m = L.marker(p.coord, { icon }).addTo(map);
+          const m = L.marker(p.coord, { icon, draggable: true, autoPan: true }).addTo(map);
+          // 드래그 종료 시 해당 경유점 좌표 갱신
+          m.on("dragend", (e) => {
+            const ll = e.target.getLatLng();
+            const newCoord = [ll.lat, ll.lng];
+            setViaMap((prev) => {
+              const cur = p.stopKey in prev ? prev[p.stopKey] : (ROUTES[p.dir].stops.find((s) => `${p.dir}|${s.name}` === p.stopKey)?.approachVia || []);
+              const idx = cur.findIndex((c) => c[0] === p.coord[0] && c[1] === p.coord[1]);
+              if (idx < 0) return prev;
+              const list = cur.slice();
+              list[idx] = newCoord;
+              return { ...prev, [p.stopKey]: list };
+            });
+          });
+          // 단순 탭(드래그 없는 클릭)은 제거
           m.on("click", (e) => {
             if (e.originalEvent) { e.originalEvent.stopPropagation(); }
             setViaMap((prev) => {
@@ -712,7 +726,7 @@ function ViaEditor({ onClose, dbUrl, getAuth }) {
         <div style={{ background: "#fff", color: FT.ink, padding: "8px 12px", borderRadius: 10,
           border: "2px solid " + FT.ink, fontFamily: "'Jua', sans-serif", fontSize: 12, lineHeight: 1.4,
           boxShadow: "3px 3px 0 " + FT.ink, fontWeight: 700, maxWidth: "70%" }}>
-          경유점 편집 · 클릭=구간에 추가 · via 탭=제거 <span style={{ color: FT.orange }}>(현재 {totalVia}개)</span>
+          경유점 편집 · 빈 곳 클릭=추가 · via 드래그=이동 · via 탭=제거 <span style={{ color: FT.orange }}>(현재 {totalVia}개)</span>
           {syncLabel ? <div style={{ marginTop: 4, fontSize: 11, color: syncColor, fontWeight: 700 }}>{syncLabel}</div> : null}
           {syncDetail ? <div style={{ marginTop: 2, fontSize: 10, color: FT.inkSoft, fontWeight: 400 }}>{syncDetail}</div> : null}
         </div>
