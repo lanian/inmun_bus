@@ -45,7 +45,7 @@
 
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef, useMemo } = React;
-const BUILD = "b69"; /* 화면 우하단 표시 — 최신 배포 확인용 */
+const BUILD = "b70"; /* 화면 우하단 표시 — 최신 배포 확인용 */
 
 /* 실시간 위치 공유용 Firebase DB 주소. 여기에 한 번 넣어두면 승객 링크가 ?view=map 만 남아 깔끔해집니다. */
 const SHARE_DB = "https://innum-bus-default-rtdb.firebaseio.com";
@@ -522,7 +522,10 @@ const FESTIVAL_ZONES = [
 
 /* 행사장 지도 + 프로그램 안내 모달 */
 function VenueModal({ onClose }) {
-  const [showFull, setShowFull] = useState(false);
+  const [expandedImg, setExpandedImg] = useState(null);
+  const [progDay, setProgDay] = useState("day1");
+  const progSrc = progDay === "day1" ? "program-day1.png" : "program-day2.png";
+  const progLabel = progDay === "day1" ? "6.13 (토)" : "6.14 (일)";
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
       style={{ background: "rgba(15,15,18,0.78)" }} onClick={onClose}>
@@ -531,9 +534,9 @@ function VenueModal({ onClose }) {
         onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between">
           <div>
-            <div style={{ fontSize: 11, color: FT.inkSoft, fontFamily: "'Jua', sans-serif" }}>Festival Map</div>
+            <div style={{ fontSize: 11, color: FT.inkSoft, fontFamily: "'Jua', sans-serif" }}>Festival Map · Program</div>
             <div style={{ color: FT.ink, fontFamily: "'Jua', sans-serif", fontWeight: 700, fontSize: 16 }}>
-              행사장 안내 <span style={{ color: FT.orange }}>· 무등생각</span>
+              행사장·프로그램 <span style={{ color: FT.orange }}>· 무등생각</span>
             </div>
             <div style={{ fontSize: 11, color: FT.inkSoft, fontFamily: "'Jua', sans-serif" }}>무등산국립공원 증심사지구 일원</div>
           </div>
@@ -542,14 +545,17 @@ function VenueModal({ onClose }) {
               background: "#fff", color: FT.ink, fontWeight: 700, fontFamily: "'Jua', sans-serif" }}>×</button>
         </div>
 
-        <button onClick={() => setShowFull(true)} aria-label="지도 크게 보기"
+        {/* 행사장 지도 */}
+        <div style={{ fontSize: 12, color: FT.ink, fontFamily: "'Jua', sans-serif", fontWeight: 700, marginTop: 2 }}>🗺️ 행사장 지도</div>
+        <button onClick={() => setExpandedImg("venue.png")} aria-label="지도 크게 보기"
           style={{ width: "100%", background: FT.paper, border: "2px solid " + FT.ink, borderRadius: 10,
             padding: 6, cursor: "zoom-in" }}>
           <img src="venue.png" alt="행사장 지도" style={{ display: "block", width: "100%", borderRadius: 6 }} />
           <div style={{ fontSize: 10, color: FT.inkSoft, fontFamily: "'Jua', sans-serif", marginTop: 4 }}>탭하여 크게 보기</div>
         </button>
 
-        <div style={{ fontSize: 12, color: FT.ink, fontFamily: "'Jua', sans-serif", fontWeight: 700, marginTop: 4 }}>주요 구역</div>
+        {/* 주요 구역 */}
+        <div style={{ fontSize: 12, color: FT.ink, fontFamily: "'Jua', sans-serif", fontWeight: 700, marginTop: 4 }}>📍 주요 구역</div>
         {FESTIVAL_ZONES.map((z) => (
           <div key={z.num} style={{ display: "flex", alignItems: "stretch", gap: 10, background: FT.paper, border: "1.5px solid " + FT.ink, borderRadius: 10, padding: "8px 10px" }}>
             <div style={{ width: 28, height: 28, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center",
@@ -562,19 +568,42 @@ function VenueModal({ onClose }) {
           </div>
         ))}
 
+        {/* 프로그램표 */}
+        <div style={{ fontSize: 12, color: FT.ink, fontFamily: "'Jua', sans-serif", fontWeight: 700, marginTop: 4 }}>🕑 프로그램표</div>
+        <div className="flex gap-1" style={{ border: "2px solid " + FT.ink, borderRadius: 10, overflow: "hidden" }}>
+          {[
+            { k: "day1", label: "6.13 (토)" },
+            { k: "day2", label: "6.14 (일)" },
+          ].map((d, i) => (
+            <button key={d.k} onClick={() => setProgDay(d.k)}
+              style={{ flex: 1, padding: "8px 0", background: progDay === d.k ? FT.orange : "#fff",
+                color: progDay === d.k ? "#fff" : FT.ink, fontFamily: "'Jua', sans-serif", fontWeight: 700, fontSize: 12,
+                borderLeft: i ? "2px solid " + FT.ink : "none" }}>
+              {d.label}
+            </button>
+          ))}
+        </div>
+        <button onClick={() => setExpandedImg(progSrc)} aria-label={`${progLabel} 프로그램 크게 보기`}
+          style={{ width: "100%", background: FT.paper, border: "2px solid " + FT.ink, borderRadius: 10,
+            padding: 6, cursor: "zoom-in" }}>
+          <img src={progSrc} alt={`${progLabel} 프로그램`} style={{ display: "block", width: "100%", borderRadius: 6 }} />
+          <div style={{ fontSize: 10, color: FT.inkSoft, fontFamily: "'Jua', sans-serif", marginTop: 4 }}>탭하여 크게 보기</div>
+        </button>
+
         <div style={{ fontSize: 10, color: FT.inkSoft, fontFamily: "'Jua', sans-serif", lineHeight: 1.6, marginTop: 4 }}>
           ※ 행사 기간 · 6.13.(토) ~ 6.14.(일) <br />
-          종합안내소·쉼터·화장실은 지도 중앙 표기를 확인하세요.
+          종합안내소·쉼터·화장실은 행사장 지도 중앙 표기를 확인하세요.
         </div>
       </div>
 
-      {showFull && (
+      {expandedImg && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center p-2"
-          style={{ background: "rgba(0,0,0,0.92)" }} onClick={() => setShowFull(false)}>
-          <img src="venue.png" alt="행사장 지도(확대)"
-            style={{ maxWidth: "100%", maxHeight: "100%", borderRadius: 8, boxShadow: "4px 4px 0 " + FT.ink }} />
-          <button onClick={() => setShowFull(false)} aria-label="닫기"
-            style={{ position: "absolute", top: 12, right: 12, width: 36, height: 36, borderRadius: 10,
+          style={{ background: "rgba(0,0,0,0.94)", overflow: "auto" }} onClick={() => setExpandedImg(null)}>
+          <img src={expandedImg} alt="확대"
+            style={{ maxWidth: "none", width: "min(180%, 1400px)", height: "auto", borderRadius: 8 }}
+            onClick={(e) => e.stopPropagation()} />
+          <button onClick={() => setExpandedImg(null)} aria-label="닫기"
+            style={{ position: "fixed", top: 12, right: 12, width: 36, height: 36, borderRadius: 10,
               border: "2px solid " + FT.ink, background: "#fff", color: FT.ink, fontWeight: 700, fontFamily: "'Jua', sans-serif" }}>×</button>
         </div>
       )}
