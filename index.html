@@ -45,7 +45,7 @@
 
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef, useMemo } = React;
-const BUILD = "b94"; /* 화면 우하단 표시 — 최신 배포 확인용 */
+const BUILD = "b95"; /* 화면 우하단 표시 — 최신 배포 확인용 */
 
 /* 실시간 위치 공유용 Firebase DB 주소. 여기에 한 번 넣어두면 승객 링크가 ?view=map 만 남아 깔끔해집니다. */
 const SHARE_DB = "https://innum-bus-default-rtdb.firebaseio.com";
@@ -1289,23 +1289,38 @@ function BusCard({ id, bus, agoText, nowMin, tripsToday }) {
         })}
       </div>
 
-      {/* 곧 도착 / 정차 중 정보 — 진행바 아래 한 줄 */}
-      <div style={{ marginTop: 8, padding: "8px 10px", borderRadius: 8,
-        background: bus.arrived ? FT.tealSoft : FT.orangeSoft,
-        border: "1.5px solid " + (bus.arrived ? FT.tealDark : FT.orangeDark),
-        display: "flex", alignItems: "center", gap: 8 }}>
-        <span style={{ fontSize: 11, color: bus.arrived ? FT.tealDark : FT.orangeDark, fontFamily: "'Jua', sans-serif", fontWeight: 700 }}>
-          {bus.arrived ? "● 정차 중" : "곧 도착"}
-        </span>
-        <span className="truncate" style={{ fontSize: 13, color: FT.ink, fontFamily: "'Jua', sans-serif", fontWeight: 700, flex: 1 }}>
-          {bus.stop || "운행 중"}
-        </span>
-        {sched && ci >= 0 && sched[ci] && (
-          <span style={{ fontSize: 11, color: bus.arrived ? FT.tealDark : FT.orangeDark, fontFamily: "'IBM Plex Mono', monospace", flexShrink: 0 }}>
-            {sched[ci]} 예정
-          </span>
-        )}
-      </div>
+      {/* 곧 도착 / 정차 중 정보 — 진행바 아래 한 줄 (카운트다운 포함) */}
+      {(() => {
+        const schedAt = sched && ci >= 0 ? sched[ci] : null;
+        const mins = schedAt ? toMin(schedAt) - nowMin : null;
+        const etaLabel = bus.arrived ? null
+          : mins == null ? null
+          : mins > 0 ? `약 ${mins}분 후`
+          : mins >= -2 ? "잠시 후"
+          : `${-mins}분 지연`;
+        const accent = bus.arrived ? FT.tealDark : FT.orangeDark;
+        return (
+          <div style={{ marginTop: 8, padding: "8px 10px", borderRadius: 8,
+            background: bus.arrived ? FT.tealSoft : FT.orangeSoft,
+            border: "1.5px solid " + accent,
+            display: "flex", alignItems: "center", gap: 8 }}>
+            <span style={{ fontSize: 11, color: accent, fontFamily: "'Jua', sans-serif", fontWeight: 700, flexShrink: 0 }}>
+              {bus.arrived ? "● 정차 중" : "곧 도착"}
+            </span>
+            <span className="truncate" style={{ fontSize: 13, color: FT.ink, fontFamily: "'Jua', sans-serif", fontWeight: 700, flex: 1 }}>
+              {bus.stop || "운행 중"}
+            </span>
+            <span style={{ flexShrink: 0, display: "flex", flexDirection: "column", alignItems: "flex-end", lineHeight: 1.15 }}>
+              {etaLabel && (
+                <span style={{ fontSize: 12, color: accent, fontFamily: "'Jua', sans-serif", fontWeight: 700 }}>{etaLabel}</span>
+              )}
+              {schedAt && (
+                <span style={{ fontSize: 10, color: accent, fontFamily: "'IBM Plex Mono', monospace", opacity: 0.85 }}>{schedAt} 예정</span>
+              )}
+            </span>
+          </div>
+        );
+      })()}
       </React.Fragment>
       )}
     </div>
