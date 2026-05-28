@@ -53,6 +53,12 @@
     white-space: nowrap; box-shadow: 2px 2px 0 #101113; }
   .fest-zone-marker .num { display: inline-flex; align-items: center; justify-content: center;
     width: 18px; height: 18px; border-radius: 5px; color: #fff; font-size: 11px; }
+  /* 세부 장소 마커 — 작은 점+이름 */
+  .fest-sub-marker > div { display: inline-flex; align-items: center; gap: 4px;
+    background: #fff; color: #101113; border: 1.5px solid #101113; border-radius: 999px;
+    padding: 1px 6px 1px 4px; font-family: 'Jua', sans-serif; font-weight: 700; font-size: 10px;
+    white-space: nowrap; box-shadow: 1px 1px 0 #101113; }
+  .fest-sub-marker .dot { width: 7px; height: 7px; border-radius: 50%; }
   /* 도착 알람 — 카운트 영역에 부드러운 노란 글로우 */
   @keyframes arrivedAlert {
     0% { box-shadow: 0 0 0 0 rgba(251, 191, 36, 0.55); }
@@ -80,7 +86,7 @@
 
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef, useMemo } = React;
-const BUILD = "b197"; /* 화면 우하단 표시 — 최신 배포 확인용 */
+const BUILD = "b198"; /* 화면 우하단 표시 — 최신 배포 확인용 */
 
 /* 실시간 위치 공유용 Firebase DB 주소. 여기에 한 번 넣어두면 승객 링크가 ?view=map 만 남아 깔끔해집니다. */
 const SHARE_DB = "https://innum-bus-default-rtdb.firebaseio.com";
@@ -545,13 +551,27 @@ function BackupModal({ onClose, counts, dateKey }) {
   );
 }
 
-/* 축제 프로그램(행사장 지도의 5개 구역) — 타원: lat/lng 중심 + rA(가로반경) rB(세로반경) rot(회전°) */
+/* 축제 프로그램(행사장 지도의 5개 구역) — 타원: lat/lng 중심 + rA(가로반경) rB(세로반경) rot(회전°)
+   subs: 세부 장소 핀(이름·위치) — 운영자가 ZoneEditor에서 좌표 보정 권장 */
 const FESTIVAL_ZONES = [
-  { num: 1, title: "생각을 켜는 광장", sub: "주무대 전다광장 · 1187 라이브러리", lat: 35.1335, lng: 126.9595, rA: 80, rB: 80, rot: 0 },
+  { num: 1, title: "생각을 켜는 광장", sub: "주무대 전다광장 · 1187 라이브러리", lat: 35.1335, lng: 126.9595, rA: 80, rB: 80, rot: 0,
+    subs: [
+      { name: "주무대 전다광장", lat: 35.1335, lng: 126.9594 },
+      { name: "1187 라이브러리", lat: 35.1334, lng: 126.9597 },
+    ] },
   { num: 2, title: "생각을 끄는 숲", sub: "편백숲", lat: 35.1325, lng: 126.9610, rA: 80, rB: 80, rot: 0 },
-  { num: 3, title: "체험존 & 인문팝업스토어", sub: "편백숲 가는 길 · 그늘광장", lat: 35.1330, lng: 126.9602, rA: 80, rB: 80, rot: 0 },
+  { num: 3, title: "체험존 & 인문팝업스토어", sub: "편백숲 가는 길 · 그늘광장", lat: 35.1330, lng: 126.9602, rA: 80, rB: 80, rot: 0,
+    subs: [
+      { name: "편백숲 가는 길", lat: 35.1331, lng: 126.9600 },
+      { name: "그늘광장", lat: 35.1328, lng: 126.9604 },
+    ] },
   { num: 4, title: "생각의 통로", sub: "무등산 진입로", lat: 35.1338, lng: 126.9588, rA: 80, rB: 80, rot: 0 },
-  { num: 5, title: "생각의 확장", sub: "증심사 일원 · 의재로권 미술관 · 5·18 민주광장", lat: 35.1310, lng: 126.9625, rA: 80, rB: 80, rot: 0 },
+  { num: 5, title: "생각의 확장", sub: "증심사 일원 · 의재로권 미술관 · 5·18 민주광장", lat: 35.1310, lng: 126.9625, rA: 80, rB: 80, rot: 0,
+    subs: [
+      { name: "증심사", lat: 35.1310, lng: 126.9625 },
+      { name: "의재로권 미술관", lat: 35.1305, lng: 126.9620 },
+      { name: "5·18 민주광장", lat: 35.14605, lng: 126.91909 },
+    ] },
 ];
 
 /* 타원 → 폴리곤 좌표 배열로 근사 (n=48개 점) */
@@ -1773,6 +1793,30 @@ function LiveMapView({ dbUrl }) {
         + `</div></div>`;
       const m = L.marker([lat, lng], { icon }).addTo(map).bindPopup(popupHtml);
       zoneLayersRef.current.push(m);
+      // 세부 장소 핀 — subs가 있는 구역만(override → 코드 기본값 순)
+      const subs = (o && Array.isArray(o.subs) && o.subs.length ? o.subs : z.subs) || [];
+      subs.forEach((s) => {
+        if (s.lat == null || s.lng == null) return;
+        const subHtml = `<div><span class="dot" style="background:${c}"></span><span>${s.name}</span></div>`;
+        const subIcon = L.divIcon({ className: "fest-sub-marker", html: subHtml, iconSize: [120, 20], iconAnchor: [60, 10] });
+        // 해당 세부 장소 프로그램(cat에 이름 포함)
+        const subItems = zoneItems.filter((it) => it.cat && it.cat.includes(s.name));
+        const subLines = subItems.length > 0
+          ? subItems.slice(0, 8).map((it) => {
+              const live = isLive(it);
+              const bg = live ? `background:${c}22;` : "";
+              const mark = live ? `<span style="color:${c};font-weight:700">● </span>` : "";
+              return `<div style="font-size:11px;color:#101113;margin:2px 0;padding:1px 4px;border-radius:4px;${bg}">${mark}<b>${it.time}</b> ${it.title}</div>`;
+            }).join("") + (subItems.length > 8 ? `<div style="font-size:10px;color:#888;margin-top:2px">외 ${subItems.length - 8}개</div>` : "")
+          : `<div style="font-size:11px;color:#888;margin-top:4px">이 장소 프로그램 없음</div>`;
+        const subPopup = `<div style="font-family:'Jua',sans-serif;max-width:240px">`
+          + `<div style="font-size:10px;color:${c};font-weight:700">${z.num}. ${z.title}</div>`
+          + `<b style="font-size:13px">${s.name}</b>`
+          + `<div style="margin-top:6px;padding-top:4px;border-top:1px solid #ddd">${subLines}</div>`
+          + `</div>`;
+        const sm = L.marker([s.lat, s.lng], { icon: subIcon }).addTo(map).bindPopup(subPopup);
+        zoneLayersRef.current.push(sm);
+      });
     });
   }, [zoneOverride, _zoneTick]);
 
