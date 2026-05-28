@@ -66,7 +66,7 @@
 
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef, useMemo } = React;
-const BUILD = "b133"; /* 화면 우하단 표시 — 최신 배포 확인용 */
+const BUILD = "b134"; /* 화면 우하단 표시 — 최신 배포 확인용 */
 
 /* 실시간 위치 공유용 Firebase DB 주소. 여기에 한 번 넣어두면 승객 링크가 ?view=map 만 남아 깔끔해집니다. */
 const SHARE_DB = "https://innum-bus-default-rtdb.firebaseio.com";
@@ -1520,7 +1520,7 @@ function BusCard({ id, bus, agoText, nowMin, tripsToday, departedInfo }) {
         const bgFill = isArrivedish ? FT.tealSoft : delayed ? "#FEE2E2" : FT.orangeSoft;
         const borderC = delayed ? "#dc2626" : accent;
         const etaColor = delayed ? "#dc2626" : accent;
-        const displayStop = phase === "departed" && departedInfo?.stopName ? departedInfo.stopName : (bus.stop || "운행 중");
+        const displayStop = phase === "departed" && departedInfo?.stopName ? departedInfo.stopName : ((ci >= 0 && stops[ci]?.name) || bus.stop || "운행 중");
         return (
           <div style={{ marginTop: 6, padding: "7px 10px", borderRadius: 8,
             background: bgFill, border: "1.5px solid " + borderC,
@@ -1842,7 +1842,7 @@ function PassengerView({ dbUrl, onAdmin, initialTab = "list" }) {
                     return (
                       <div style={{ padding: "6px 10px", background: FT.paper, border: "1.5px solid " + FT.mute + "66", borderRadius: 8,
                         fontSize: 11, color: FT.inkSoft, fontFamily: "'Jua', sans-serif", fontWeight: 700, textAlign: "center" }}>
-                        오늘 운행 종료
+                        마지막 회차 운행 중
                       </div>
                     );
                   }
