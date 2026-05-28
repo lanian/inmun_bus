@@ -80,7 +80,7 @@
 
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef, useMemo } = React;
-const BUILD = "b192"; /* 화면 우하단 표시 — 최신 배포 확인용 */
+const BUILD = "b193"; /* 화면 우하단 표시 — 최신 배포 확인용 */
 
 /* 실시간 위치 공유용 Firebase DB 주소. 여기에 한 번 넣어두면 승객 링크가 ?view=map 만 남아 깔끔해집니다. */
 const SHARE_DB = "https://innum-bus-default-rtdb.firebaseio.com";
@@ -545,14 +545,32 @@ function BackupModal({ onClose, counts, dateKey }) {
   );
 }
 
-/* 축제 프로그램(행사장 지도의 5개 구역) — lat/lng는 행사장 지도 기준 추정값(운영자 확인 후 보정) */
+/* 축제 프로그램(행사장 지도의 5개 구역) — 타원: lat/lng 중심 + rA(가로반경) rB(세로반경) rot(회전°) */
 const FESTIVAL_ZONES = [
-  { num: 1, title: "생각을 켜는 광장", sub: "주무대 전다광장 · 1187 라이브러리", lat: 35.1335, lng: 126.9595 },
-  { num: 2, title: "생각을 끄는 숲", sub: "편백숲", lat: 35.1325, lng: 126.9610 },
-  { num: 3, title: "체험존 & 인문팝업스토어", sub: "편백숲 가는 길 · 그늘광장", lat: 35.1330, lng: 126.9602 },
-  { num: 4, title: "생각의 통로", sub: "무등산 진입로", lat: 35.1338, lng: 126.9588 },
-  { num: 5, title: "생각의 확장", sub: "증심사 일원 · 의재로권 미술관 · 5·18 민주광장", lat: 35.1310, lng: 126.9625 },
+  { num: 1, title: "생각을 켜는 광장", sub: "주무대 전다광장 · 1187 라이브러리", lat: 35.1335, lng: 126.9595, rA: 80, rB: 80, rot: 0 },
+  { num: 2, title: "생각을 끄는 숲", sub: "편백숲", lat: 35.1325, lng: 126.9610, rA: 80, rB: 80, rot: 0 },
+  { num: 3, title: "체험존 & 인문팝업스토어", sub: "편백숲 가는 길 · 그늘광장", lat: 35.1330, lng: 126.9602, rA: 80, rB: 80, rot: 0 },
+  { num: 4, title: "생각의 통로", sub: "무등산 진입로", lat: 35.1338, lng: 126.9588, rA: 80, rB: 80, rot: 0 },
+  { num: 5, title: "생각의 확장", sub: "증심사 일원 · 의재로권 미술관 · 5·18 민주광장", lat: 35.1310, lng: 126.9625, rA: 80, rB: 80, rot: 0 },
 ];
+
+/* 타원 → 폴리곤 좌표 배열로 근사 (n=48개 점) */
+function ellipsePolygon(centerLat, centerLng, semiAm, semiBm, rotationDeg, n = 48) {
+  const cosLat = Math.cos(centerLat * Math.PI / 180);
+  const aDeg = (semiAm || 0) / 111000; // 1 lat 도 ≈ 111km
+  const bDeg = (semiBm || 0) / 111000;
+  const rot = (rotationDeg || 0) * Math.PI / 180;
+  const pts = [];
+  for (let i = 0; i < n; i++) {
+    const t = (i / n) * 2 * Math.PI;
+    const x = aDeg * Math.cos(t);
+    const y = bDeg * Math.sin(t);
+    const xr = x * Math.cos(rot) - y * Math.sin(rot);
+    const yr = x * Math.sin(rot) + y * Math.cos(rot);
+    pts.push([centerLat + yr, centerLng + xr / Math.max(cosLat, 1e-6)]);
+  }
+  return pts;
+}
 
 /* 일자별 프로그램 — 6.13(토) / 6.14(일). 시간 "상시"는 전 시간대 운영. */
 const FESTIVAL_PROGRAM = {
@@ -1116,10 +1134,13 @@ function ZoneEditor({ onClose, dbUrl, getAuth, refreshAuth }) {
     const ls = LS.getJSON("zones", {});
     const out = {};
     FESTIVAL_ZONES.forEach((z) => {
-      const o = ls[z.num];
+      const o = ls[z.num] || {};
       out[z.num] = {
-        lat: o && typeof o.lat === "number" ? o.lat : z.lat,
-        lng: o && typeof o.lng === "number" ? o.lng : z.lng,
+        lat: typeof o.lat === "number" ? o.lat : z.lat,
+        lng: typeof o.lng === "number" ? o.lng : z.lng,
+        rA: typeof o.rA === "number" ? o.rA : (z.rA || 80),
+        rB: typeof o.rB === "number" ? o.rB : (z.rB || 80),
+        rot: typeof o.rot === "number" ? o.rot : (z.rot || 0),
       };
     });
     return out;
@@ -1135,7 +1156,14 @@ function ZoneEditor({ onClose, dbUrl, getAuth, refreshAuth }) {
       setZones((prev) => {
         const next = { ...prev };
         Object.entries(d).forEach(([k, v]) => {
-          if (v && typeof v.lat === "number" && typeof v.lng === "number") next[k] = { lat: v.lat, lng: v.lng };
+          if (v && typeof v.lat === "number" && typeof v.lng === "number") {
+            next[k] = {
+              lat: v.lat, lng: v.lng,
+              rA: typeof v.rA === "number" ? v.rA : (prev[k]?.rA || 80),
+              rB: typeof v.rB === "number" ? v.rB : (prev[k]?.rB || 80),
+              rot: typeof v.rot === "number" ? v.rot : (prev[k]?.rot || 0),
+            };
+          }
         });
         return next;
       });
@@ -1152,16 +1180,23 @@ function ZoneEditor({ onClose, dbUrl, getAuth, refreshAuth }) {
     L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 19, attribution: "© OpenStreetMap" }).addTo(map);
     mapRef.current = map;
     FESTIVAL_ZONES.forEach((z) => {
-      const v = init[z.num] || { lat: z.lat, lng: z.lng };
+      const v = init[z.num] || { lat: z.lat, lng: z.lng, rA: 80, rB: 80, rot: 0 };
       const c = z.num % 2 ? "#fb923c" : "#22d65f";
       const html = `<div style="display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:8px;background:${c};color:#0a0b0f;border:2px solid #101113;box-shadow:2px 2px 0 #101113;font-family:'Jua',sans-serif;font-weight:700;font-size:13px;">${z.num}</div>`;
       const icon = L.divIcon({ className: "", html, iconSize: [32, 32], iconAnchor: [16, 16] });
+      // 타원 미리보기 폴리곤
+      const poly = L.polygon(ellipsePolygon(v.lat, v.lng, v.rA || 80, v.rB || 80, v.rot || 0), {
+        color: c, weight: 2, opacity: 0.85, fillColor: c, fillOpacity: 0.2,
+      }).addTo(map);
       const marker = L.marker([v.lat, v.lng], { draggable: true, icon }).addTo(map).bindTooltip(z.title);
       marker.on("dragend", () => {
         const p = marker.getLatLng();
-        setZones((prev) => ({ ...prev, [z.num]: { lat: p.lat, lng: p.lng } }));
+        setZones((prev) => {
+          const nz = { ...(prev[z.num] || {}), lat: p.lat, lng: p.lng };
+          return { ...prev, [z.num]: nz };
+        });
       });
-      markersRef.current[z.num] = marker;
+      markersRef.current[z.num] = { marker, poly };
     });
     // 5개 모두 보이도록 fitBounds
     const coords = Object.values(init).map((v) => [v.lat, v.lng]);
@@ -1169,12 +1204,16 @@ function ZoneEditor({ onClose, dbUrl, getAuth, refreshAuth }) {
     setTimeout(() => map.invalidateSize(), 80);
     return () => { map.remove(); mapRef.current = null; markersRef.current = {}; };
   }, []);
-  /* zones 외부 변경(기본값 복원 등) 시 마커 위치 동기화 */
+  /* zones 변경(기본값 복원/숫자 입력 등) 시 마커 위치 + 타원 폴리곤 동기화 */
   useEffect(() => {
-    Object.entries(markersRef.current).forEach(([num, marker]) => {
-      const v = zones[num]; if (!v || !marker) return;
-      const c = marker.getLatLng();
-      if (Math.abs(c.lat - v.lat) > 1e-7 || Math.abs(c.lng - v.lng) > 1e-7) marker.setLatLng([v.lat, v.lng]);
+    Object.entries(markersRef.current).forEach(([num, ref]) => {
+      const v = zones[num]; if (!v || !ref) return;
+      const { marker, poly } = ref;
+      if (marker) {
+        const c = marker.getLatLng();
+        if (Math.abs(c.lat - v.lat) > 1e-7 || Math.abs(c.lng - v.lng) > 1e-7) marker.setLatLng([v.lat, v.lng]);
+      }
+      if (poly) poly.setLatLngs(ellipsePolygon(v.lat, v.lng, v.rA || 80, v.rB || 80, v.rot || 0));
     });
   }, [zones]);
   const putZones = async (tok) => {
@@ -1200,9 +1239,9 @@ function ZoneEditor({ onClose, dbUrl, getAuth, refreshAuth }) {
     } catch (_) { setMsg("⚠ 네트워크 오류 — 로컬만 저장됨"); }
   };
   const resetToDefaults = () => {
-    if (!window.confirm("기본 좌표로 되돌립니다. 계속할까요?")) return;
+    if (!window.confirm("기본 좌표/반경/회전으로 되돌립니다. 계속할까요?")) return;
     const out = {};
-    FESTIVAL_ZONES.forEach((z) => { out[z.num] = { lat: z.lat, lng: z.lng }; });
+    FESTIVAL_ZONES.forEach((z) => { out[z.num] = { lat: z.lat, lng: z.lng, rA: z.rA || 80, rB: z.rB || 80, rot: z.rot || 0 }; });
     setZones(out);
     setMsg("기본값으로 되돌림 — 저장 버튼으로 적용");
   };
@@ -1224,13 +1263,33 @@ function ZoneEditor({ onClose, dbUrl, getAuth, refreshAuth }) {
         <div className="grid grid-cols-1 gap-1">
           {FESTIVAL_ZONES.map((z) => {
             const c = z.num % 2 ? "#fb923c" : "#22d65f";
-            const v = zones[z.num] || { lat: 0, lng: 0 };
+            const v = zones[z.num] || { lat: 0, lng: 0, rA: 80, rB: 80, rot: 0 };
+            const update = (key, val) => {
+              const n = parseFloat(val); if (Number.isNaN(n)) return;
+              setZones((prev) => ({ ...prev, [z.num]: { ...prev[z.num], [key]: n } }));
+            };
             return (
-              <div key={z.num} className="flex items-center gap-2 text-[10px]" style={{ fontFamily: "'IBM Plex Mono', monospace" }}>
-                <span style={{ width: 20, height: 20, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center",
-                  background: c, color: "#0a0b0f", borderRadius: 5, fontFamily: "'Jua', sans-serif", fontWeight: 700, fontSize: 11 }}>{z.num}</span>
-                <span className="truncate" style={{ flex: 1, color: "#cbd5e1", fontFamily: "'Jua', sans-serif" }}>{z.title}</span>
-                <span style={{ color: "#94a3b8" }}>{v.lat.toFixed(5)}, {v.lng.toFixed(5)}</span>
+              <div key={z.num} className="p-2 rounded-lg" style={{ background: "rgba(255,255,255,0.04)", border: "1px solid #2c3142" }}>
+                <div className="flex items-center gap-2 mb-1">
+                  <span style={{ width: 20, height: 20, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center",
+                    background: c, color: "#0a0b0f", borderRadius: 5, fontFamily: "'Jua', sans-serif", fontWeight: 700, fontSize: 11 }}>{z.num}</span>
+                  <span className="truncate text-[11px]" style={{ flex: 1, color: "#cbd5e1", fontFamily: "'Jua', sans-serif" }}>{z.title}</span>
+                  <span className="text-[9px]" style={{ color: "#94a3b8", fontFamily: "'IBM Plex Mono', monospace" }}>{v.lat.toFixed(5)}, {v.lng.toFixed(5)}</span>
+                </div>
+                <div className="flex items-center gap-1 text-[10px]" style={{ color: "#cbd5e1", fontFamily: "'Jua', sans-serif" }}>
+                  <span style={{ width: 24, color: "#94a3b8" }}>가로</span>
+                  <input type="number" min="10" step="10" value={v.rA || 80} onChange={(e) => update("rA", e.target.value)}
+                    className="w-14 px-1 py-0.5 rounded" style={{ background: "#0a0b0f", border: "1px solid #3a3f54", color: "#cbd5e1", fontFamily: "'IBM Plex Mono', monospace" }} />
+                  <span style={{ color: "#64748b" }}>m</span>
+                  <span style={{ width: 24, color: "#94a3b8", marginLeft: 6 }}>세로</span>
+                  <input type="number" min="10" step="10" value={v.rB || 80} onChange={(e) => update("rB", e.target.value)}
+                    className="w-14 px-1 py-0.5 rounded" style={{ background: "#0a0b0f", border: "1px solid #3a3f54", color: "#cbd5e1", fontFamily: "'IBM Plex Mono', monospace" }} />
+                  <span style={{ color: "#64748b" }}>m</span>
+                  <span style={{ width: 24, color: "#94a3b8", marginLeft: 6 }}>회전</span>
+                  <input type="number" min="0" max="180" step="5" value={v.rot || 0} onChange={(e) => update("rot", e.target.value)}
+                    className="w-12 px-1 py-0.5 rounded" style={{ background: "#0a0b0f", border: "1px solid #3a3f54", color: "#cbd5e1", fontFamily: "'IBM Plex Mono', monospace" }} />
+                  <span style={{ color: "#64748b" }}>°</span>
+                </div>
               </div>
             );
           })}
@@ -1541,7 +1600,14 @@ function LiveMapView({ dbUrl }) {
         if (!d || typeof d !== "object") return;
         const clean = {};
         Object.entries(d).forEach(([k, v]) => {
-          if (v && typeof v.lat === "number" && typeof v.lng === "number") clean[k] = { lat: v.lat, lng: v.lng };
+          if (v && typeof v.lat === "number" && typeof v.lng === "number") {
+            clean[k] = {
+              lat: v.lat, lng: v.lng,
+              rA: typeof v.rA === "number" ? v.rA : 80,
+              rB: typeof v.rB === "number" ? v.rB : 80,
+              rot: typeof v.rot === "number" ? v.rot : 0,
+            };
+          }
         });
         if (Object.keys(clean).length) { setZoneOverride(clean); LS.setJSON("zones", clean); }
       })
@@ -1634,9 +1700,20 @@ function LiveMapView({ dbUrl }) {
       const o = zoneOverride[z.num];
       const lat = o && typeof o.lat === "number" ? o.lat : z.lat;
       const lng = o && typeof o.lng === "number" ? o.lng : z.lng;
+      const rA = o && typeof o.rA === "number" ? o.rA : (z.rA || 80);
+      const rB = o && typeof o.rB === "number" ? o.rB : (z.rB || 80);
+      const rot = o && typeof o.rot === "number" ? o.rot : (z.rot || 0);
       if (lat == null || lng == null) return;
       const c = z.num % 2 ? FT.orange : FT.teal;
       const liveItems = dayKey ? (FESTIVAL_PROGRAM[dayKey]?.items || []).filter((it) => it.zone === z.num && isLive(it)) : [];
+      // 타원 영역 폴리곤
+      if (rA > 0 && rB > 0) {
+        const poly = L.polygon(ellipsePolygon(lat, lng, rA, rB, rot), {
+          color: c, weight: 2, opacity: 0.85, fillColor: c, fillOpacity: 0.18, lineCap: "round", lineJoin: "round",
+        }).addTo(map);
+        poly.bringToBack();
+        zoneLayersRef.current.push(poly);
+      }
       const badge = liveItems.length > 0 ? `<span style="display:inline-flex;align-items:center;justify-content:center;min-width:14px;height:14px;border-radius:7px;background:#dc2626;color:#fff;font-size:9px;padding:0 4px;margin-left:3px">${liveItems.length}</span>` : "";
       const html = `<div><span class="num" style="background:${c}">${z.num}</span><span>${z.title}</span>${badge}</div>`;
       const icon = L.divIcon({ className: "fest-zone-marker", html, iconSize: [180, 24], iconAnchor: [90, 12] });
