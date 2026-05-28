@@ -73,7 +73,7 @@
 
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef, useMemo } = React;
-const BUILD = "b153"; /* 화면 우하단 표시 — 최신 배포 확인용 */
+const BUILD = "b154"; /* 화면 우하단 표시 — 최신 배포 확인용 */
 
 /* 실시간 위치 공유용 Firebase DB 주소. 여기에 한 번 넣어두면 승객 링크가 ?view=map 만 남아 깔끔해집니다. */
 const SHARE_DB = "https://innum-bus-default-rtdb.firebaseio.com";
@@ -2849,8 +2849,10 @@ function App() {
          지나친 정류장은 passed 처리해 건너뜀에서 복구 가능하도록 함 --- */
   useEffect(() => {
     if (!autoMode || !userPos) return;
+    // 최대 3 정류장 앞까지만 검색 — 테스트/노이즈로 인한 큰 점프 방지
+    const searchLimit = Math.min(currentIdx + 4, stops.length);
     let nearestIdx = -1, nearestDist = Infinity;
-    for (let i = currentIdx; i < stops.length; i++) {
+    for (let i = currentIdx; i < searchLimit; i++) {
       const c = coords[coordKey(direction, stops[i].name)]; if (!c) continue;
       const d = distanceMeters(userPos, c);
       if (d < nearestDist) { nearestDist = d; nearestIdx = i; }
@@ -2938,6 +2940,8 @@ function App() {
   const updateCount = (kind, delta) => {
     const cs = stops[currentIdx];
     if (!cs) return;
+    // 종점에서는 승차 금지 (하차만 허용)
+    if (kind === "board" && cs.terminus) return;
     const tripPrefix = `${direction}|${tripIdx + 1}|`;
     const key = `${tripPrefix}${cs.name}`;
     setCounts((prev) => {
@@ -3263,10 +3267,18 @@ function App() {
                 </div>
               );
               const pulseClass = arrivedPulse && (Date.now() - arrivedPulse < 6000) ? " arrived-alert" : "";
+              const atTerminus = !!curStop.terminus;
               return (
                 <div className={"mt-4 pt-3 rounded-lg" + pulseClass} style={{ borderTop: "1px solid #3a3f54", padding: "8px 4px" }}>
                   <div className="flex items-stretch gap-3">
-                    <Cell label="탑승" kind="board" color="#22d65f" />
+                    {atTerminus ? (
+                      <div className="flex flex-col items-center justify-center" style={{ flex: 1, color: "#64748b", fontFamily: "'Jua', sans-serif" }}>
+                        <div className="text-[10px]" style={{ letterSpacing: 1 }}>탑승</div>
+                        <div className="text-[11px] mt-1" style={{ color: "#94a3b8" }}>종점 — 승차 불가</div>
+                      </div>
+                    ) : (
+                      <Cell label="탑승" kind="board" color="#22d65f" />
+                    )}
                     <div style={{ width: 1, background: "#3a3f54" }} />
                     <Cell label="하차" kind="alight" color="#fb923c" />
                   </div>
