@@ -38,7 +38,7 @@
 
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef, useMemo } = React;
-const BUILD = "b54"; /* 화면 우하단 표시 — 최신 배포 확인용 */
+const BUILD = "b55"; /* 화면 우하단 표시 — 최신 배포 확인용 */
 
 /* 실시간 위치 공유용 Firebase DB 주소. 여기에 한 번 넣어두면 승객 링크가 ?view=map 만 남아 깔끔해집니다. */
 const SHARE_DB = "https://innum-bus-default-rtdb.firebaseio.com";
@@ -504,7 +504,7 @@ function LiveMapView({ dbUrl }) {
       </div>
 
       {/* 범례 (좌하단) */}
-      <div style={{ position: "absolute", bottom: 80, left: 10, zIndex: 1000,
+      <div style={{ position: "absolute", bottom: 96, left: 10, zIndex: 1000,
         background: "#fff", border: "2px solid " + FT.ink, borderRadius: 10, boxShadow: "3px 3px 0 " + FT.ink,
         padding: "8px 10px", fontFamily: "'Jua', sans-serif", fontSize: 11, color: FT.ink, lineHeight: 1.6 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -637,9 +637,9 @@ function BusCard({ id, bus, agoText, nowMin, tripsToday }) {
 }
 
 /* 승객 기본 화면 — 실시간 버스 목록(버스안내판 스타일) + 지도 탭. 제목 7번 탭하면 운영자(히든) 진입 */
-function PassengerView({ dbUrl, onAdmin }) {
+function PassengerView({ dbUrl, onAdmin, initialTab = "list" }) {
   const [buses, setBuses] = useState({});
-  const [tab, setTab] = useState("list");
+  const [tab, setTab] = useState(initialTab);
   const [conn, setConn] = useState("loading"); // loading | ok | error
   const [showTimetable, setShowTimetable] = useState(false);
   const tapRef = useRef(0), tapTimeRef = useRef(0);
@@ -691,12 +691,13 @@ function PassengerView({ dbUrl, onAdmin }) {
     return (
       <div style={{ position: "relative" }}>
         <LiveMapView dbUrl={dbUrl} />
-        <button onClick={() => setTab("list")}
-          style={{ position: "absolute", bottom: 18, left: "50%", transform: "translateX(-50%)", zIndex: 1000,
-            background: FT.orange, color: "#fff", padding: "10px 24px", borderRadius: 999,
-            fontFamily: "'Jua', sans-serif", fontWeight: 700, border: "2.5px solid " + FT.ink,
-            boxShadow: "3px 3px 0 " + FT.ink }}>
-          ☰ 목록으로
+        <button onClick={() => setTab("list")} aria-label="목록으로 돌아가기"
+          style={{ position: "fixed", left: "50%", transform: "translateX(-50%)", zIndex: 1100,
+            bottom: "calc(20px + env(safe-area-inset-bottom, 0px))",
+            background: FT.orange, color: "#fff", padding: "12px 28px", borderRadius: 999,
+            fontFamily: "'Jua', sans-serif", fontWeight: 700, fontSize: 15,
+            border: "2.5px solid " + FT.ink, boxShadow: "3px 3px 0 " + FT.ink, cursor: "pointer" }}>
+          ☰ 목록으로 돌아가기
         </button>
       </div>
     );
@@ -2684,8 +2685,8 @@ function Root() {
   const params = new URLSearchParams(window.location.search);
   const [admin, setAdmin] = useState(params.get("admin") === "1");
   if (admin) return <App />;                                            // 운영자(히든) — ?admin=1 또는 제목 7번 탭
-  if (params.get("view") === "map") return <LiveMapView dbUrl={params.get("db") || SHARE_DB} />; // 지도 직접 링크(호환)
-  return <PassengerView dbUrl={params.get("db") || SHARE_DB} onAdmin={() => setAdmin(true)} />;  // 기본: 승객 뷰
+  const initialTab = params.get("view") === "map" ? "map" : "list";
+  return <PassengerView dbUrl={params.get("db") || SHARE_DB} onAdmin={() => setAdmin(true)} initialTab={initialTab} />;
 }
 ReactDOM.createRoot(document.getElementById('root')).render(<Root />);
 </script>
