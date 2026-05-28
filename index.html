@@ -66,7 +66,7 @@
 
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef, useMemo } = React;
-const BUILD = "b143"; /* 화면 우하단 표시 — 최신 배포 확인용 */
+const BUILD = "b144"; /* 화면 우하단 표시 — 최신 배포 확인용 */
 
 /* 실시간 위치 공유용 Firebase DB 주소. 여기에 한 번 넣어두면 승객 링크가 ?view=map 만 남아 깔끔해집니다. */
 const SHARE_DB = "https://innum-bus-default-rtdb.firebaseio.com";
@@ -804,6 +804,39 @@ function projectOnRoute(pos, stops) {
   return { ci, perpDist: bestDist, routePos };
 }
 
+/* 전체 노선 폴리라인 — 정류장 + approachVia 경유점을 순서대로 합쳐 한 줄로 구성 */
+function buildRoutePolyline(dir, stops) {
+  const points = [];
+  for (let i = 0; i < stops.length; i++) {
+    if (i > 0) {
+      try {
+        const via = effectiveVia(dir, stops[i].name) || [];
+        via.forEach((v) => points.push({ lat: v[0], lng: v[1] }));
+      } catch (_) {}
+    }
+    if (stops[i].lat != null) points.push({ lat: stops[i].lat, lng: stops[i].lng });
+  }
+  return points;
+}
+/* GPS 좌표를 노선 폴리라인에 수직 투영(가장 가까운 세그먼트). 반환: { snapped, perpDist } 또는 null. */
+function snapToRoute(pos, dir, stops) {
+  if (!pos || pos.lat == null) return null;
+  const poly = buildRoutePolyline(dir, stops);
+  if (poly.length < 2) return null;
+  let bestDist = Infinity, bestProj = null;
+  for (let i = 0; i < poly.length - 1; i++) {
+    const a = poly[i], b = poly[i + 1];
+    const dx = b.lat - a.lat, dy = b.lng - a.lng;
+    const len2 = dx * dx + dy * dy;
+    if (len2 < 1e-12) continue;
+    const t = Math.max(0, Math.min(1, ((pos.lat - a.lat) * dx + (pos.lng - a.lng) * dy) / len2));
+    const proj = { lat: a.lat + t * dx, lng: a.lng + t * dy };
+    const d = distanceMeters(pos, proj);
+    if (d < bestDist) { bestDist = d; bestProj = proj; }
+  }
+  return bestProj ? { snapped: bestProj, perpDist: bestDist } : null;
+}
+
 /* 두 정류장 사이의 폴리라인(앞 정류장→approachVia 경유점→뒤 정류장) 구성 */
 function buildSegmentPolyline(dir, prevStop, curStop) {
   const points = [{ lat: prevStop.lat, lng: prevStop.lng }];
@@ -1298,10 +1331,14 @@ function LiveMapView({ dbUrl }) {
         const nowMinTick = nowDate.getHours() * 60 + nowDate.getMinutes() + nowDate.getSeconds() / 60;
         Object.entries(data || {}).forEach(([id, b]) => {
           if (!b || (b.ts && now - b.ts > 60000)) return;
-          // 좌표 결정: GPS 좌표 우선. 없으면 운행 정보+시간으로 직전↔현재 정류장 사이 보간. 둘 다 안 되면 정류장 좌표.
+          // 좌표 결정: GPS 좌표 우선(노선 폴리라인에 스냅). 없으면 운행 정보+시간 보간. 둘 다 안 되면 정류장 좌표.
           let pos = null, noGps = false;
           if (b.lat != null && b.lng != null) {
-            pos = [b.lat, b.lng];
+            // 노선 폴리라인 100m 이내면 스냅, 그 이상이면 raw GPS
+            const dirKey0 = b.dir === "inbound" ? "inbound" : "outbound";
+            const snap = snapToRoute({ lat: b.lat, lng: b.lng }, dirKey0, ROUTES[dirKey0].stops);
+            if (snap && snap.perpDist < 100) pos = [snap.snapped.lat, snap.snapped.lng];
+            else pos = [b.lat, b.lng];
           } else if (b.stop && b.dir) {
             const dirKey = b.dir === "inbound" ? "inbound" : "outbound";
             const op = b.trip ? operationBasedPos(dirKey, b.trip - 1, b.stop, nowMinTick, b.waiting === true) : null;
