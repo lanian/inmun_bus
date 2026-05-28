@@ -80,7 +80,7 @@
 
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef, useMemo } = React;
-const BUILD = "b186"; /* 화면 우하단 표시 — 최신 배포 확인용 */
+const BUILD = "b187"; /* 화면 우하단 표시 — 최신 배포 확인용 */
 
 /* 실시간 위치 공유용 Firebase DB 주소. 여기에 한 번 넣어두면 승객 링크가 ?view=map 만 남아 깔끔해집니다. */
 const SHARE_DB = "https://innum-bus-default-rtdb.firebaseio.com";
@@ -3601,14 +3601,17 @@ function App() {
             </div>
           )}
 
-          {/* Big glanceable status bar — 우선순위: 송신실패>충돌>안내중>대기>송신중+GPS>송신중>GPS자동>수동 */}
+          {/* Big glanceable status bar — 우선순위: 송신실패>충돌>안내중>대기>송신중>GPS자동>수동 */}
           {(() => {
             const st = broadcastStatus === "failing" ? { c: "#ef4444", bg: "rgba(239,68,68,0.18)", t: "⚠ 위치 송신 실패", pulse: true }
               : busIdConflict ? { c: "#fb923c", bg: "rgba(251,146,60,0.18)", t: "⚠ 버스 번호 충돌", pulse: true }
               : isAnnouncing ? { c: "#fca5a5", bg: "rgba(239,68,68,0.18)", t: "📢 안내 방송 중", pulse: true }
               : manualWaiting ? { c: "#60a5fa", bg: "rgba(96,165,250,0.18)", t: "🅿️ 출발 대기 중", pulse: true }
-              : sharing && autoMode && userPos ? { c: "#22d65f", bg: "rgba(34,214,95,0.18)", t: locShare ? "📡 송신 · 위치+운행" : "📡 송신 · 운행만", pulse: false }
-              : sharing && (!autoMode || !userPos) ? { c: "#fbbf24", bg: "rgba(251,191,36,0.18)", t: locShare ? "📡 송신 · GPS 대기" : "📡 송신 · 운행만", pulse: true }
+              // 위치 공유 ON — locShare/GPS 상태에 따라 분기
+              : sharing && !locShare ? { c: "#22d65f", bg: "rgba(34,214,95,0.18)", t: "📡 송신 · 운행만 (GPS 미사용)", pulse: false }
+              : sharing && locShare && userPos ? { c: "#22d65f", bg: "rgba(34,214,95,0.18)", t: "📡 송신 · 위치+운행", pulse: false }
+              : sharing && locShare && !userPos ? { c: "#fbbf24", bg: "rgba(251,191,36,0.18)", t: "📡 송신 · GPS 신호 대기", pulse: true }
+              // GPS 자동만 켜진 경우(공유 OFF) — 자체 진행만
               : autoMode && userPos ? { c: "#22d65f", bg: "rgba(34,214,95,0.15)", t: "GPS 자동 · 위치 정상", pulse: false }
               : autoMode ? { c: "#fbbf24", bg: "rgba(251,191,36,0.12)", t: "GPS 자동 · 신호 대기", pulse: true }
               : { c: "#94a3b8", bg: "rgba(100,116,139,0.12)", t: "수동 대기 중", pulse: false };
