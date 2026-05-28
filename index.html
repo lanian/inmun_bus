@@ -45,7 +45,7 @@
 
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef, useMemo } = React;
-const BUILD = "b108"; /* 화면 우하단 표시 — 최신 배포 확인용 */
+const BUILD = "b109"; /* 화면 우하단 표시 — 최신 배포 확인용 */
 
 /* 실시간 위치 공유용 Firebase DB 주소. 여기에 한 번 넣어두면 승객 링크가 ?view=map 만 남아 깔끔해집니다. */
 const SHARE_DB = "https://innum-bus-default-rtdb.firebaseio.com";
@@ -1426,15 +1426,29 @@ function PassengerView({ dbUrl, onAdmin, initialTab = "list" }) {
       const dir = b.dir === "inbound" ? "inbound" : "outbound";
       const route = ROUTES[dir];
       const stops = route.stops;
-      const ci = stops.findIndex((s) => s.name === b.stop);
+      let ci = stops.findIndex((s) => s.name === b.stop);
       if (ci < 0) continue;
+      // GPS 좌표 기반으로 실제 진행 위치 보정: 버스가 b.stop을 이미 지나갔다면 가장 가까운 노선 정류장으로 ci 전진
+      if (b.lat != null && b.lng != null) {
+        let bestI = -1, bestD = Infinity;
+        for (let i = 0; i < stops.length; i++) {
+          const s = stops[i]; if (s.lat == null) continue;
+          const d = distanceMeters({ lat: b.lat, lng: b.lng }, s);
+          if (d < bestD) { bestD = d; bestI = i; }
+        }
+        if (bestI > ci) ci = bestI; // 뒤로는 가지 않음(차량이 막 지난 정류장 잠깐 표시 유지)
+      }
       if (b.trip) liveTripSet.add(`${dir}|${b.trip}`);
       const sched = route.trips[(b.trip || 1) - 1];
       if (!sched || !sched[ci]) continue;
       const ciSchedMin = toMin(sched[ci]);
       // 곧 도착 정류장의 지연(분). 시간표보다 늦으면 양수, 빠르면 0.
       const delay = Math.max(0, nowMin - ciSchedMin);
-      const start = b.arrived ? ci + 1 : ci;
+      // 보정된 도착 판정(30m 이내)
+      const ciStop = stops[ci];
+      const distToCi = ciStop.lat != null ? distanceMeters({ lat: b.lat, lng: b.lng }, ciStop) : null;
+      const arrivedAtCi = distToCi != null && distToCi < 30;
+      const start = arrivedAtCi ? ci + 1 : ci;
       for (let i = start; i < stops.length; i++) {
         const t = sched[i]; if (!t) continue;
         const adjMins = (toMin(t) - ciSchedMin) + Math.max(0, ciSchedMin - nowMin);
