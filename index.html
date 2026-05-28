@@ -45,7 +45,7 @@
 
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef, useMemo } = React;
-const BUILD = "b112"; /* 화면 우하단 표시 — 최신 배포 확인용 */
+const BUILD = "b113"; /* 화면 우하단 표시 — 최신 배포 확인용 */
 
 /* 실시간 위치 공유용 Firebase DB 주소. 여기에 한 번 넣어두면 승객 링크가 ?view=map 만 남아 깔끔해집니다. */
 const SHARE_DB = "https://innum-bus-default-rtdb.firebaseio.com";
@@ -1119,12 +1119,15 @@ function LiveMapView({ dbUrl }) {
     let stopped = false;
     const base = dbUrl.replace(/\/+$/, "");
     const L = window.L;
-    const makeIcon = (id, b) => {
+    const makeIcon = (id, b, noGps) => {
       const dir = b.dir === "inbound" ? "inbound" : "outbound";
       const bg = dir === "inbound" ? FT.teal : FT.orange;
       const wait = b.waiting === true;
-      const html = `<div style="display:inline-flex;align-items:center;gap:3px;background:${wait ? "#fff" : bg};color:${wait ? FT.ink : "#fff"};border:2.5px solid ${FT.ink};border-radius:999px;padding:3px 9px;box-shadow:2px 2px 0 ${FT.ink};font-family:'Jua',sans-serif;font-weight:700;font-size:12px;white-space:nowrap;">${wait ? "🅿️" : "🚌"} ${id}</div>`;
-      return L.divIcon({ className: "", html, iconSize: [120, 28], iconAnchor: [60, 14] });
+      const borderStyle = noGps ? "dashed" : "solid";
+      const shadow = noGps ? "" : `box-shadow:2px 2px 0 ${FT.ink};`;
+      const trailing = noGps ? " 📍" : "";
+      const html = `<div style="display:inline-flex;align-items:center;gap:3px;background:${wait ? "#fff" : bg};color:${wait ? FT.ink : "#fff"};border:2.5px ${borderStyle} ${FT.ink};border-radius:999px;padding:3px 9px;${shadow}font-family:'Jua',sans-serif;font-weight:700;font-size:12px;white-space:nowrap;">${wait ? "🅿️" : "🚌"} ${id}${trailing}</div>`;
+      return L.divIcon({ className: "", html, iconSize: [130, 28], iconAnchor: [65, 14] });
     };
     const schedIcon = (dir, tripNum) => {
       const c = dir === "inbound" ? FT.teal : FT.orange;
@@ -1138,25 +1141,36 @@ function LiveMapView({ dbUrl }) {
         const map = mapRef.current; if (!map) return;
         const now = Date.now(); let n = 0;
         const liveTripSet = new Set();
+        const validIds = new Set();
         Object.entries(data || {}).forEach(([id, b]) => {
-          if (!b || b.lat == null || (b.ts && now - b.ts > 60000)) return;
+          if (!b || (b.ts && now - b.ts > 60000)) return;
+          // 좌표 결정: GPS 좌표 우선, 없으면 현재 정류장 좌표 사용(정류장 기반 위치)
+          let pos = null, noGps = false;
+          if (b.lat != null && b.lng != null) {
+            pos = [b.lat, b.lng];
+          } else if (b.stop && b.dir) {
+            const route = ROUTES[b.dir === "inbound" ? "inbound" : "outbound"];
+            const s = route && route.stops.find((x) => x.name === b.stop);
+            if (s && s.lat != null) { pos = [s.lat, s.lng]; noGps = true; }
+          }
+          if (!pos) return;
           n++;
+          validIds.add(id);
           const dir = b.dir === "inbound" ? "inbound" : "outbound";
           if (b.trip) liveTripSet.add(`${dir}|${b.trip}`);
-          const label = `${id} · ${ROUTES[dir].label}${b.trip ? ` ${b.trip}회차` : ""}${b.stop ? ` · ${b.stop}` : ""}${b.waiting === true ? " · 출발 대기" : ""}`;
+          const label = `${id} · ${ROUTES[dir].label}${b.trip ? ` ${b.trip}회차` : ""}${b.stop ? ` · ${b.stop}` : ""}${b.waiting === true ? " · 출발 대기" : ""}${noGps ? " · 정류장 기반" : ""}`;
           let m = markersRef.current[id];
           if (!m) {
-            m = L.marker([b.lat, b.lng], { icon: makeIcon(id, b) }).addTo(map);
+            m = L.marker(pos, { icon: makeIcon(id, b, noGps) }).addTo(map);
             markersRef.current[id] = m;
           } else {
-            m.setLatLng([b.lat, b.lng]);
-            m.setIcon(makeIcon(id, b));
+            m.setLatLng(pos);
+            m.setIcon(makeIcon(id, b, noGps));
           }
           m.bindTooltip(label, { direction: "top", offset: [0, -16] });
         });
         Object.keys(markersRef.current).forEach((id) => {
-          const b = data && data[id];
-          if (!b || (b.ts && now - b.ts > 60000)) { map.removeLayer(markersRef.current[id]); delete markersRef.current[id]; }
+          if (!validIds.has(id)) { map.removeLayer(markersRef.current[id]); delete markersRef.current[id]; }
         });
 
         // 시간표 기반 추정 위치 — 라이브로 커버되지 않는 운행 중 회차
@@ -1475,7 +1489,7 @@ function PassengerView({ dbUrl, onAdmin, initialTab = "list" }) {
   const now = Date.now();
   const agoText = (ts) => { if (!ts) return ""; const s = Math.round((now - ts) / 1000); return s < 5 ? "방금" : s < 60 ? `${s}초 전` : `${Math.floor(s / 60)}분 전`; };
   const live = Object.entries(buses)
-    .filter(([, b]) => b && b.lat != null && (!b.ts || now - b.ts < 60000))
+    .filter(([, b]) => b && (b.lat != null || b.stop) && (!b.ts || now - b.ts < 60000))
     .sort((a, b) => a[0].localeCompare(b[0], undefined, { numeric: true }));
 
   // 시간표(승객용) — 일요일(6.14)은 5회차, 그 외 6회차
@@ -1782,6 +1796,8 @@ function App() {
   const [authStatus, setAuthStatus] = useState("");
   const [sharing, setSharing] = useState(false);
   const [manualWaiting, setManualWaiting] = useState(false);
+  const [locShare, setLocShare] = useState(() => LS.get("locshare", "1") === "1"); // 위치 좌표 공유(끄면 운행 정보만 송신)
+  useEffect(() => LS.set("locshare", locShare ? "1" : "0"), [locShare]);
   const lastShareRef = useRef(0);
   const authTokenRef = useRef("");
   const [progTimeBase, setProgTimeBase] = useState(() => LS.get("progbase", "now")); // now|trip
@@ -2502,17 +2518,18 @@ function App() {
     lastShareRef.current = now;
     const base = shareUrl.replace(/\/+$/, "");
     const auth = authTokenRef.current ? `?auth=${encodeURIComponent(authTokenRef.current)}` : "";
-    // bus.stop(=곧 도착할 정류장)까지의 거리 — 30m 이내면 '도착'으로 간주
+    // bus.stop(=곧 도착할 정류장)까지의 거리 — 30m 이내면 '도착'으로 간주 (좌표 공유 시에만)
     const distToCur = userPos && curCoord ? distanceMeters(userPos, curCoord) : null;
-    const arrived = distToCur != null && distToCur < 30 ? true : undefined;
+    const arrived = locShare && distToCur != null && distToCur < 30 ? true : undefined;
     const body = JSON.stringify({
-      lat: userPos.lat, lng: userPos.lng, dir: direction, trip: tripIdx + 1,
+      ...(locShare ? { lat: userPos.lat, lng: userPos.lng } : {}),
+      dir: direction, trip: tripIdx + 1,
       stop: curStop?.name || "", ts: now,
       waiting: manualWaiting || undefined,
-      arrived,
+      ...(arrived ? { arrived } : {}),
     });
     fetch(`${base}/buses/${encodeURIComponent(busId || "1")}.json${auth}`, { method: "PUT", body }).catch(() => {});
-  }, [userPos, sharing, shareUrl, busId, direction, tripIdx, curStop, curCoord, manualWaiting]);
+  }, [userPos, sharing, shareUrl, busId, direction, tripIdx, curStop, curCoord, manualWaiting, locShare]);
 
   // 공유를 끄면(켰다가 끈 경우만) 내 위치 노드 삭제 — 지도에서 사라지게
   const wasSharingRef = useRef(false);
@@ -3074,11 +3091,21 @@ function App() {
                 실시간 위치 공유 {manualWaiting ? "· 대기 표시 중" : ""}
               </div>
               <div className="text-[10px] text-slate-500 truncate">
-                {sharing ? `${busId || "1"}번 차량 위치 송신 중 · 3초 간격` : shareUrl ? "끄면 승객 지도에서 사라짐" : "고급 설정에서 DB 주소를 먼저 입력"}
+                {sharing ? `${busId || "1"}번 차량 ${locShare ? "위치+운행" : "운행 정보만"} 송신 중 · 3초 간격` : shareUrl ? "끄면 승객 지도에서 사라짐" : "고급 설정에서 DB 주소를 먼저 입력"}
               </div>
             </div>
           </div>
           <div className="flex items-center gap-2 flex-shrink-0">
+            {sharing && (
+              <button onClick={() => setLocShare((v) => !v)}
+                className="text-[10px] px-2 py-1 rounded-full"
+                style={{ background: locShare ? "#60a5fa" : "rgba(100,116,139,0.18)",
+                  color: locShare ? "#0a0b0f" : "#94a3b8",
+                  border: "1px solid " + (locShare ? "rgba(96,165,250,0.35)" : "#3a3f54"), fontFamily: "'Jua', sans-serif" }}
+                title={locShare ? "GPS 좌표 공유 중 — 끄면 운행 정보만 송신" : "운행 정보만 송신 중 — 켜면 GPS 좌표도 송신"}>
+                📍 {locShare ? "ON" : "OFF"}
+              </button>
+            )}
             {sharing && (
               <button onClick={() => setManualWaiting((v) => !v)}
                 className="text-[10px] px-2 py-1 rounded-full"
