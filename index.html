@@ -45,7 +45,7 @@
 
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef, useMemo } = React;
-const BUILD = "b89"; /* 화면 우하단 표시 — 최신 배포 확인용 */
+const BUILD = "b91"; /* 화면 우하단 표시 — 최신 배포 확인용 */
 
 /* 실시간 위치 공유용 Firebase DB 주소. 여기에 한 번 넣어두면 승객 링크가 ?view=map 만 남아 깔끔해집니다. */
 const SHARE_DB = "https://innum-bus-default-rtdb.firebaseio.com";
@@ -1262,39 +1262,50 @@ function BusCard({ id, bus, agoText, nowMin, tripsToday }) {
         </div>
       ) : (
       <React.Fragment>
-      <div className="flex items-stretch gap-2 mb-2.5">
-        <div className="flex-1 px-3 py-2" style={{ background: FT.orangeSoft, border: "1.5px solid " + FT.ink, borderRadius: 8 }}>
-          <div style={{ fontSize: 9, color: FT.orangeDark, marginBottom: 2 }}>곧 도착</div>
-          <div className="truncate" style={{ fontSize: 14, fontWeight: 700, color: FT.ink, fontFamily: "'Jua', sans-serif" }}>
-            {bus.stop || "운행 중"}
-            {sched && ci >= 0 && sched[ci] ? <span style={{ fontSize: 10, color: FT.orangeDark, marginLeft: 4 }}>{sched[ci]} 예정</span> : null}
-          </div>
-        </div>
-        <div className="flex-1 px-3 py-2" style={{ background: FT.paper, border: "1.5px solid " + FT.ink, borderRadius: 8 }}>
-          <div style={{ fontSize: 9, color: FT.mute, marginBottom: 2 }}>{nextStop ? "그 다음" : "종점"}</div>
-          <div className="truncate" style={{ fontSize: 14, fontWeight: 700, color: FT.ink, fontFamily: "'Jua', sans-serif" }}>
-            {nextStop ? nextStop.name : finalName}
-            {(nextStop ? nextEta : finalEta) ? <span style={{ fontSize: 10, color: FT.mute, marginLeft: 4 }}>{nextStop ? nextEta : finalEta} 예정</span> : null}
-          </div>
-        </div>
+      <div ref={stripRef} className="flex items-start gap-0 overflow-x-auto" style={{ scrollbarWidth: "none", paddingTop: 6, paddingBottom: 4 }}>
+        {stops.map((s, i) => {
+          // 정류장 점 색: 지나온 곳=청록, 곧 도착(ci)=주황(도착 시 청록), 미래=흰
+          const isCur = i === ci;
+          const isPast = i < ci;
+          const dotBg = isCur ? (bus.arrived ? FT.teal : "#fff") : isPast ? FT.teal : "#fff";
+          const dotBorder = isCur ? (bus.arrived ? FT.tealDark : FT.orangeDark) : isPast ? FT.tealDark : FT.mute;
+          // 연결 막대 색: (i, i+1) 구간. (ci-1, ci) 구간은 주황 강조(곧 도착 막대)
+          let segColor = "#D1D5DB", segH = 2;
+          if (i < ci - 1) { segColor = FT.teal; }
+          else if (i === ci - 1) { segColor = bus.arrived ? FT.teal : FT.orange; segH = 4; }
+          return (
+            <React.Fragment key={s.name}>
+              <div ref={isCur ? activeRef : null} className="flex flex-col items-center flex-shrink-0">
+                <div style={{
+                  width: isCur ? 14 : 11, height: isCur ? 14 : 11, borderRadius: "50%",
+                  background: dotBg, border: "2px solid " + dotBorder,
+                  boxShadow: isCur && !bus.arrived ? `0 0 0 3px ${FT.orangeSoft}` : "none" }} />
+                <span style={{ fontSize: 8, marginTop: 2, whiteSpace: "nowrap", padding: "0 4px",
+                  color: isCur ? (bus.arrived ? FT.tealDark : FT.orangeDark) : isPast ? FT.tealDark : FT.mute,
+                  fontWeight: isCur ? 700 : 400 }}>{s.name}</span>
+              </div>
+              {i < stops.length - 1 && <div className="flex-shrink-0 self-start" style={{ width: 16, height: segH, marginTop: 6 + (segH > 2 ? -1 : 0), background: segColor, borderRadius: 1 }} />}
+            </React.Fragment>
+          );
+        })}
       </div>
 
-      <div ref={stripRef} className="flex items-start gap-0 overflow-x-auto" style={{ scrollbarWidth: "none", paddingTop: 6, paddingBottom: 4 }}>
-        {stops.map((s, i) => (
-          <React.Fragment key={s.name}>
-            <div ref={i === ci ? activeRef : null} className="flex flex-col items-center flex-shrink-0">
-              <div style={{
-                width: i === ci ? 14 : 11, height: i === ci ? 14 : 11, borderRadius: "50%",
-                background: i === ci ? FT.orange : i < ci ? FT.teal : "#fff",
-                border: "1.5px solid " + (i === ci ? FT.orangeDark : i < ci ? FT.tealDark : FT.mute),
-                boxShadow: i === ci ? "0 0 0 3px " + FT.orangeSoft : "none" }} />
-              <span style={{ fontSize: 8, marginTop: 2, whiteSpace: "nowrap", padding: "0 4px",
-                color: i === ci ? FT.orangeDark : i < ci ? FT.tealDark : FT.mute,
-                fontWeight: i === ci ? 700 : 400 }}>{s.name}</span>
-            </div>
-            {i < stops.length - 1 && <div className="flex-shrink-0 self-start" style={{ width: 16, height: 2, marginTop: 6, background: i < ci ? FT.teal : "#D1D5DB" }} />}
-          </React.Fragment>
-        ))}
+      {/* 곧 도착 / 정차 중 정보 — 진행바 아래 한 줄 */}
+      <div style={{ marginTop: 8, padding: "8px 10px", borderRadius: 8,
+        background: bus.arrived ? FT.tealSoft : FT.orangeSoft,
+        border: "1.5px solid " + (bus.arrived ? FT.tealDark : FT.orangeDark),
+        display: "flex", alignItems: "center", gap: 8 }}>
+        <span style={{ fontSize: 11, color: bus.arrived ? FT.tealDark : FT.orangeDark, fontFamily: "'Jua', sans-serif", fontWeight: 700 }}>
+          {bus.arrived ? "● 정차 중" : "곧 도착"}
+        </span>
+        <span className="truncate" style={{ fontSize: 13, color: FT.ink, fontFamily: "'Jua', sans-serif", fontWeight: 700, flex: 1 }}>
+          {bus.stop || "운행 중"}
+        </span>
+        {sched && ci >= 0 && sched[ci] && (
+          <span style={{ fontSize: 11, color: bus.arrived ? FT.tealDark : FT.orangeDark, fontFamily: "'IBM Plex Mono', monospace", flexShrink: 0 }}>
+            {sched[ci]} 예정
+          </span>
+        )}
       </div>
       </React.Fragment>
       )}
@@ -2275,12 +2286,17 @@ function App() {
     lastShareRef.current = now;
     const base = shareUrl.replace(/\/+$/, "");
     const auth = authTokenRef.current ? `?auth=${encodeURIComponent(authTokenRef.current)}` : "";
+    // bus.stop(=곧 도착할 정류장)까지의 거리 — 30m 이내면 '도착'으로 간주
+    const distToCur = userPos && curCoord ? distanceMeters(userPos, curCoord) : null;
+    const arrived = distToCur != null && distToCur < 30 ? true : undefined;
     const body = JSON.stringify({
       lat: userPos.lat, lng: userPos.lng, dir: direction, trip: tripIdx + 1,
-      stop: curStop?.name || "", ts: now, waiting: manualWaiting || undefined,
+      stop: curStop?.name || "", ts: now,
+      waiting: manualWaiting || undefined,
+      arrived,
     });
     fetch(`${base}/buses/${encodeURIComponent(busId || "1")}.json${auth}`, { method: "PUT", body }).catch(() => {});
-  }, [userPos, sharing, shareUrl, busId, direction, tripIdx, curStop, manualWaiting]);
+  }, [userPos, sharing, shareUrl, busId, direction, tripIdx, curStop, curCoord, manualWaiting]);
 
   // 공유를 끄면(켰다가 끈 경우만) 내 위치 노드 삭제 — 지도에서 사라지게
   const wasSharingRef = useRef(false);
