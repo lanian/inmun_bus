@@ -45,7 +45,7 @@
 
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef, useMemo } = React;
-const BUILD = "b114"; /* 화면 우하단 표시 — 최신 배포 확인용 */
+const BUILD = "b115"; /* 화면 우하단 표시 — 최신 배포 확인용 */
 
 /* 실시간 위치 공유용 Firebase DB 주소. 여기에 한 번 넣어두면 승객 링크가 ?view=map 만 남아 깔끔해집니다. */
 const SHARE_DB = "https://innum-bus-default-rtdb.firebaseio.com";
@@ -731,6 +731,29 @@ function VenueModal({ onClose, initialZone = 0 }) {
   );
 }
 
+/* 운행 정보(dir/trip/현재 정류장) + 현재 시간 → 직전 정류장과 현재 정류장 사이를 시간 비율로 보간한 위치 */
+function operationBasedPos(dir, tripIdx, curStopName, nowMin) {
+  const route = ROUTES[dir];
+  const sched = route.trips[tripIdx];
+  if (!sched) return null;
+  const stops = route.stops;
+  const i = stops.findIndex((s) => s.name === curStopName);
+  if (i < 0) return null;
+  if (i === 0) {
+    return stops[0].lat != null ? { lat: stops[0].lat, lng: stops[0].lng, fromName: stops[0].name, toName: stops[0].name } : null;
+  }
+  const prev = stops[i - 1], cur = stops[i];
+  if (prev.lat == null || cur.lat == null || !sched[i - 1] || !sched[i]) return null;
+  const tPrev = toMin(sched[i - 1]), tCur = toMin(sched[i]);
+  let t = (nowMin - tPrev) / Math.max(1, tCur - tPrev);
+  t = Math.max(0, Math.min(1, t));
+  return {
+    lat: prev.lat + (cur.lat - prev.lat) * t,
+    lng: prev.lng + (cur.lng - prev.lng) * t,
+    fromName: prev.name, toName: cur.name,
+  };
+}
+
 /* 시간표 기반 버스 추정 위치 — 운행 중 회차의 두 정류장 사이를 시간 비율로 보간 */
 function scheduledBusPos(dir, tripIdx, nowMin) {
   const route = ROUTES[dir];
@@ -1142,16 +1165,23 @@ function LiveMapView({ dbUrl }) {
         const now = Date.now(); let n = 0;
         const liveTripSet = new Set();
         const validIds = new Set();
+        const nowDate = new Date();
+        const nowMinTick = nowDate.getHours() * 60 + nowDate.getMinutes() + nowDate.getSeconds() / 60;
         Object.entries(data || {}).forEach(([id, b]) => {
           if (!b || (b.ts && now - b.ts > 60000)) return;
-          // 좌표 결정: GPS 좌표 우선, 없으면 현재 정류장 좌표 사용(정류장 기반 위치)
+          // 좌표 결정: GPS 좌표 우선. 없으면 운행 정보+시간으로 직전↔현재 정류장 사이 보간. 둘 다 안 되면 정류장 좌표.
           let pos = null, noGps = false;
           if (b.lat != null && b.lng != null) {
             pos = [b.lat, b.lng];
           } else if (b.stop && b.dir) {
-            const route = ROUTES[b.dir === "inbound" ? "inbound" : "outbound"];
-            const s = route && route.stops.find((x) => x.name === b.stop);
-            if (s && s.lat != null) { pos = [s.lat, s.lng]; noGps = true; }
+            const dirKey = b.dir === "inbound" ? "inbound" : "outbound";
+            const op = b.trip ? operationBasedPos(dirKey, b.trip - 1, b.stop, nowMinTick) : null;
+            if (op) { pos = [op.lat, op.lng]; noGps = true; }
+            else {
+              const route = ROUTES[dirKey];
+              const s = route && route.stops.find((x) => x.name === b.stop);
+              if (s && s.lat != null) { pos = [s.lat, s.lng]; noGps = true; }
+            }
           }
           if (!pos) return;
           n++;
