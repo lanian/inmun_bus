@@ -80,7 +80,7 @@
 
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef, useMemo } = React;
-const BUILD = "b185"; /* 화면 우하단 표시 — 최신 배포 확인용 */
+const BUILD = "b186"; /* 화면 우하단 표시 — 최신 배포 확인용 */
 
 /* 실시간 위치 공유용 Firebase DB 주소. 여기에 한 번 넣어두면 승객 링크가 ?view=map 만 남아 깔끔해집니다. */
 const SHARE_DB = "https://innum-bus-default-rtdb.firebaseio.com";
@@ -1595,6 +1595,7 @@ function LiveMapView({ dbUrl }) {
         routePts.push(c);
       });
       lineRefsRef.current[dir] = L.polyline(stopCoords, { color: dirColor, weight: 5, opacity: 0.45, dashArray: dash, lineCap: "round", lineJoin: "round" }).addTo(map);
+      lineRefsRef.current[dir].bringToBack(); // 정류장 마커 아래로
       const path = routePts.map(([la, ln]) => `${ln},${la}`).join(";");
       fetch(`https://router.project-osrm.org/route/v1/driving/${path}?overview=full&geometries=geojson&continue_straight=false`)
         .then((r) => r.ok ? r.json() : null)
@@ -1603,6 +1604,7 @@ function LiveMapView({ dbUrl }) {
           const road = d.routes[0].geometry.coordinates.map(([ln, la]) => [la, ln]);
           if (lineRefsRef.current[dir]) map.removeLayer(lineRefsRef.current[dir]);
           lineRefsRef.current[dir] = L.polyline(road, { color: dirColor, weight: 5, opacity: 0.85, dashArray: dash, lineCap: "round", lineJoin: "round" }).addTo(map);
+          lineRefsRef.current[dir].bringToBack(); // 도로 폴리라인도 마커 아래로
         })
         .catch(() => {});
     });
