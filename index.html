@@ -80,7 +80,7 @@
 
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef, useMemo } = React;
-const BUILD = "b187"; /* 화면 우하단 표시 — 최신 배포 확인용 */
+const BUILD = "b188"; /* 화면 우하단 표시 — 최신 배포 확인용 */
 
 /* 실시간 위치 공유용 Firebase DB 주소. 여기에 한 번 넣어두면 승객 링크가 ?view=map 만 남아 깔끔해집니다. */
 const SHARE_DB = "https://innum-bus-default-rtdb.firebaseio.com";
@@ -3415,7 +3415,7 @@ function App() {
       } catch (_) { setGpsError("쓰기 로그인 네트워크 오류"); }
     };
     signIn();
-    timer = setInterval(() => { if (!stopped) signIn(); }, 50 * 60 * 1000);
+    timer = setInterval(() => { if (!stopped) signIn(); }, 30 * 60 * 1000);
     return () => { stopped = true; clearInterval(timer); };
   }, [sharing, driverEmail, driverPass, apiKey]);
 
@@ -3423,13 +3423,16 @@ function App() {
   const [_shareTick, _setShareTick] = useState(0);
   useEffect(() => {
     if (!sharing) return;
-    const id = setInterval(() => _setShareTick((t) => t + 1), 3000);
+    const id = setInterval(() => _setShareTick((t) => t + 1), 5000);
     return () => clearInterval(id);
   }, [sharing]);
   useEffect(() => {
     if (!sharing || !shareUrl) return;
     const now = Date.now();
-    if (now - lastShareRef.current < 2500) return;
+    // 실패 누적 시 지수 백오프 — 최소 간격을 늘려 서버 부하/오류 폭주 완화
+    const fails = broadcastFailRef.current;
+    const minGap = Math.min(60000, 4500 * Math.pow(1.5, Math.min(fails, 6))); // 4.5s → 최대 60s
+    if (now - lastShareRef.current < minGap) return;
     lastShareRef.current = now;
     const base = shareUrl.replace(/\/+$/, "");
     const auth = authTokenRef.current ? `?auth=${encodeURIComponent(authTokenRef.current)}` : "";
@@ -3491,7 +3494,7 @@ function App() {
       .catch((err) => {
         broadcastFailRef.current += 1;
         setLastBroadcastStatus(String(err.message || err));
-        if (broadcastFailRef.current >= 5) setBroadcastStatus("failing");
+        if (broadcastFailRef.current >= 8) setBroadcastStatus("failing"); // 임계 5→8
       });
   }, [_shareTick, userPos, sharing, shareUrl, busId, direction, tripIdx, curStop, curCoord, manualWaiting, locShare]);
 
