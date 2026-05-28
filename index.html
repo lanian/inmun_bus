@@ -80,7 +80,7 @@
 
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef, useMemo } = React;
-const BUILD = "b184"; /* 화면 우하단 표시 — 최신 배포 확인용 */
+const BUILD = "b185"; /* 화면 우하단 표시 — 최신 배포 확인용 */
 
 /* 실시간 위치 공유용 Firebase DB 주소. 여기에 한 번 넣어두면 승객 링크가 ?view=map 만 남아 깔끔해집니다. */
 const SHARE_DB = "https://innum-bus-default-rtdb.firebaseio.com";
@@ -1490,6 +1490,7 @@ function LiveMapView({ dbUrl }) {
   useEffect(() => { const id = setInterval(() => _setZoneTick((t) => t + 1), 60000); return () => clearInterval(id); }, []);
   const lineRefsRef = useRef({});
   const stopLayersRef = useRef([]);
+  const zoneLayersRef = useRef([]);
   const hasFitRef = useRef(false);
 
   // 좌표 lookup — override(공유 키) 우선, 없으면 ROUTES 기본값
@@ -1605,7 +1606,18 @@ function LiveMapView({ dbUrl }) {
         })
         .catch(() => {});
     });
-    // 행사 주요 구역 마커 — override(/zones) 우선, 없으면 ROUTES 기본값. 현재 진행 중 프로그램 배지·팝업
+    if (!hasFitRef.current && allCoords.length) {
+      map.fitBounds(allCoords, { padding: [80, 30] });
+      hasFitRef.current = true;
+    }
+  }, [coordOverride, viaOverride]);
+
+  /* 행사 주요 구역 마커 — 자체 effect (zoneOverride·_zoneTick 변경 시만 재계산, 노선 폴리라인은 건드리지 않음) */
+  useEffect(() => {
+    const map = mapRef.current; if (!map || !window.L) return;
+    const L = window.L;
+    zoneLayersRef.current.forEach((l) => map.removeLayer(l));
+    zoneLayersRef.current = [];
     const today = new Date();
     const dayKey = (today.getMonth() === 5 && today.getDate() === 13) ? "day1"
       : (today.getMonth() === 5 && today.getDate() === 14) ? "day2" : null;
@@ -1635,13 +1647,9 @@ function LiveMapView({ dbUrl }) {
             : (dayKey ? `<div style="margin-top:6px;font-size:10px;color:#888">지금 진행 중인 프로그램 없음</div>` : ""))
         + `</div>`;
       const m = L.marker([lat, lng], { icon }).addTo(map).bindPopup(popupHtml);
-      stopLayersRef.current.push(m);
+      zoneLayersRef.current.push(m);
     });
-    if (!hasFitRef.current && allCoords.length) {
-      map.fitBounds(allCoords, { padding: [80, 30] });
-      hasFitRef.current = true;
-    }
-  }, [coordOverride, viaOverride, zoneOverride, _zoneTick]);
+  }, [zoneOverride, _zoneTick]);
 
   useEffect(() => {
     if (!dbUrl) { setStatus("공유 주소(db)가 없습니다"); return; }
