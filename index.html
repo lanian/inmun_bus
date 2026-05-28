@@ -45,7 +45,7 @@
 
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef, useMemo } = React;
-const BUILD = "b116"; /* 화면 우하단 표시 — 최신 배포 확인용 */
+const BUILD = "b117"; /* 화면 우하단 표시 — 최신 배포 확인용 */
 
 /* 실시간 위치 공유용 Firebase DB 주소. 여기에 한 번 넣어두면 승객 링크가 ?view=map 만 남아 깔끔해집니다. */
 const SHARE_DB = "https://innum-bus-default-rtdb.firebaseio.com";
@@ -1148,14 +1148,14 @@ function LiveMapView({ dbUrl }) {
       const wait = b.waiting === true;
       const borderStyle = noGps ? "dashed" : "solid";
       const shadow = noGps ? "" : `box-shadow:2px 2px 0 ${FT.ink};`;
-      const trailing = noGps ? " 📍" : "";
+      const trailing = noGps ? " 예상" : "";
       const html = `<div style="display:inline-flex;align-items:center;gap:3px;background:${wait ? "#fff" : bg};color:${wait ? FT.ink : "#fff"};border:2.5px ${borderStyle} ${FT.ink};border-radius:999px;padding:3px 9px;${shadow}font-family:'Jua',sans-serif;font-weight:700;font-size:12px;white-space:nowrap;">${wait ? "🅿️" : "🚌"} ${id}${trailing}</div>`;
-      return L.divIcon({ className: "", html, iconSize: [130, 28], iconAnchor: [65, 14] });
+      return L.divIcon({ className: "", html, iconSize: [140, 28], iconAnchor: [70, 14] });
     };
     const schedIcon = (dir, tripNum) => {
       const c = dir === "inbound" ? FT.teal : FT.orange;
-      const html = `<div style="display:inline-flex;align-items:center;gap:3px;background:#fff;color:${FT.ink};border:2px dashed ${c};border-radius:999px;padding:3px 9px;font-family:'Jua',sans-serif;font-weight:700;font-size:11px;white-space:nowrap;opacity:0.92;">📅 ${tripNum}</div>`;
-      return L.divIcon({ className: "", html, iconSize: [90, 26], iconAnchor: [45, 13] });
+      const html = `<div style="display:inline-flex;align-items:center;gap:3px;background:#fff;color:${FT.ink};border:2px dashed ${c};border-radius:999px;padding:3px 9px;font-family:'Jua',sans-serif;font-weight:700;font-size:11px;white-space:nowrap;opacity:0.92;">📅 ${tripNum}회차 예상</div>`;
+      return L.divIcon({ className: "", html, iconSize: [130, 26], iconAnchor: [65, 13] });
     };
     const poll = async () => {
       try {
