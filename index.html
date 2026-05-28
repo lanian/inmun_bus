@@ -80,7 +80,7 @@
 
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef, useMemo } = React;
-const BUILD = "b195"; /* 화면 우하단 표시 — 최신 배포 확인용 */
+const BUILD = "b196"; /* 화면 우하단 표시 — 최신 배포 확인용 */
 
 /* 실시간 위치 공유용 Firebase DB 주소. 여기에 한 번 넣어두면 승객 링크가 ?view=map 만 남아 깔끔해집니다. */
 const SHARE_DB = "https://innum-bus-default-rtdb.firebaseio.com";
@@ -1722,10 +1722,13 @@ function LiveMapView({ dbUrl }) {
     zoneLayersRef.current.forEach((l) => map.removeLayer(l));
     zoneLayersRef.current = [];
     const today = new Date();
-    const dayKey = (today.getMonth() === 5 && today.getDate() === 13) ? "day1"
-      : (today.getMonth() === 5 && today.getDate() === 14) ? "day2" : null;
+    const isToday = today.getMonth() === 5 && (today.getDate() === 13 || today.getDate() === 14);
+    // 행사 기간이면 그날의 일정, 아니면 day1을 기본 미리보기로
+    const dayKey = (today.getMonth() === 5 && today.getDate() === 14) ? "day2" : "day1";
+    const dayLabel = FESTIVAL_PROGRAM[dayKey]?.label || "";
     const nowMinNow = today.getHours() * 60 + today.getMinutes();
     const isLive = (item) => {
+      if (!isToday) return false; // 행사 기간 외엔 라이브 강조 없음
       if (item.time === "상시") return true;
       const mm = item.time.match(/^(\d\d:\d\d)~(\d\d:\d\d)$/);
       if (!mm) return false;
@@ -1740,7 +1743,8 @@ function LiveMapView({ dbUrl }) {
       const rot = o && typeof o.rot === "number" ? o.rot : (z.rot || 0);
       if (lat == null || lng == null) return;
       const c = z.num % 2 ? FT.orange : FT.teal;
-      const liveItems = dayKey ? (FESTIVAL_PROGRAM[dayKey]?.items || []).filter((it) => it.zone === z.num && isLive(it)) : [];
+      const zoneItems = (FESTIVAL_PROGRAM[dayKey]?.items || []).filter((it) => it.zone === z.num);
+      const liveItems = isToday ? zoneItems.filter(isLive) : [];
       // 타원 영역 폴리곤
       if (rA > 0 && rB > 0) {
         const poly = L.polygon(ellipsePolygon(lat, lng, rA, rB, rot), {
@@ -1752,14 +1756,21 @@ function LiveMapView({ dbUrl }) {
       const badge = liveItems.length > 0 ? `<span style="display:inline-flex;align-items:center;justify-content:center;min-width:14px;height:14px;border-radius:7px;background:#dc2626;color:#fff;font-size:9px;padding:0 4px;margin-left:3px">${liveItems.length}</span>` : "";
       const html = `<div><span class="num" style="background:${c}">${z.num}</span><span>${z.title}</span>${badge}</div>`;
       const icon = L.divIcon({ className: "fest-zone-marker", html, iconSize: [180, 24], iconAnchor: [90, 12] });
-      const popupHtml = `<div style="font-family:'Jua',sans-serif;max-width:240px"><b>${z.num}. ${z.title}</b><br><span style="color:#4A4E55;font-size:11px">${z.sub}</span>`
-        + (liveItems.length > 0
-            ? `<div style="margin-top:8px;padding-top:6px;border-top:1px solid #ddd"><div style="font-size:11px;color:${c};font-weight:700;margin-bottom:3px">● 지금 진행 중 (${liveItems.length})</div>`
-              + liveItems.slice(0, 4).map((it) => `<div style="font-size:11px;color:#101113;margin:2px 0"><b>${it.time}</b> ${it.title}</div>`).join("")
-              + (liveItems.length > 4 ? `<div style="font-size:10px;color:#888">외 ${liveItems.length - 4}개</div>` : "")
-              + `</div>`
-            : (dayKey ? `<div style="margin-top:6px;font-size:10px;color:#888">지금 진행 중인 프로그램 없음</div>` : ""))
-        + `</div>`;
+      const programLines = zoneItems.length > 0
+        ? zoneItems.slice(0, 10).map((it) => {
+            const live = isLive(it);
+            const bg = live ? `background:${c}22;` : "";
+            const mark = live ? `<span style="color:${c};font-weight:700">● </span>` : "";
+            return `<div style="font-size:11px;color:#101113;margin:2px 0;padding:1px 4px;border-radius:4px;${bg}">${mark}<b>${it.time}</b> ${it.title}</div>`;
+          }).join("") + (zoneItems.length > 10 ? `<div style="font-size:10px;color:#888;margin-top:2px">외 ${zoneItems.length - 10}개</div>` : "")
+        : `<div style="font-size:11px;color:#888;margin-top:4px">등록된 프로그램 없음</div>`;
+      const heading = isToday
+        ? (liveItems.length > 0 ? `● 오늘 ${dayLabel} · 진행 ${liveItems.length}건` : `오늘 ${dayLabel} 일정`)
+        : `${dayLabel} 일정 (미리보기)`;
+      const popupHtml = `<div style="font-family:'Jua',sans-serif;max-width:260px"><b>${z.num}. ${z.title}</b><br><span style="color:#4A4E55;font-size:11px">${z.sub}</span>`
+        + `<div style="margin-top:8px;padding-top:6px;border-top:1px solid #ddd"><div style="font-size:11px;color:${c};font-weight:700;margin-bottom:3px">${heading}</div>`
+        + programLines
+        + `</div></div>`;
       const m = L.marker([lat, lng], { icon }).addTo(map).bindPopup(popupHtml);
       zoneLayersRef.current.push(m);
     });
