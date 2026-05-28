@@ -45,7 +45,7 @@
 
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef, useMemo } = React;
-const BUILD = "b92"; /* 화면 우하단 표시 — 최신 배포 확인용 */
+const BUILD = "b93"; /* 화면 우하단 표시 — 최신 배포 확인용 */
 
 /* 실시간 위치 공유용 Firebase DB 주소. 여기에 한 번 넣어두면 승객 링크가 ?view=map 만 남아 깔끔해집니다. */
 const SHARE_DB = "https://innum-bus-default-rtdb.firebaseio.com";
@@ -155,7 +155,7 @@ const ROUTES = {
       { name: "학운초등학교", lat: 35.13310169245655, lng: 126.94788811002641 },
       { name: "운림중학교", lat: 35.13221866580787, lng: 126.94241924494327 },
       { name: "홍림교", lat: 35.132095930651055, lng: 126.93636507806373 },
-      { name: "학동증심사입구", lat: null, lng: null }, // TODO: 좌표 추가 필요(현재는 목록·시간표에만 표시, 지도엔 미표시)
+      { name: "학동증심사입구", lat: 35.134588332673225, lng: 126.92753093429309 },
       { name: "학동증심사역", lat: 35.13455267915917, lng: 126.92751386790852 },
       { name: "5·18민주광장", sub: "마한지맞은편", terminus: true, lat: 35.14605385691435, lng: 126.91908569725996 },
     ],
