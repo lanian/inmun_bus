@@ -80,7 +80,7 @@
 
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef, useMemo } = React;
-const BUILD = "b181"; /* 화면 우하단 표시 — 최신 배포 확인용 */
+const BUILD = "b182"; /* 화면 우하단 표시 — 최신 배포 확인용 */
 
 /* 실시간 위치 공유용 Firebase DB 주소. 여기에 한 번 넣어두면 승객 링크가 ?view=map 만 남아 깔끔해집니다. */
 const SHARE_DB = "https://innum-bus-default-rtdb.firebaseio.com";
@@ -1476,6 +1476,9 @@ function LiveMapView({ dbUrl }) {
   const [viaOverride, setViaOverride] = useState(() => LS.getJSON("viapoints", {}));
   const [coordOverride, setCoordOverride] = useState(() => LS.getJSON("coords", {}));
   const [zoneOverride, setZoneOverride] = useState(() => LS.getJSON("zones", {}));
+  /* 진행 중 프로그램 재계산 트리거 — 1분마다 tick */
+  const [_zoneTick, _setZoneTick] = useState(0);
+  useEffect(() => { const id = setInterval(() => _setZoneTick((t) => t + 1), 60000); return () => clearInterval(id); }, []);
   const lineRefsRef = useRef({});
   const stopLayersRef = useRef([]);
   const hasFitRef = useRef(false);
@@ -1593,24 +1596,43 @@ function LiveMapView({ dbUrl }) {
         })
         .catch(() => {});
     });
-    // 행사 주요 구역 마커 — override(/zones) 우선, 없으면 ROUTES 기본값
+    // 행사 주요 구역 마커 — override(/zones) 우선, 없으면 ROUTES 기본값. 현재 진행 중 프로그램 배지·팝업
+    const today = new Date();
+    const dayKey = (today.getMonth() === 5 && today.getDate() === 13) ? "day1"
+      : (today.getMonth() === 5 && today.getDate() === 14) ? "day2" : null;
+    const nowMinNow = today.getHours() * 60 + today.getMinutes();
+    const isLive = (item) => {
+      if (item.time === "상시") return true;
+      const mm = item.time.match(/^(\d\d:\d\d)~(\d\d:\d\d)$/);
+      if (!mm) return false;
+      return toMin(mm[1]) <= nowMinNow && nowMinNow < toMin(mm[2]);
+    };
     FESTIVAL_ZONES.forEach((z) => {
       const o = zoneOverride[z.num];
       const lat = o && typeof o.lat === "number" ? o.lat : z.lat;
       const lng = o && typeof o.lng === "number" ? o.lng : z.lng;
       if (lat == null || lng == null) return;
       const c = z.num % 2 ? FT.orange : FT.teal;
-      const html = `<div><span class="num" style="background:${c}">${z.num}</span><span>${z.title}</span></div>`;
-      const icon = L.divIcon({ className: "fest-zone-marker", html, iconSize: [160, 24], iconAnchor: [80, 12] });
-      const m = L.marker([lat, lng], { icon }).addTo(map)
-        .bindPopup(`<div style="font-family:'Jua',sans-serif"><b>${z.num}. ${z.title}</b><br><span style="color:#4A4E55;font-size:11px">${z.sub}</span></div>`);
+      const liveItems = dayKey ? (FESTIVAL_PROGRAM[dayKey]?.items || []).filter((it) => it.zone === z.num && isLive(it)) : [];
+      const badge = liveItems.length > 0 ? `<span style="display:inline-flex;align-items:center;justify-content:center;min-width:14px;height:14px;border-radius:7px;background:#dc2626;color:#fff;font-size:9px;padding:0 4px;margin-left:3px">${liveItems.length}</span>` : "";
+      const html = `<div><span class="num" style="background:${c}">${z.num}</span><span>${z.title}</span>${badge}</div>`;
+      const icon = L.divIcon({ className: "fest-zone-marker", html, iconSize: [180, 24], iconAnchor: [90, 12] });
+      const popupHtml = `<div style="font-family:'Jua',sans-serif;max-width:240px"><b>${z.num}. ${z.title}</b><br><span style="color:#4A4E55;font-size:11px">${z.sub}</span>`
+        + (liveItems.length > 0
+            ? `<div style="margin-top:8px;padding-top:6px;border-top:1px solid #ddd"><div style="font-size:11px;color:${c};font-weight:700;margin-bottom:3px">● 지금 진행 중 (${liveItems.length})</div>`
+              + liveItems.slice(0, 4).map((it) => `<div style="font-size:11px;color:#101113;margin:2px 0"><b>${it.time}</b> ${it.title}</div>`).join("")
+              + (liveItems.length > 4 ? `<div style="font-size:10px;color:#888">외 ${liveItems.length - 4}개</div>` : "")
+              + `</div>`
+            : (dayKey ? `<div style="margin-top:6px;font-size:10px;color:#888">지금 진행 중인 프로그램 없음</div>` : ""))
+        + `</div>`;
+      const m = L.marker([lat, lng], { icon }).addTo(map).bindPopup(popupHtml);
       stopLayersRef.current.push(m);
     });
     if (!hasFitRef.current && allCoords.length) {
       map.fitBounds(allCoords, { padding: [80, 30] });
       hasFitRef.current = true;
     }
-  }, [coordOverride, viaOverride, zoneOverride]);
+  }, [coordOverride, viaOverride, zoneOverride, _zoneTick]);
 
   useEffect(() => {
     if (!dbUrl) { setStatus("공유 주소(db)가 없습니다"); return; }
