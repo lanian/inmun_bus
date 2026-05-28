@@ -38,7 +38,7 @@
 
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef, useMemo } = React;
-const BUILD = "b52"; /* 화면 우하단 표시 — 최신 배포 확인용 */
+const BUILD = "b53"; /* 화면 우하단 표시 — 최신 배포 확인용 */
 
 /* 실시간 위치 공유용 Firebase DB 주소. 여기에 한 번 넣어두면 승객 링크가 ?view=map 만 남아 깔끔해집니다. */
 const SHARE_DB = "https://innum-bus-default-rtdb.firebaseio.com";
@@ -544,7 +544,7 @@ function BusCard({ id, bus, agoText, nowMin, tripsToday }) {
         </div>
       </div>
 
-      <div ref={stripRef} className="flex items-start gap-0 overflow-x-auto pb-1" style={{ scrollbarWidth: "none" }}>
+      <div ref={stripRef} className="flex items-start gap-0 overflow-x-auto" style={{ scrollbarWidth: "none", paddingTop: 6, paddingBottom: 4 }}>
         {stops.map((s, i) => (
           <React.Fragment key={s.name}>
             <div ref={i === ci ? activeRef : null} className="flex flex-col items-center flex-shrink-0">
