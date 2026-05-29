@@ -110,7 +110,7 @@
 
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef, useMemo } = React;
-const BUILD = "b289"; /* 화면 우하단 표시 — 최신 배포 확인용 */
+const BUILD = "b290"; /* 화면 우하단 표시 — 최신 배포 확인용 */
 
 /* 실시간 위치 공유용 Firebase DB 주소. 여기에 한 번 넣어두면 승객 링크가 ?view=map 만 남아 깔끔해집니다. */
 const SHARE_DB = "https://innum-bus-default-rtdb.firebaseio.com";
@@ -3626,7 +3626,7 @@ function PassengerView({ dbUrl, onAdmin, initialTab = "list" }) {
                       </button>
                     )}
 
-                    {/* 풀폭 그라데이션 배너 — 좌 D-day 큰 배지 + 중앙 텍스트 + 우 → */}
+                    {/* 풀폭 그라데이션 배너 — 좌 D-day 큰 배지 + 중앙 텍스트 + 우 썸네일 + → */}
                     <button onClick={() => { setVenueZone(0); setTab("venue"); }}
                       style={{ width: "100%", display: "flex", alignItems: "center", gap: 12,
                         background: bgGradient, color: "#fff",
@@ -3635,19 +3635,28 @@ function PassengerView({ dbUrl, onAdmin, initialTab = "list" }) {
                         fontFamily: "'Jua', sans-serif", fontWeight: 700, cursor: "pointer", textAlign: "left" }}>
                       {/* 좌측 D-day 배지 */}
                       <span style={{ flexShrink: 0, display: "inline-flex", alignItems: "center", justifyContent: "center",
-                        minWidth: 58, height: 44, padding: "0 10px", borderRadius: 10,
+                        minWidth: 58, height: 56, padding: "0 10px", borderRadius: 10,
                         background: "#fff", color: urgent ? "#dc2626" : ended ? "#64748b" : FT.orangeDark,
-                        border: "2px solid " + FT.ink, fontSize: badgeText.length > 4 ? 13 : 16,
+                        border: "2px solid " + FT.ink, fontSize: badgeText.length > 4 ? 13 : 18,
                         fontWeight: 700, lineHeight: 1, boxShadow: "1.5px 1.5px 0 " + FT.ink + "55" }}>
                         {badgeText}
                       </span>
                       {/* 중앙 텍스트 */}
                       <span style={{ flex: 1, minWidth: 0, lineHeight: 1.2 }}>
-                        <div style={{ fontSize: 14, marginBottom: 2 }}>🎪 무등생각 행사 안내</div>
+                        <div style={{ fontSize: 14, marginBottom: 2 }}>무등생각 행사 안내</div>
                         <div style={{ fontSize: 11, opacity: 0.92, fontWeight: 400 }}>{subText}</div>
+                        <div style={{ fontSize: 10, opacity: 0.85, fontWeight: 400, marginTop: 3,
+                          display: "inline-flex", alignItems: "center", gap: 4 }}>
+                          행사장·프로그램 보기 →
+                        </div>
                       </span>
-                      {/* 우측 화살표 */}
-                      <span style={{ fontSize: 22, flexShrink: 0, fontWeight: 700 }}>→</span>
+                      {/* 우측 썸네일 — 행사장 지도 미리보기 */}
+                      <img src="venue.png" alt="" width="56" height="56"
+                        loading="lazy" decoding="async"
+                        style={{ flexShrink: 0, width: 56, height: 56, borderRadius: 10,
+                          objectFit: "cover", background: "#fff",
+                          border: "2px solid " + FT.ink,
+                          boxShadow: "1.5px 1.5px 0 " + FT.ink + "55" }} />
                     </button>
 
                     {/* 다가올 프로그램 랜덤 홍보 — 행사 종료 후엔 숨김 */}
