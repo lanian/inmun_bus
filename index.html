@@ -86,7 +86,7 @@
 
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef, useMemo } = React;
-const BUILD = "b236"; /* 화면 우하단 표시 — 최신 배포 확인용 */
+const BUILD = "b237"; /* 화면 우하단 표시 — 최신 배포 확인용 */
 
 /* 실시간 위치 공유용 Firebase DB 주소. 여기에 한 번 넣어두면 승객 링크가 ?view=map 만 남아 깔끔해집니다. */
 const SHARE_DB = "https://innum-bus-default-rtdb.firebaseio.com";
@@ -966,18 +966,8 @@ function VenueModal({ onClose, initialZone = 0, onOpenLiveMap, pageMode = false 
           </div>
         )}
 
-        {/* 행사장 지도 — venue.png 안내도 + 무등생각 지도 점프 (B) */}
-        <div className="flex items-center justify-between" style={{ marginTop: 2 }}>
-          <div style={{ fontSize: 12, color: FT.ink, fontFamily: "'Jua', sans-serif", fontWeight: 700 }}>🗺️ 행사장 지도</div>
-          {onOpenLiveMap && (
-            <button onClick={onOpenLiveMap}
-              title="실시간 셔틀 위치 지도로 이동"
-              style={{ fontSize: 11, color: FT.tealDark, fontFamily: "'Jua', sans-serif", fontWeight: 700,
-                background: "transparent", border: "none", cursor: "pointer", padding: 0 }}>
-              무등생각 지도 보기 →
-            </button>
-          )}
-        </div>
+        {/* 행사장 지도 — venue.png 안내도 */}
+        <div style={{ fontSize: 12, color: FT.ink, fontFamily: "'Jua', sans-serif", fontWeight: 700, marginTop: 2 }}>🗺️ 행사장 지도</div>
         <button onClick={() => setExpandedImg("venue.png")} aria-label="지도 크게 보기"
           style={{ width: "100%", background: FT.paper, border: "2px solid " + FT.ink, borderRadius: 10,
             padding: 6, cursor: "zoom-in" }}>
