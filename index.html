@@ -29,6 +29,10 @@
                       radial-gradient(circle at 85% 110%, rgba(238,107,46,0.16), transparent 45%);
     font-family: 'Jua', sans-serif; }
   .boot img { width: 92px; height: auto; animation: bootPulse 1.6s ease-in-out infinite; }
+  /* 인트로 듀얼 로고 — 끄고(원본) + 켜다(상하 반전). logo.png 한 이미지로 OFF/ON 표현 */
+  .boot .boot-logos { display: inline-flex; gap: 24px; align-items: center; justify-content: center; margin-top: 0; }
+  .boot .boot-logos img { width: 84px; height: auto; animation: bootPulse 1.6s ease-in-out infinite; }
+  .boot .boot-logos .flip-on { transform: scaleY(-1); animation-delay: 0.8s; }
   .boot .slogan { font-size: 12px; color: #4A4E55; margin-top: 18px; letter-spacing: 2px; }
   .boot .who { font-size: 14px; color: #101113; font-weight: 700; margin-top: 6px; }
   .boot .accent { font-size: 22px; color: #EE6B2E; font-weight: 700; margin-top: 6px; line-height: 1.2; }
@@ -36,9 +40,8 @@
   .boot .dot { width: 8px; height: 8px; border-radius: 50%; background: #EE6B2E; animation: bootDot 1.4s ease-in-out infinite; }
   .boot .dot:nth-child(2) { background: #16A89E; animation-delay: 0.18s; }
   .boot .dot:nth-child(3) { animation-delay: 0.36s; }
-  /* 인트로 토글 스위치 이미지(투명 PNG) — '생각을 끄고, 생각을 켜다' 시각화 */
-  .intro-switches { margin-top: 14px; width: 200px; height: auto; animation: introSwitchIn 0.7s ease-out 0.15s both; }
-  .intro-switches img { display: block; width: 100%; height: auto; }
+  /* 인트로 듀얼 로고 등장 애니메이션 — 살짝 떠올랐다 정착 */
+  .intro-switches { margin-top: 14px; animation: introSwitchIn 0.7s ease-out 0.15s both; }
   @keyframes introSwitchIn {
     0% { opacity: 0; transform: translateY(8px) scale(0.96); }
     60% { opacity: 1; transform: translateY(0) scale(1.02); }
@@ -94,7 +97,7 @@
 
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef, useMemo } = React;
-const BUILD = "b245"; /* 화면 우하단 표시 — 최신 배포 확인용 */
+const BUILD = "b246"; /* 화면 우하단 표시 — 최신 배포 확인용 */
 
 /* 실시간 위치 공유용 Firebase DB 주소. 여기에 한 번 넣어두면 승객 링크가 ?view=map 만 남아 깔끔해집니다. */
 const SHARE_DB = "https://innum-bus-default-rtdb.firebaseio.com";
@@ -3170,8 +3173,8 @@ function PassengerView({ dbUrl, onAdmin, initialTab = "list" }) {
             <div style={{ flex: 1, minWidth: 0, paddingRight: 20 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                 <span style={{ fontSize: 11, color: FT.inkSoft, fontFamily: "'Jua', sans-serif" }}>생각을 끄고, 생각을 켜다</span>
-                <img src="intro-switches.png" alt="" aria-hidden="true"
-                  style={{ height: 16, width: "auto", flexShrink: 0 }} />
+                <img src="logo.png" alt="" aria-hidden="true"
+                  style={{ height: 16, width: "auto", flexShrink: 0, transform: "scaleY(-1)" }} />
               </div>
               <div style={{ fontSize: 14, color: FT.ink, fontFamily: "'Jua', sans-serif", fontWeight: 700, marginTop: 2 }}>제4회 동구 무등산 인문축제</div>
               <div onClick={onTitleTap} className="select-none"
@@ -6546,9 +6549,9 @@ function App() {
 function Intro() {
   return (
     <div className="boot">
-      <img src="logo.png" alt="무등생각" />
-      <div className="intro-switches" aria-hidden="true">
-        <img src="intro-switches.png" alt="" />
+      <div className="boot-logos intro-switches" aria-label="무등생각 — 생각을 끄고, 생각을 켜다">
+        <img src="logo.png" alt="" aria-hidden="true" />
+        <img src="logo.png" alt="" aria-hidden="true" className="flip-on" />
       </div>
       <div className="slogan">생각을 끄고, 생각을 켜다</div>
       <div className="who">제4회 동구 무등산 인문축제</div>
