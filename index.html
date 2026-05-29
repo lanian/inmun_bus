@@ -100,7 +100,7 @@
 
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef, useMemo } = React;
-const BUILD = "b277"; /* 화면 우하단 표시 — 최신 배포 확인용 */
+const BUILD = "b278"; /* 화면 우하단 표시 — 최신 배포 확인용 */
 
 /* 실시간 위치 공유용 Firebase DB 주소. 여기에 한 번 넣어두면 승객 링크가 ?view=map 만 남아 깔끔해집니다. */
 const SHARE_DB = "https://innum-bus-default-rtdb.firebaseio.com";
@@ -5534,18 +5534,18 @@ function App() {
                 <SkipForward size={22} />
               </button>
             </div>
-            {isAnnouncing && (
-              <button onClick={stopAnnounce}
-                className="px-4 py-1.5 rounded-full text-xs font-bold flex items-center gap-1.5"
-                style={{ background: "rgba(239,68,68,0.15)", color: "#fca5a5",
-                  border: "1px solid rgba(239,68,68,0.4)", fontFamily: "'Jua', sans-serif" }}>
-                <Pause size={12} /> 안내 정지
-              </button>
-            )}
           </div>
 
-          {/* 1차 액션 — 운행/대기 가로 세그먼트 바 (sharing 시, 플랫) */}
-          {sharing && (
+          {/* 1차 액션 영역 — isAnnouncing 시 '안내 정지' 가로 바로 대체, 아니면 운행/대기 세그먼트 */}
+          {isAnnouncing ? (
+            <button onClick={stopAnnounce}
+              className="mt-3 w-full flex items-center justify-center gap-2"
+              style={{ background: "#ef4444", color: "#0a0b0f",
+                fontFamily: "'Jua', sans-serif", fontWeight: 700, fontSize: 14,
+                border: "1.5px solid #ef4444", height: 44, cursor: "pointer" }}>
+              <Pause size={14} /> 안내 정지
+            </button>
+          ) : sharing && (
             <div className="mt-3 grid grid-cols-2"
               style={{ overflow: "hidden",
                 border: `1.5px solid ${manualWaiting ? "rgba(96,165,250,0.45)" : "rgba(34, 214, 95, 0.4)"}`,
