@@ -86,7 +86,7 @@
 
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef, useMemo } = React;
-const BUILD = "b217"; /* 화면 우하단 표시 — 최신 배포 확인용 */
+const BUILD = "b218"; /* 화면 우하단 표시 — 최신 배포 확인용 */
 
 /* 실시간 위치 공유용 Firebase DB 주소. 여기에 한 번 넣어두면 승객 링크가 ?view=map 만 남아 깔끔해집니다. */
 const SHARE_DB = "https://innum-bus-default-rtdb.firebaseio.com";
@@ -3233,6 +3233,47 @@ function OpsDashboard({ dbUrl }) {
   const [conn, setConn] = useState("loading");
   const [refreshAt, setRefreshAt] = useState(0);
   const [autoRefresh, setAutoRefresh] = useState(true);
+  const [journalStatus, setJournalStatus] = useState(""); // CSV 내려받기 진행 표시
+
+  // P2-5: 운행 일지 CSV 내려받기
+  const downloadJournalCsv = async () => {
+    if (!dbUrl) { setJournalStatus("⚠ DB 주소가 없습니다"); return; }
+    const base = dbUrl.replace(/\/+$/, "");
+    const fmtDate = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+    const dateKey = fmtDate(getNow());
+    setJournalStatus("불러오는 중…");
+    try {
+      const r = await fetch(`${base}/journal/${dateKey}.json`, { cache: "no-store" });
+      const data = await r.json();
+      if (!data || typeof data !== "object") { setJournalStatus("📭 오늘 운행 일지 없음"); return; }
+      const rows = [["date", "busId", "dir", "trip", "startAt", "endAt", "durationMin", "board", "alight", "onboard", "broadcastFails", "stopArrivals"]];
+      Object.entries(data).forEach(([busId, trips]) => {
+        if (!trips || typeof trips !== "object") return;
+        Object.values(trips).forEach((e) => {
+          if (!e || typeof e !== "object") return;
+          const dur = (e.startAt && e.endAt) ? Math.round((e.endAt - e.startAt) / 60000) : "";
+          const arrivals = e.stopArrivals && typeof e.stopArrivals === "object"
+            ? Object.entries(e.stopArrivals).map(([nm, ts]) => `${nm}=${new Date(ts).toISOString().slice(11, 19)}`).join(" | ")
+            : "";
+          rows.push([
+            dateKey, busId, e.dir || "", e.trip ?? "",
+            e.startAt || "", e.endAt || "", dur,
+            e.counts?.board ?? "", e.counts?.alight ?? "", e.counts?.onboard ?? "",
+            e.broadcastFails ?? "",
+            arrivals.replace(/"/g, "''")
+          ]);
+        });
+      });
+      if (rows.length === 1) { setJournalStatus("📭 오늘 운행 일지 없음"); return; }
+      const csv = rows.map((r) => r.map((c) => /[,"\n]/.test(String(c)) ? `"${String(c).replace(/"/g, '""')}"` : String(c)).join(",")).join("\n");
+      const blob = new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url; a.download = `journal-${dateKey}.csv`; a.click();
+      URL.revokeObjectURL(url);
+      setJournalStatus(`✅ ${rows.length - 1}건 내려받음`);
+    } catch (_) { setJournalStatus("⚠ 네트워크 오류"); }
+  };
 
   useEffect(() => {
     if (!dbUrl) { setConn("error"); return; }
@@ -3315,7 +3356,7 @@ function OpsDashboard({ dbUrl }) {
               {autoRefresh ? "5초 폴링" : "수동 갱신"} · 마지막 {refreshAt ? new Date(refreshAt).toLocaleTimeString() : "—"}
             </div>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             <span style={{ fontSize: 11, color: conn === "ok" ? "#22d65f" : conn === "error" ? "#fca5a5" : "#fbbf24", fontFamily: "'Jua', sans-serif" }}>
               ● {conn === "ok" ? "연결됨" : conn === "error" ? "연결 오류" : "연결 중…"}
             </span>
@@ -3326,6 +3367,18 @@ function OpsDashboard({ dbUrl }) {
                 border: "1px solid " + (autoRefresh ? "rgba(34,214,95,0.3)" : "#3a3f54"), cursor: "pointer" }}>
               {autoRefresh ? "자동 ON" : "자동 OFF"}
             </button>
+            <button onClick={downloadJournalCsv}
+              title="오늘 /journal 전체를 CSV 로 내려받기"
+              style={{ padding: "5px 10px", borderRadius: 8, fontSize: 11, fontFamily: "'Jua', sans-serif", fontWeight: 700,
+                background: "rgba(251,191,36,0.15)", color: "#fbbf24",
+                border: "1px solid rgba(251,191,36,0.3)", cursor: "pointer" }}>
+              📋 운행 일지 CSV
+            </button>
+            {journalStatus && (
+              <span style={{ fontSize: 10, color: journalStatus.startsWith("✅") ? "#22d65f"
+                : journalStatus.startsWith("⚠") ? "#fca5a5" : "#94a3b8",
+                fontFamily: "'Jua', sans-serif" }}>{journalStatus}</span>
+            )}
           </div>
         </div>
 
@@ -3632,6 +3685,63 @@ function App() {
   } : null;
 
   const isAtTerminus = currentIdx === stops.length - 1;
+
+  // P2-5: 운행 일지 — direction/tripIdx 변경 시 직전 leg 정보를 /journal 에 자동 기록
+  const tripStartedAtRef = useRef(Date.now());
+  const tripStopArrivalRef = useRef({}); // { stopIdx: ts }
+  const writeJournalEntry = (wasDir, wasTrip) => {
+    try {
+      if (!shareUrl || !busId) return;
+      const base = shareUrl.replace(/\/+$/, "");
+      const auth = authTokenRef.current ? `?auth=${encodeURIComponent(authTokenRef.current)}` : "";
+      const tripPrefix = `${wasDir}|${wasTrip + 1}|`;
+      let board = 0, alight = 0;
+      Object.entries(countsRef.current || {}).forEach(([k, v]) => {
+        if (!k.startsWith(tripPrefix) || !v) return;
+        board += Number(v.board) || 0;
+        alight += Number(v.alight) || 0;
+      });
+      const route = ROUTES[wasDir];
+      const stopArrivals = {};
+      Object.entries(tripStopArrivalRef.current || {}).forEach(([idx, ts]) => {
+        const nm = route && route.stops[Number(idx)]?.name;
+        if (nm) stopArrivals[nm] = ts;
+      });
+      const entry = {
+        dir: wasDir, trip: wasTrip + 1, busId,
+        startAt: tripStartedAtRef.current || null,
+        endAt: Date.now(),
+        stopArrivals,
+        counts: { board, alight, onboard: Math.max(0, board - alight) },
+        broadcastFails: broadcastStats?.failCount || 0,
+      };
+      fetch(`${base}/journal/${dateKey}/${encodeURIComponent(busId)}/${wasDir}-${wasTrip + 1}.json${auth}`, {
+        method: "PUT", body: JSON.stringify(entry), keepalive: true,
+      }).catch(() => {});
+    } catch (_) {}
+  };
+  const prevDirRef = useRef(direction);
+  const prevTripRef = useRef(tripIdx);
+  useEffect(() => {
+    const wasDir = prevDirRef.current, wasTrip = prevTripRef.current;
+    if (wasDir !== direction || wasTrip !== tripIdx) {
+      writeJournalEntry(wasDir, wasTrip);
+      tripStartedAtRef.current = Date.now();
+      tripStopArrivalRef.current = {};
+    }
+    prevDirRef.current = direction;
+    prevTripRef.current = tripIdx;
+  }, [direction, tripIdx]);
+  // pagehide/freeze 시점에 현재 leg 의 부분 일지 기록 — 탭 종료 손실 방지
+  useEffect(() => {
+    const onHide = () => writeJournalEntry(direction, tripIdx);
+    window.addEventListener("pagehide", onHide);
+    document.addEventListener("freeze", onHide);
+    return () => {
+      window.removeEventListener("pagehide", onHide);
+      document.removeEventListener("freeze", onHide);
+    };
+  }, [direction, tripIdx, shareUrl, busId, dateKey]);
 
   const goToNextLeg = () => {
     if (!nextLeg) return;
@@ -4646,9 +4756,12 @@ function App() {
         setCurrentIdx(currentIdx + 1);
       }
     }
-    // 도착 진입 시 카운트 영역에 펄스 알람
+    // 도착 진입 시 카운트 영역에 펄스 알람 + P2-5 운행 일지에 정류장별 도착 시각 기록
     if (!prevArrived && arrivedNow) {
       setArrivedPulse(Date.now());
+      if (!tripStopArrivalRef.current[currentIdx]) {
+        tripStopArrivalRef.current[currentIdx] = Date.now();
+      }
     }
     arrivedStateRef.current = arrivedNow;
     const dep = departedFromRef.current;
