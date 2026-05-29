@@ -74,10 +74,9 @@
     100% { box-shadow: 0 0 0 0 rgba(251, 191, 36, 0); }
   }
   .arrived-alert { animation: arrivedAlert 1.4s ease-out 3; }
-  /* 운행모드 하단 타일 — hover/press 인터랙션 */
-  .op-tile { transition: transform 0.14s ease, box-shadow 0.14s ease, background 0.14s ease; }
-  .op-tile:hover { transform: translateY(-2px); box-shadow: 0 6px 16px rgba(0,0,0,0.32); }
-  .op-tile:active { transform: translateY(1px); box-shadow: 0 2px 4px rgba(0,0,0,0.18); }
+  /* 운행모드 하단 플랫 타일 — 누름 시 살짝 톤다운만 */
+  .op-tile { transition: background 0.12s, opacity 0.12s; }
+  .op-tile:active { opacity: 0.82; }
   /* 정류장 상시 라벨 — 무등생각 테마(흰 박스 + 검정 외곽선 + 입체 그림자) */
   .leaflet-tooltip.fest-stop { background: #fff; color: #101113; border: 1.5px solid #101113;
     border-radius: 6px; padding: 1px 7px; font-family: 'Jua', sans-serif; font-size: 11px; font-weight: 700;
@@ -98,7 +97,7 @@
 
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef, useMemo } = React;
-const BUILD = "b264"; /* 화면 우하단 표시 — 최신 배포 확인용 */
+const BUILD = "b265"; /* 화면 우하단 표시 — 최신 배포 확인용 */
 
 /* 실시간 위치 공유용 Firebase DB 주소. 여기에 한 번 넣어두면 승객 링크가 ?view=map 만 남아 깔끔해집니다. */
 const SHARE_DB = "https://innum-bus-default-rtdb.firebaseio.com";
@@ -5557,17 +5556,12 @@ function App() {
             {(() => {
               const tileStyle = (active, color, off = "#94a3b8") => ({
                 display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 6,
-                padding: "16px 10px 14px", borderRadius: 16, minHeight: 96,
-                background: active
-                  ? `linear-gradient(160deg, ${color.bg} 0%, ${color.bg2 || color.bg} 100%)`
-                  : "linear-gradient(160deg, rgba(100,116,139,0.10) 0%, rgba(100,116,139,0.04) 100%)",
+                padding: "14px 10px 12px", borderRadius: 10, minHeight: 88,
+                background: active ? color.bg : "rgba(100, 116, 139, 0.08)",
                 color: active ? color.fg : off,
                 border: `1.5px solid ${active ? color.border : "rgba(100,116,139,0.28)"}`,
                 fontFamily: "'Jua', sans-serif", fontSize: 13, fontWeight: 700, lineHeight: 1.2, textAlign: "center",
                 cursor: "pointer",
-                boxShadow: active
-                  ? `0 4px 14px ${color.shadow || "rgba(0,0,0,0.25)"}, inset 0 1px 0 rgba(255,255,255,0.08)`
-                  : "0 2px 8px rgba(0,0,0,0.20), inset 0 1px 0 rgba(255,255,255,0.04)",
               });
               return (
                 <>
