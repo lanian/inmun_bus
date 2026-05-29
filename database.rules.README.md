@@ -27,7 +27,7 @@ P0-5: 행사 당일 누구나 `/zones`, `/counts`, `/buses` 같은 운영 데이
 | `/handoff` | 누구나 | driver 또는 admin |
 | `/journal/{date}` | 누구나 | driver 또는 admin |
 | `/zones` | 누구나 | **admin 만** |
-| `/notice` | 누구나 | **admin 만** |
+| `/notice` | 누구나 | driver 또는 admin |
 | `/drivers`, `/admins` | admin | admin |
 
 ## 주의
