@@ -86,7 +86,7 @@
 
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef, useMemo } = React;
-const BUILD = "b235"; /* 화면 우하단 표시 — 최신 배포 확인용 */
+const BUILD = "b236"; /* 화면 우하단 표시 — 최신 배포 확인용 */
 
 /* 실시간 위치 공유용 Firebase DB 주소. 여기에 한 번 넣어두면 승객 링크가 ?view=map 만 남아 깔끔해집니다. */
 const SHARE_DB = "https://innum-bus-default-rtdb.firebaseio.com";
@@ -3128,20 +3128,25 @@ function PassengerView({ dbUrl, onAdmin, initialTab = "list" }) {
           backgroundImage: "radial-gradient(circle at 15% -10%, rgba(22,168,158,0.18), transparent 45%), radial-gradient(circle at 85% 110%, rgba(238,107,46,0.14), transparent 45%)" }}>
         <div className="w-full max-w-md flex flex-col" style={{ flex: 1, minHeight: 0 }}>
           <div className="flex flex-col" style={{ flex: 1, minHeight: 0, background: "#fff", border: "2.5px solid " + FT.ink, borderRadius: 18, boxShadow: "4px 4px 0 " + FT.ink, overflow: "hidden" }}>
-            {/* header — list 와 동일 구조: 로고 + 부제/제목 + ← 목록 버튼 */}
+            {/* header — A·B: 로고+제목 영역 자체가 홈 버튼(좌측), 우상단 '← 목록' 버튼 키움(38px 높이, 13px) */}
             <div style={{ padding: "16px 18px 14px 18px", borderBottom: "2.5px solid " + FT.ink, background: "#fff", display: "flex", gap: 14, alignItems: "flex-start", position: "relative" }}>
-              <FestivalLogo size={44} />
-              <div style={{ flex: 1, minWidth: 0, paddingRight: 70 }}>
-                <div style={{ fontSize: 11, color: FT.inkSoft, fontFamily: "'Jua', sans-serif" }}>Festival Map · Program</div>
-                <div style={{ fontSize: 14, color: FT.ink, fontFamily: "'Jua', sans-serif", fontWeight: 700, marginTop: 2 }}>제4회 동구 무등산 인문축제</div>
-                <div style={{ fontSize: 18, color: FT.orange, fontFamily: "'Jua', sans-serif", fontWeight: 700, lineHeight: 1.15, marginTop: 4 }}>
-                  🎪 행사장·프로그램
+              <button onClick={() => setTab("list")} aria-label="홈으로 (로고/제목 영역 전체 탭 가능)"
+                title="탭하면 홈으로 돌아갑니다"
+                style={{ display: "flex", alignItems: "flex-start", gap: 14, flex: 1, minWidth: 0, paddingRight: 80,
+                  background: "transparent", border: "none", textAlign: "left", cursor: "pointer", font: "inherit", padding: 0 }}>
+                <FestivalLogo size={44} />
+                <div style={{ minWidth: 0, flex: 1 }}>
+                  <div style={{ fontSize: 11, color: FT.inkSoft, fontFamily: "'Jua', sans-serif" }}>Festival Map · Program</div>
+                  <div style={{ fontSize: 14, color: FT.ink, fontFamily: "'Jua', sans-serif", fontWeight: 700, marginTop: 2 }}>제4회 동구 무등산 인문축제</div>
+                  <div style={{ fontSize: 18, color: FT.orange, fontFamily: "'Jua', sans-serif", fontWeight: 700, lineHeight: 1.15, marginTop: 4 }}>
+                    🎪 행사장·프로그램
+                  </div>
                 </div>
-              </div>
-              <button onClick={() => setTab("list")} aria-label="목록으로 돌아가기"
-                style={{ position: "absolute", top: 12, right: 12, padding: "0 10px", height: 28, borderRadius: 8, border: "2px solid " + FT.ink,
-                  background: "#fff", color: FT.ink, fontWeight: 700, fontFamily: "'Jua', sans-serif", fontSize: 11, cursor: "pointer",
-                  boxShadow: "1.5px 1.5px 0 " + FT.ink }}>
+              </button>
+              <button onClick={() => setTab("list")} aria-label="목록(홈)으로 돌아가기"
+                style={{ position: "absolute", top: 12, right: 12, padding: "0 14px", height: 38, borderRadius: 10, border: "2.5px solid " + FT.ink,
+                  background: "#fff", color: FT.ink, fontWeight: 700, fontFamily: "'Jua', sans-serif", fontSize: 13, cursor: "pointer",
+                  boxShadow: "2px 2px 0 " + FT.ink, display: "flex", alignItems: "center", gap: 4 }}>
                 ← 목록
               </button>
             </div>
