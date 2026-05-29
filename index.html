@@ -97,7 +97,7 @@
 
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef, useMemo } = React;
-const BUILD = "b267"; /* 화면 우하단 표시 — 최신 배포 확인용 */
+const BUILD = "b268"; /* 화면 우하단 표시 — 최신 배포 확인용 */
 
 /* 실시간 위치 공유용 Firebase DB 주소. 여기에 한 번 넣어두면 승객 링크가 ?view=map 만 남아 깔끔해집니다. */
 const SHARE_DB = "https://innum-bus-default-rtdb.firebaseio.com";
@@ -5636,16 +5636,21 @@ function App() {
                       {sharing ? (locShare ? "위치+운행" : "운행만") : "—"}
                     </span>
                   </button>
-                  {sharing && (
-                    <button onClick={() => setLocShare((v) => !v)}
-                      title={locShare ? "GPS 좌표 송신 중 — 끄면 운행 정보만" : "운행 정보만 송신 중 — 켜면 좌표도 송신"}
-                      className="op-tile"
-                      style={tileStyle(locShare, { bg: "rgba(96,165,250,0.25)", bg2: "rgba(96,165,250,0.08)", fg: "#60a5fa", border: "rgba(96,165,250,0.45)", shadow: "rgba(96,165,250,0.25)" })}>
-                      <span style={{ fontSize: 28, lineHeight: 1 }}>📍</span>
-                      <span>위치 송신</span>
-                      <span style={{ fontSize: 10, opacity: 0.85, fontWeight: 400 }}>{locShare ? "ON" : "OFF"}</span>
-                    </button>
-                  )}
+                  <button onClick={() => sharing && setLocShare((v) => !v)}
+                    disabled={!sharing}
+                    title={!sharing ? "공유를 먼저 켜세요" : locShare ? "GPS 좌표 송신 중 — 끄면 운행 정보만" : "운행 정보만 송신 중 — 켜면 좌표도 송신"}
+                    className="op-tile"
+                    style={(() => {
+                      const s = tileStyle(sharing && locShare, { bg: "rgba(96,165,250,0.25)", bg2: "rgba(96,165,250,0.08)", fg: "#60a5fa", border: "rgba(96,165,250,0.45)", shadow: "rgba(96,165,250,0.25)" });
+                      if (!sharing) { s.opacity = 0.45; s.cursor = "not-allowed"; }
+                      return s;
+                    })()}>
+                    <span style={{ fontSize: 28, lineHeight: 1 }}>📍</span>
+                    <span>위치 송신</span>
+                    <span style={{ fontSize: 10, opacity: 0.85, fontWeight: 400 }}>
+                      {!sharing ? "공유 OFF" : locShare ? "ON" : "OFF"}
+                    </span>
+                  </button>
                   <button onClick={() => setShowTimetable(true)}
                     className="op-tile"
                     style={tileStyle(true, { bg: "rgba(251,191,36,0.10)", bg2: "rgba(251,191,36,0.03)", fg: "#fbbf24", border: "rgba(251,191,36,0.30)", shadow: "rgba(251,191,36,0.18)" })}>
