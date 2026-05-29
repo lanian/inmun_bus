@@ -86,7 +86,7 @@
 
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef, useMemo } = React;
-const BUILD = "b222"; /* 화면 우하단 표시 — 최신 배포 확인용 */
+const BUILD = "b223"; /* 화면 우하단 표시 — 최신 배포 확인용 */
 
 /* 실시간 위치 공유용 Firebase DB 주소. 여기에 한 번 넣어두면 승객 링크가 ?view=map 만 남아 깔끔해집니다. */
 const SHARE_DB = "https://innum-bus-default-rtdb.firebaseio.com";
@@ -1139,10 +1139,16 @@ function buildRoutePolyline(dir, stops) {
   }
   return points;
 }
-/* GPS 좌표를 노선 폴리라인에 수직 투영(가장 가까운 세그먼트). 반환: { snapped, perpDist } 또는 null. */
-function snapToRoute(pos, dir, stops) {
+/* GPS 좌표를 노선 폴리라인에 수직 투영(가장 가까운 세그먼트). 반환: { snapped, perpDist } 또는 null.
+   polyOverride([[lat,lng],...]) 주어지면 그것 사용(OSRM 도로 곡선) — 없으면 정류장+via 직선 폴리라인 fallback */
+function snapToRoute(pos, dir, stops, polyOverride) {
   if (!pos || pos.lat == null) return null;
-  const poly = buildRoutePolyline(dir, stops);
+  let poly;
+  if (Array.isArray(polyOverride) && polyOverride.length >= 2) {
+    poly = polyOverride.map((p) => Array.isArray(p) ? { lat: p[0], lng: p[1] } : p);
+  } else {
+    poly = buildRoutePolyline(dir, stops);
+  }
   if (poly.length < 2) return null;
   let bestDist = Infinity, bestProj = null;
   for (let i = 0; i < poly.length - 1; i++) {
@@ -1942,6 +1948,7 @@ function LiveMapView({ dbUrl }) {
   const [_zoneTick, _setZoneTick] = useState(0);
   useEffect(() => { const id = setInterval(() => _setZoneTick((t) => t + 1), 60000); return () => clearInterval(id); }, []);
   const lineRefsRef = useRef({});
+  const osrmPolyRef = useRef({}); // { [dir]: [[lat,lng], ...] } — 마커 노선 스냅에 사용
   const stopLayersRef = useRef([]);
   const zoneLayersRef = useRef([]);
   const hasFitRef = useRef(false);
@@ -2101,6 +2108,7 @@ function LiveMapView({ dbUrl }) {
       const drawRoad = (road) => {
         if (lineRefsRef.current[dir]) map.removeLayer(lineRefsRef.current[dir]);
         lineRefsRef.current[dir] = L.polyline(road, { pane: "routePane", color: dirColor, weight: 5, opacity: 0.85, dashArray: dash, lineCap: "round", lineJoin: "round" }).addTo(map);
+        osrmPolyRef.current[dir] = road; // 마커 곡선 스냅용
       };
       const cached = LS.getJSON(cacheKey, null);
       if (Array.isArray(cached) && cached.length) drawRoad(cached); // 즉시 캐시로 그림
@@ -2252,7 +2260,9 @@ function LiveMapView({ dbUrl }) {
           let pos = null, noGps = false;
           if (b.lat != null && b.lng != null) {
             const dirKey0 = b.dir === "inbound" ? "inbound" : "outbound";
-            const snap = snapToRoute({ lat: b.lat, lng: b.lng }, dirKey0, ROUTES[dirKey0].stops);
+            // OSRM 도로 폴리라인(곡선)이 로드돼 있으면 그것에 스냅 — 없으면 정류장 직선 fallback
+            const osrmPoly = osrmPolyRef.current[dirKey0];
+            const snap = snapToRoute({ lat: b.lat, lng: b.lng }, dirKey0, ROUTES[dirKey0].stops, osrmPoly);
             if (snap && snap.perpDist < 100) pos = [snap.snapped.lat, snap.snapped.lng];
             else pos = [b.lat, b.lng];
           } else if (b.stop && b.dir) {
