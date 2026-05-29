@@ -86,7 +86,7 @@
 
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef, useMemo } = React;
-const BUILD = "b232"; /* 화면 우하단 표시 — 최신 배포 확인용 */
+const BUILD = "b233"; /* 화면 우하단 표시 — 최신 배포 확인용 */
 
 /* 실시간 위치 공유용 Firebase DB 주소. 여기에 한 번 넣어두면 승객 링크가 ?view=map 만 남아 깔끔해집니다. */
 const SHARE_DB = "https://innum-bus-default-rtdb.firebaseio.com";
@@ -3066,18 +3066,49 @@ function PassengerView({ dbUrl, onAdmin, initialTab = "list" }) {
     : schedActive ? "라이브 송신 없음 · 시간표 기준 진행 중"
     : "현재 운행 중인 셔틀이 없습니다";
 
+  // 풋터 공통 — 어디서나 동일 3-버튼. 현재 화면(active)은 검정 강조, 활성 버튼 재클릭 시 홈(list) 복귀
+  const renderFooter = (currentKey) => {
+    const items = [
+      { key: "map", label: "🗺️ 무등생각 지도" },
+      { key: "venue", label: "🎪 행사장" },
+      { key: "timetable", label: "🕒 시간표" },
+    ];
+    const handle = (key) => {
+      if (key === "timetable") { setShowTimetable(true); return; }
+      if (key === currentKey) { setTab("list"); return; } // 활성 탭 재클릭 → 홈
+      if (key === "venue") setVenueZone(0);
+      setTab(key);
+    };
+    return (
+      <div className="grid grid-cols-3 gap-2"
+        style={{ background: "#fff", borderTop: "2.5px solid " + FT.ink, padding: 10, flexShrink: 0 }}>
+        {items.map((b) => {
+          const active = b.key === currentKey;
+          return (
+            <button key={b.key} onClick={() => handle(b.key)} className="py-2.5 text-[12px]"
+              title={active ? "다시 누르면 홈으로 돌아갑니다" : undefined}
+              style={{ background: active ? FT.ink : "#fff",
+                color: active ? "#fff" : FT.ink,
+                border: "2px solid " + FT.ink, borderRadius: 10,
+                boxShadow: active ? "none" : "2px 2px 0 " + FT.ink,
+                transform: active ? "translate(2px, 2px)" : "none",
+                fontFamily: "'Jua', sans-serif", fontWeight: 700, cursor: "pointer" }}>
+              {b.label}
+            </button>
+          );
+        })}
+      </div>
+    );
+  };
+
   if (tab === "map") {
     return (
-      <div style={{ position: "relative" }}>
-        <LiveMapView dbUrl={dbUrl} />
-        <button onClick={() => setTab("list")} aria-label="목록으로 돌아가기"
-          style={{ position: "fixed", left: "50%", transform: "translateX(-50%)", zIndex: 1100,
-            bottom: "calc(20px + env(safe-area-inset-bottom, 0px))",
-            background: FT.orange, color: "#fff", padding: "12px 28px", borderRadius: 999,
-            fontFamily: "'Jua', sans-serif", fontWeight: 700, fontSize: 15,
-            border: "2.5px solid " + FT.ink, boxShadow: "3px 3px 0 " + FT.ink, cursor: "pointer" }}>
-          ☰ 목록으로 돌아가기
-        </button>
+      <div style={{ height: "100dvh", display: "flex", flexDirection: "column", overflow: "hidden", background: "#000" }}>
+        <div style={{ flex: 1, minHeight: 0, position: "relative" }}>
+          <LiveMapView dbUrl={dbUrl} />
+        </div>
+        {renderFooter("map")}
+        {showTimetable && <TimetableModal tripsToday={tripsToday} onClose={closeTable} focusTrip={tableFocus} />}
       </div>
     );
   }
@@ -3110,25 +3141,7 @@ function PassengerView({ dbUrl, onAdmin, initialTab = "list" }) {
               <VenueModal pageMode onClose={() => setTab("list")} initialZone={venueZone}
                 onOpenLiveMap={() => setTab("map")} />
             </div>
-            {/* footer — list 와 동일 3-버튼 */}
-            <div className="grid grid-cols-3 gap-2"
-              style={{ background: "#fff", borderTop: "2.5px solid " + FT.ink, padding: 10, flexShrink: 0 }}>
-              <button onClick={() => setTab("map")} className="py-2.5 text-[12px]"
-                style={{ background: FT.teal, color: "#fff", border: "2px solid " + FT.ink, borderRadius: 10,
-                  boxShadow: "2px 2px 0 " + FT.ink, fontFamily: "'Jua', sans-serif", fontWeight: 700 }}>
-                🗺️ 무등생각 지도
-              </button>
-              <button onClick={() => setTab("list")} className="py-2.5 text-[12px]"
-                style={{ background: FT.orange, color: "#fff", border: "2px solid " + FT.ink, borderRadius: 10,
-                  boxShadow: "2px 2px 0 " + FT.ink, fontFamily: "'Jua', sans-serif", fontWeight: 700 }}>
-                🎪 행사장
-              </button>
-              <button onClick={() => setShowTimetable(true)} className="py-2.5 text-[12px]"
-                style={{ background: "#fff", color: FT.ink, border: "2px solid " + FT.ink, borderRadius: 10,
-                  boxShadow: "2px 2px 0 " + FT.ink, fontFamily: "'Jua', sans-serif", fontWeight: 700 }}>
-                시간표
-              </button>
-            </div>
+            {renderFooter("venue")}
           </div>
         </div>
         {showTimetable && <TimetableModal tripsToday={tripsToday} onClose={closeTable} focusTrip={tableFocus} />}
@@ -3474,25 +3487,8 @@ function PassengerView({ dbUrl, onAdmin, initialTab = "list" }) {
             </div>
           </div>
 
-          {/* 하단 고정 액션 바 — 항상 보임 */}
-          <div className="grid grid-cols-3 gap-2"
-            style={{ background: "#fff", borderTop: "2.5px solid " + FT.ink, padding: 10, flexShrink: 0 }}>
-            <button onClick={() => setTab("map")} className="py-2.5 text-[12px]"
-              style={{ background: FT.teal, color: "#fff", border: "2px solid " + FT.ink, borderRadius: 10,
-                boxShadow: "2px 2px 0 " + FT.ink, fontFamily: "'Jua', sans-serif", fontWeight: 700 }}>
-              🗺️ 무등생각 지도
-            </button>
-            <button onClick={() => { setVenueZone(0); setTab("venue"); }} className="py-2.5 text-[12px]"
-              style={{ background: "#fff", color: FT.ink, border: "2px solid " + FT.ink, borderRadius: 10,
-                boxShadow: "2px 2px 0 " + FT.ink, fontFamily: "'Jua', sans-serif", fontWeight: 700 }}>
-              🎪 행사장 안내
-            </button>
-            <button onClick={() => setShowTimetable(true)} className="py-2.5 text-[12px]"
-              style={{ background: FT.orange, color: "#fff", border: "2px solid " + FT.ink, borderRadius: 10,
-                boxShadow: "2px 2px 0 " + FT.ink, fontFamily: "'Jua', sans-serif", fontWeight: 700 }}>
-              시간표
-            </button>
-          </div>
+          {/* 하단 고정 액션 바 — 어디서나 동일 3-버튼 (list 페이지에선 모두 비활성) */}
+          {renderFooter("list")}
         </div>
       </div>
       {showTimetable && <TimetableModal tripsToday={tripsToday} onClose={closeTable} focusTrip={tableFocus} />}
