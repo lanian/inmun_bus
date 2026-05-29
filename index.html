@@ -110,7 +110,7 @@
 
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef, useMemo } = React;
-const BUILD = "b296"; /* 화면 우하단 표시 — 최신 배포 확인용 */
+const BUILD = "b297"; /* 화면 우하단 표시 — 최신 배포 확인용 */
 
 /* 실시간 위치 공유용 Firebase DB 주소. 여기에 한 번 넣어두면 승객 링크가 ?view=map 만 남아 깔끔해집니다. */
 const SHARE_DB = "https://innum-bus-default-rtdb.firebaseio.com";
@@ -990,6 +990,26 @@ function VenueModal({ onClose, initialZone = 0, onOpenLiveMap, pageMode = false 
   const [hidePast, setHidePast] = useState(false);
   // 주요 구역 카드 — 모달에서는 기본 펼침(상세 보기 목적). 본문은 항상 칩 row(b220 옵션 A)
   const [zonesExpanded, setZonesExpanded] = useState(true);
+  // 사용자가 운영자 화면에서 추가한 zone 도 함께 노출 — LS 캐시 사용 (라이브 지도 진입 시 채워짐)
+  const allZones = (() => {
+    const builtinNums = new Set(FESTIVAL_ZONES.map((z) => z.num));
+    const ls = LS.getJSON("zones", {});
+    const out = FESTIVAL_ZONES.map((z) => {
+      const o = ls[z.num] || {};
+      return {
+        num: z.num,
+        title: (typeof o.title === "string" && o.title) ? o.title : z.title,
+        sub: (typeof o.sub === "string") ? o.sub : (z.sub || ""),
+      };
+    });
+    Object.entries(ls).forEach(([k, v]) => {
+      const n = Number(k);
+      if (!Number.isFinite(n) || builtinNums.has(n)) return;
+      if (!v || typeof v.lat !== "number") return;
+      out.push({ num: n, title: v.title || `구역 ${n}`, sub: v.sub || "" });
+    });
+    return out.sort((a, b) => a.num - b.num);
+  })();
   // 프로그램 상세(desc/host/sub) 펼침 — 카드 탭 시 토글
   const [expandedSet, setExpandedSet] = useState(new Set());
   const toggleExpand = (k) => setExpandedSet((prev) => {
@@ -1116,7 +1136,7 @@ function VenueModal({ onClose, initialZone = 0, onOpenLiveMap, pageMode = false 
           </div>
         </div>
         {zonesExpanded ? (
-          FESTIVAL_ZONES.map((z) => {
+          allZones.map((z) => {
             const active = progZone === z.num;
             const c = z.num % 2 ? FT.orange : FT.teal;
             return (
@@ -1141,7 +1161,7 @@ function VenueModal({ onClose, initialZone = 0, onOpenLiveMap, pageMode = false 
           })
         ) : (
           <div className="flex flex-wrap gap-1.5">
-            {FESTIVAL_ZONES.map((z) => {
+            {allZones.map((z) => {
               const active = progZone === z.num;
               const c = z.num % 2 ? FT.orange : FT.teal;
               return (
@@ -1186,7 +1206,7 @@ function VenueModal({ onClose, initialZone = 0, onOpenLiveMap, pageMode = false 
         {progZone !== 0 && (
           <div style={{ fontSize: 10, color: FT.inkSoft, fontFamily: "'Jua', sans-serif", marginTop: 2 }}>
             ⓘ <span style={{ color: progZone % 2 ? FT.orangeDark : FT.tealDark, fontWeight: 700 }}>
-              {FESTIVAL_ZONES.find((z) => z.num === progZone)?.title}
+              {allZones.find((z) => z.num === progZone)?.title}
             </span> 만 표시 중 — 위 카드 또는 '전체 보기' 로 해제
           </div>
         )}
@@ -2217,20 +2237,23 @@ function ZoneEditor({ onClose, dbUrl, getAuth, refreshAuth }) {
                   placeholder={bm ? (bm.sub || "부제(선택)") : "부제(선택)"}
                   className="w-full mb-1 px-1.5 py-0.5 rounded text-[10px]"
                   style={{ background: "#0a0b0f", border: "1px solid #2c3142", color: "#94a3b8", fontFamily: "'Jua', sans-serif" }} />
-                <div className="flex items-center gap-1 text-[10px]" style={{ color: "#cbd5e1", fontFamily: "'Jua', sans-serif" }}>
-                  <span style={{ width: 24, color: "#94a3b8" }}>가로</span>
-                  <input type="number" min="10" step="10" value={v.rA ?? ""} onChange={(e) => update("rA", e.target.value)} onBlur={() => commitDefault("rA", 80)}
-                    className="w-14 px-1 py-0.5 rounded" style={{ background: "#0a0b0f", border: "1px solid #3a3f54", color: "#cbd5e1", fontFamily: "'IBM Plex Mono', monospace" }} />
-                  <span style={{ color: "#64748b" }}>m</span>
-                  <span style={{ width: 24, color: "#94a3b8", marginLeft: 6 }}>세로</span>
-                  <input type="number" min="10" step="10" value={v.rB ?? ""} onChange={(e) => update("rB", e.target.value)} onBlur={() => commitDefault("rB", 80)}
-                    className="w-14 px-1 py-0.5 rounded" style={{ background: "#0a0b0f", border: "1px solid #3a3f54", color: "#cbd5e1", fontFamily: "'IBM Plex Mono', monospace" }} />
-                  <span style={{ color: "#64748b" }}>m</span>
-                  <span style={{ width: 24, color: "#94a3b8", marginLeft: 6 }}>회전</span>
-                  <input type="number" min="0" max="180" step="5" value={v.rot ?? ""} onChange={(e) => update("rot", e.target.value)} onBlur={() => commitDefault("rot", 0)}
-                    className="w-12 px-1 py-0.5 rounded" style={{ background: "#0a0b0f", border: "1px solid #3a3f54", color: "#cbd5e1", fontFamily: "'IBM Plex Mono', monospace" }} />
-                  <span style={{ color: "#64748b" }}>°</span>
-                </div>
+                {/* 타원 모드일 때만 가로/세로/회전 입력 노출. 다각형 모드에선 점 좌표가 모양을 결정. */}
+                {!(Array.isArray(v.points) && v.points.length >= 3) && (
+                  <div className="flex items-center gap-1 text-[10px]" style={{ color: "#cbd5e1", fontFamily: "'Jua', sans-serif" }}>
+                    <span style={{ width: 24, color: "#94a3b8" }}>가로</span>
+                    <input type="number" min="10" step="10" value={v.rA ?? ""} onChange={(e) => update("rA", e.target.value)} onBlur={() => commitDefault("rA", 80)}
+                      className="w-14 px-1 py-0.5 rounded" style={{ background: "#0a0b0f", border: "1px solid #3a3f54", color: "#cbd5e1", fontFamily: "'IBM Plex Mono', monospace" }} />
+                    <span style={{ color: "#64748b" }}>m</span>
+                    <span style={{ width: 24, color: "#94a3b8", marginLeft: 6 }}>세로</span>
+                    <input type="number" min="10" step="10" value={v.rB ?? ""} onChange={(e) => update("rB", e.target.value)} onBlur={() => commitDefault("rB", 80)}
+                      className="w-14 px-1 py-0.5 rounded" style={{ background: "#0a0b0f", border: "1px solid #3a3f54", color: "#cbd5e1", fontFamily: "'IBM Plex Mono', monospace" }} />
+                    <span style={{ color: "#64748b" }}>m</span>
+                    <span style={{ width: 24, color: "#94a3b8", marginLeft: 6 }}>회전</span>
+                    <input type="number" min="0" max="180" step="5" value={v.rot ?? ""} onChange={(e) => update("rot", e.target.value)} onBlur={() => commitDefault("rot", 0)}
+                      className="w-12 px-1 py-0.5 rounded" style={{ background: "#0a0b0f", border: "1px solid #3a3f54", color: "#cbd5e1", fontFamily: "'IBM Plex Mono', monospace" }} />
+                    <span style={{ color: "#64748b" }}>°</span>
+                  </div>
+                )}
                 {/* 다각형 모드 컨트롤 — 좌표 기반 폴리곤 + 곡선 보간 */}
                 <div className="mt-2 pt-1.5 flex items-center gap-1 flex-wrap text-[10px]"
                   style={{ borderTop: "1px dashed #2c3142", color: "#cbd5e1", fontFamily: "'Jua', sans-serif" }}>
