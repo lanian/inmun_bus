@@ -86,7 +86,7 @@
 
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef, useMemo } = React;
-const BUILD = "b213"; /* 화면 우하단 표시 — 최신 배포 확인용 */
+const BUILD = "b214"; /* 화면 우하단 표시 — 최신 배포 확인용 */
 
 /* 실시간 위치 공유용 Firebase DB 주소. 여기에 한 번 넣어두면 승객 링크가 ?view=map 만 남아 깔끔해집니다. */
 const SHARE_DB = "https://innum-bus-default-rtdb.firebaseio.com";
@@ -309,7 +309,7 @@ const buildProgramText = (m, dayKey, refMin) => {
     return intro + "오늘 준비된 주요 프로그램은 대부분 마무리되었어요. 그래도 " + m.allday + " 무등산에서 천천히, 편안한 시간 보내세요.";
   }
   const shown = upcoming.slice(0, 6); // 안내가 길어지지 않도록 다가오는 6개까지만
-  const items = shown.map(p => `${spokenClock(p.t)}에는 ${p.d}`).join(", ");
+  const items = shown.map(p => `${spokenClock(p.t)} ${p.d}`).join(", ");
   const more = upcoming.length > shown.length ? " 이 외에도 더 많은 프로그램이 여러분을 기다리고 있어요." : "";
   return intro + "도착하시면, " + items + " 등 다양한 프로그램을 만나보실 수 있습니다." + more + " 그리고 " + m.allday + " 오늘 무등생각과 함께, 마음을 쉬어가는 하루 보내세요.";
 };
