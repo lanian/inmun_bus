@@ -97,7 +97,7 @@
 
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef, useMemo } = React;
-const BUILD = "b268"; /* 화면 우하단 표시 — 최신 배포 확인용 */
+const BUILD = "b269"; /* 화면 우하단 표시 — 최신 배포 확인용 */
 
 /* 실시간 위치 공유용 Firebase DB 주소. 여기에 한 번 넣어두면 승객 링크가 ?view=map 만 남아 깔끔해집니다. */
 const SHARE_DB = "https://innum-bus-default-rtdb.firebaseio.com";
@@ -5554,8 +5554,9 @@ function App() {
               {manualWaiting ? "🅿️ 대기 해제 (출발)" : "▶ 운행 중 — 탭하여 대기"}
             </button>
           )}
-          {/* 본문 끝에 풋터 패널 높이만큼 공간 확보 — fixed 풋터가 콘텐츠를 가리지 않게 */}
-          <div aria-hidden="true" style={{ height: bottomPanelOpen ? "calc(330px + env(safe-area-inset-bottom, 0px))" : "calc(56px + env(safe-area-inset-bottom, 0px))" }} />
+          {/* 본문 끝 spacer — 실제 풋터 높이에 맞춤(handle 38 + 타일 2행 200 = 238 / 접힘 38).
+              여분 빈 공간 제거해 불필요한 스크롤 차단 */}
+          <div aria-hidden="true" style={{ height: bottomPanelOpen ? "calc(240px + env(safe-area-inset-bottom, 0px))" : "calc(44px + env(safe-area-inset-bottom, 0px))" }} />
 
           {/* 하단 고정 설정 패널 — 핸들 + 펼침 시 타일 그리드 */}
           <div style={{ position: "fixed", left: 0, right: 0, bottom: 0, zIndex: 90,
