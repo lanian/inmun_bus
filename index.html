@@ -100,7 +100,7 @@
 
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef, useMemo } = React;
-const BUILD = "b273"; /* 화면 우하단 표시 — 최신 배포 확인용 */
+const BUILD = "b274"; /* 화면 우하단 표시 — 최신 배포 확인용 */
 
 /* 실시간 위치 공유용 Firebase DB 주소. 여기에 한 번 넣어두면 승객 링크가 ?view=map 만 남아 깔끔해집니다. */
 const SHARE_DB = "https://innum-bus-default-rtdb.firebaseio.com";
@@ -5161,7 +5161,8 @@ function App() {
       <div className="w-full flex flex-col items-stretch"
         style={{ height: "100dvh", overflow: "hidden",
           paddingBottom: "calc(44px + env(safe-area-inset-bottom, 0px))",
-          background: "radial-gradient(ellipse at top, #1a1d29 0%, #0a0b10 60%, #050608 100%)" }}>
+          background: "#0a0b0f",
+          backgroundImage: "repeating-linear-gradient(0deg, rgba(255,255,255,0.02) 0px, rgba(255,255,255,0.02) 1px, transparent 1px, transparent 3px)" }}>
         {resetToastNode}
         <div className="w-full max-w-2xl mx-auto flex flex-col" style={{ flex: 1, minHeight: 0 }}>
 
@@ -5310,12 +5311,11 @@ function App() {
             </button>
           )}
 
-          {/* 중앙 가변 영역 — Current/Next/Leg/GPS 묶음 (flex 1, overflow auto) */}
+          {/* 중앙 가변 영역 — Current (배경은 외곽 inherit) */}
           <div className="flex flex-col" style={{ flex: 1, minHeight: 0, overflowY: "auto" }}>
-          {/* Current stop — BIG (flex 1 로 가변, minHeight 제거 — 스크롤 없이 viewport 안에 맞춤) */}
+          {/* Current stop — BIG (배경 외곽 inherit, 줄 패턴은 외곽에 있음) */}
           <div className="px-5 py-6 flex flex-col justify-center flex-shrink-0"
-            style={{ background: "#0a0b0f", borderColor: "#3a3f54",
-              backgroundImage: "repeating-linear-gradient(0deg, rgba(255,255,255,0.02) 0px, rgba(255,255,255,0.02) 1px, transparent 1px, transparent 3px)" }}>
+            style={{ borderColor: "#3a3f54" }}>
             <div className="text-center mb-3">
               <span className="text-[11px] tracking-[0.3em] px-3 py-1 rounded-full"
                 style={{ color: "#fbbf24", background: "rgba(251, 191, 36, 0.1)",
@@ -5420,9 +5420,9 @@ function App() {
           </div>
           </div>{/* 중앙 가변 영역 끝 — 이후 next stop / leg / gps / controls 는 하단 고정 */}
 
-          {/* Next stop — 하단 고정 영역(안내 버튼 위) */}
+          {/* Next stop — 하단 고정, 배경 투명(외곽 inherit) */}
           <div className="px-5 py-4 flex items-center justify-between gap-3 flex-shrink-0"
-            style={{ background: "#13151c", borderTop: "1px solid #3a3f54" }}>
+            style={{ borderTop: "1px solid #2c3142" }}>
             <div className="flex-shrink-0 flex flex-col items-center px-3 py-1.5 rounded"
               style={{ background: "rgba(34, 214, 95, 0.12)", minWidth: 68 }}>
               <span className="text-[10px] tracking-widest text-emerald-400/80"
@@ -5503,9 +5503,9 @@ function App() {
             </div>
           )}
 
-          {/* Controls — 안내 버튼 영역, flex-shrink 0 으로 하단 고정 */}
+          {/* Controls — 안내 버튼 영역, 배경 투명(외곽 inherit) */}
           <div className="px-5 py-4 flex flex-col items-center gap-3 flex-shrink-0"
-            style={{ background: "linear-gradient(180deg, #1c1f2b 0%, #13151c 100%)", borderTop: "1px solid #3a3f54" }}>
+            style={{ borderTop: "1px solid #2c3142" }}>
             <div className="flex items-center justify-between w-full">
               <button onClick={prev} disabled={currentIdx === 0}
                 className="w-14 h-14 rounded-full flex items-center justify-center disabled:opacity-30"
