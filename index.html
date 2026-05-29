@@ -94,7 +94,7 @@
 
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef, useMemo } = React;
-const BUILD = "b251"; /* 화면 우하단 표시 — 최신 배포 확인용 */
+const BUILD = "b252"; /* 화면 우하단 표시 — 최신 배포 확인용 */
 
 /* 실시간 위치 공유용 Firebase DB 주소. 여기에 한 번 넣어두면 승객 링크가 ?view=map 만 남아 깔끔해집니다. */
 const SHARE_DB = "https://innum-bus-default-rtdb.firebaseio.com";
@@ -3146,8 +3146,8 @@ function PassengerView({ dbUrl, onAdmin, initialTab = "list" }) {
                 <div style={{ minWidth: 0, flex: 1 }}>
                   <div style={{ fontSize: 11, color: FT.inkSoft, fontFamily: "'Jua', sans-serif" }}>Festival Map · Program</div>
                   <div style={{ fontSize: 14, color: FT.ink, fontFamily: "'Jua', sans-serif", fontWeight: 700, marginTop: 2 }}>제4회 동구 무등산 인문축제</div>
-                  <div style={{ fontSize: 18, color: FT.orange, fontFamily: "'Jua', sans-serif", fontWeight: 700, lineHeight: 1.15, marginTop: 4 }}>
-                    🎪 행사장·프로그램
+                  <div style={{ fontSize: 22, color: FT.orange, fontFamily: "'Jua', sans-serif", fontWeight: 700, lineHeight: 1.15, marginTop: 4 }}>
+                    행사장·프로그램
                   </div>
                 </div>
               </button>
