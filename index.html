@@ -86,7 +86,7 @@
 
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef, useMemo } = React;
-const BUILD = "b220"; /* 화면 우하단 표시 — 최신 배포 확인용 */
+const BUILD = "b221"; /* 화면 우하단 표시 — 최신 배포 확인용 */
 
 /* 실시간 위치 공유용 Firebase DB 주소. 여기에 한 번 넣어두면 승객 링크가 ?view=map 만 남아 깔끔해집니다. */
 const SHARE_DB = "https://innum-bus-default-rtdb.firebaseio.com";
@@ -809,8 +809,8 @@ function VenueModal({ onClose, initialZone = 0 }) {
   const [progDay, setProgDay] = useState("day1");
   const [progZone, setProgZone] = useState(initialZone); // 0=전체, 1~5=해당 구역
   const [hidePast, setHidePast] = useState(false);
-  // P1-8: 주요 구역 카드 collapse — 기본은 칩 row, 탭하면 큰 카드
-  const [zonesExpanded, setZonesExpanded] = useState(false);
+  // 주요 구역 카드 — 모달에서는 기본 펼침(상세 보기 목적). 본문은 항상 칩 row(b220 옵션 A)
+  const [zonesExpanded, setZonesExpanded] = useState(true);
   // P1-8: 오늘 진행 중 프로그램 1~3개 핀 — 행사 당일에만 노출
   const todayDay = (() => {
     const d = getNow();
