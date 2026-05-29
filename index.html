@@ -100,7 +100,7 @@
 
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef, useMemo } = React;
-const BUILD = "b272"; /* 화면 우하단 표시 — 최신 배포 확인용 */
+const BUILD = "b273"; /* 화면 우하단 표시 — 최신 배포 확인용 */
 
 /* 실시간 위치 공유용 Firebase DB 주소. 여기에 한 번 넣어두면 승객 링크가 ?view=map 만 남아 깔끔해집니다. */
 const SHARE_DB = "https://innum-bus-default-rtdb.firebaseio.com";
@@ -5543,21 +5543,38 @@ function App() {
             )}
           </div>
 
-          {/* Bottom: 대기 큰 1차 버튼(C) + 보조 토글 row(H 13px) */}
-          {/* 1차 액션 — 대기 ON/OFF: 운행 중 가장 자주 누르는 버튼이라 풀폭 강조 */}
+          {/* 1차 액션 — 운행/대기 가로 세그먼트 바 (sharing 시) */}
           {sharing && (
-            <button onClick={() => setManualWaiting((v) => !v)}
-              className="mt-3 w-full flex items-center justify-center gap-2 px-4 rounded-2xl"
-              style={{
-                background: manualWaiting ? "linear-gradient(180deg, rgba(96,165,250,0.32) 0%, rgba(96,165,250,0.18) 100%)" : "linear-gradient(180deg, rgba(34,214,95,0.18) 0%, rgba(34,214,95,0.08) 100%)",
-                color: manualWaiting ? "#60a5fa" : "#22d65f",
-                border: `2px solid ${manualWaiting ? "rgba(96,165,250,0.5)" : "rgba(34, 214, 95, 0.35)"}`,
-                fontFamily: "'Jua', sans-serif", fontWeight: 700, fontSize: 16,
-                height: 56, boxShadow: manualWaiting ? "0 0 24px rgba(96,165,250,0.35)" : "none",
-                transition: "all 0.18s",
-              }}>
-              {manualWaiting ? "🅿️ 대기 해제 (출발)" : "▶ 운행 중 — 탭하여 대기"}
-            </button>
+            <div className="mt-3 grid grid-cols-2"
+              style={{ borderRadius: 12, overflow: "hidden",
+                border: `2px solid ${manualWaiting ? "rgba(96,165,250,0.5)" : "rgba(34, 214, 95, 0.4)"}`,
+                height: 48, transition: "border-color 0.18s" }}>
+              <button onClick={() => setManualWaiting(false)}
+                style={{
+                  background: !manualWaiting ? "#22d65f" : "transparent",
+                  color: !manualWaiting ? "#0a0b0f" : "#64748b",
+                  fontFamily: "'Jua', sans-serif", fontWeight: 700, fontSize: 14,
+                  display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
+                  cursor: "pointer", border: "none",
+                  transition: "all 0.18s",
+                }}>
+                <span style={{ fontSize: 16 }}>▶</span>
+                운행 중
+              </button>
+              <button onClick={() => setManualWaiting(true)}
+                style={{
+                  background: manualWaiting ? "#60a5fa" : "transparent",
+                  color: manualWaiting ? "#0a0b0f" : "#64748b",
+                  fontFamily: "'Jua', sans-serif", fontWeight: 700, fontSize: 14,
+                  display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
+                  cursor: "pointer", border: "none",
+                  borderLeft: "1px solid rgba(100, 116, 139, 0.3)",
+                  transition: "all 0.18s",
+                }}>
+                <span style={{ fontSize: 14 }}>🅿️</span>
+                대기
+              </button>
+            </div>
           )}
           {/* spacer 제거 — outer paddingBottom 으로 핸들 공간 처리 */}
 
