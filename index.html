@@ -110,7 +110,7 @@
 
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef, useMemo } = React;
-const BUILD = "b293"; /* 화면 우하단 표시 — 최신 배포 확인용 */
+const BUILD = "b294"; /* 화면 우하단 표시 — 최신 배포 확인용 */
 
 /* 실시간 위치 공유용 Firebase DB 주소. 여기에 한 번 넣어두면 승객 링크가 ?view=map 만 남아 깔끔해집니다. */
 const SHARE_DB = "https://innum-bus-default-rtdb.firebaseio.com";
@@ -1589,6 +1589,152 @@ function NoticeEditor({ onClose, dbUrl, getAuth, refreshAuth }) {
             style={{ background: "#dc2626", color: "#fff", fontFamily: "'Jua', sans-serif" }}>
             발송
           </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* 라이브 지도 스티커 편집기 — 운영자 전용. 부적절 콘텐츠 개별 삭제 + 만료 일괄 정리. */
+function StickerEditor({ onClose, dbUrl, getAuth, refreshAuth }) {
+  const [items, setItems] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [status, setStatus] = useState("");
+  const STICKER_TTL_MS = 2 * 60 * 60 * 1000;
+  const reload = async () => {
+    if (!dbUrl) { setStatus("⚠ DB 주소 없음"); setLoading(false); return; }
+    setLoading(true);
+    try {
+      const base = dbUrl.replace(/\/+$/, "");
+      const r = await fetch(`${base}/stickers.json`, { cache: "no-store" });
+      const d = await r.json();
+      const arr = Object.entries(d || {})
+        .filter(([, s]) => s && typeof s.lat === "number" && typeof s.lng === "number" && typeof s.ts === "number")
+        .map(([id, s]) => ({ id, ...s }))
+        .sort((a, b) => b.ts - a.ts);
+      setItems(arr);
+      setStatus("");
+    } catch (e) { setStatus(`⚠ 로드 실패 · ${e && e.message ? e.message : ""}`); }
+    setLoading(false);
+  };
+  useEffect(() => { reload(); }, [dbUrl]);
+  const callDelete = async (path) => {
+    const base = dbUrl.replace(/\/+$/, "");
+    const tok0 = getAuth && getAuth();
+    const tryOnce = (tok) => {
+      const auth = tok ? `?auth=${encodeURIComponent(tok)}` : "";
+      return fetch(`${base}${path}.json${auth}`, { method: "DELETE" });
+    };
+    if (!tok0 && !refreshAuth) return { ok: false, status: 401, body: "인증 토큰 없음" };
+    let r = await tryOnce(tok0);
+    if ((r.status === 401 || r.status === 403) && refreshAuth) {
+      const tok2 = await refreshAuth();
+      if (tok2) r = await tryOnce(tok2);
+    }
+    return r;
+  };
+  const removeOne = async (id) => {
+    if (!window.confirm("이 스티커를 삭제할까요?")) return;
+    setStatus("삭제 중…");
+    try {
+      const r = await callDelete(`/stickers/${encodeURIComponent(id)}`);
+      if (r.ok) { setStatus("✅ 삭제 완료"); reload(); }
+      else { setStatus(`⚠ 삭제 실패 (HTTP ${r.status})`); }
+    } catch (e) { setStatus(`⚠ ${e && e.message ? e.message : "네트워크 오류"}`); }
+  };
+  const sweepExpired = async () => {
+    const cutoff = Date.now() - STICKER_TTL_MS;
+    const dead = items.filter((it) => it.ts < cutoff);
+    if (dead.length === 0) { setStatus("✅ 만료된 스티커가 없어요"); return; }
+    if (!window.confirm(`만료된 스티커 ${dead.length}개를 정리할까요?`)) return;
+    setStatus("정리 중…");
+    let ok = 0, fail = 0;
+    for (const it of dead) {
+      try { const r = await callDelete(`/stickers/${encodeURIComponent(it.id)}`); if (r.ok) ok++; else fail++; }
+      catch (_) { fail++; }
+    }
+    setStatus(`✅ 정리 완료 — 성공 ${ok}건${fail ? ` · 실패 ${fail}건` : ""}`);
+    reload();
+  };
+  const wipeAll = async () => {
+    if (items.length === 0) { setStatus("스티커가 없어요"); return; }
+    if (!window.confirm(`전체 스티커 ${items.length}개를 삭제할까요? 되돌릴 수 없어요.`)) return;
+    setStatus("전체 삭제 중…");
+    try {
+      const r = await callDelete(`/stickers`);
+      if (r.ok) { setStatus("✅ 전체 삭제 완료"); reload(); }
+      else { setStatus(`⚠ 실패 (HTTP ${r.status})`); }
+    } catch (e) { setStatus(`⚠ ${e && e.message ? e.message : "네트워크 오류"}`); }
+  };
+  const now = Date.now();
+  const expiredCount = items.filter((it) => it.ts < now - STICKER_TTL_MS).length;
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      style={{ background: "rgba(0,0,0,0.7)" }} onClick={onClose}>
+      <div className="w-full max-w-md rounded-2xl border-2 p-4 space-y-3 max-h-[92vh] overflow-y-auto"
+        style={{ background: "#13151c", borderColor: "#3a3f54" }} onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between">
+          <div className="text-sm font-bold" style={{ color: "#fbbf24", fontFamily: "'Jua', sans-serif" }}>
+            지도 스티커 관리 · {items.length}건 {expiredCount > 0 && <span style={{ color: "#94a3b8", fontWeight: 400 }}>(만료 {expiredCount})</span>}
+          </div>
+          <button onClick={onClose} className="text-slate-400 text-lg leading-none px-1" aria-label="닫기">×</button>
+        </div>
+        <div className="text-[10px] text-slate-500 leading-relaxed">
+          누구나 라이브 지도에 남긴 이모지 스티커 목록입니다. 부적절 콘텐츠는 즉시 삭제하고, 행사 후 일괄 정리하세요. 클라이언트는 2시간 초과 항목을 자동 숨김.
+        </div>
+        <div className="grid grid-cols-2 gap-2">
+          <button onClick={sweepExpired} disabled={loading}
+            style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
+              minHeight: 40, borderRadius: 8, padding: "0 10px",
+              background: "rgba(96,165,250,0.15)", color: "#60a5fa",
+              border: "1px solid rgba(96,165,250,0.4)",
+              fontFamily: "'Jua', sans-serif", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
+            만료 정리 ({expiredCount})
+          </button>
+          <button onClick={wipeAll} disabled={loading || items.length === 0}
+            style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
+              minHeight: 40, borderRadius: 8, padding: "0 10px",
+              background: "rgba(239,68,68,0.15)", color: "#fca5a5",
+              border: "1px solid rgba(239,68,68,0.4)",
+              fontFamily: "'Jua', sans-serif", fontSize: 12, fontWeight: 700,
+              cursor: items.length === 0 ? "default" : "pointer",
+              opacity: items.length === 0 ? 0.4 : 1 }}>
+            전체 비우기
+          </button>
+        </div>
+        {status && <div className="text-[11px]" style={{ color: status.startsWith("✅") ? "#22d65f" : status.startsWith("⚠") ? "#fca5a5" : "#fbbf24" }}>{status}</div>}
+        <div className="space-y-1">
+          {loading ? (
+            <div className="text-[11px] text-slate-500 text-center py-4">불러오는 중…</div>
+          ) : items.length === 0 ? (
+            <div className="text-[11px] text-slate-500 text-center py-4">아직 스티커가 없어요.</div>
+          ) : items.map((it) => {
+            const ageMin = Math.floor((now - it.ts) / 60000);
+            const expired = it.ts < now - STICKER_TTL_MS;
+            return (
+              <div key={it.id} className="flex items-center gap-2 p-2 rounded-lg"
+                style={{ background: expired ? "rgba(100,116,139,0.10)" : "rgba(34,214,95,0.06)",
+                  border: "1px solid " + (expired ? "#3a3f54" : "rgba(34,214,95,0.25)") }}>
+                <span style={{ fontSize: 22, lineHeight: 1, width: 28, textAlign: "center" }}>{it.kind || "📍"}</span>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div className="text-[11px]" style={{ color: "#cbd5e1", fontFamily: "'Jua', sans-serif", fontWeight: 700 }}>
+                    {ageMin <= 0 ? "방금" : `${ageMin}분 전`} {expired && <span style={{ color: "#fb923c" }}>· 만료</span>}
+                  </div>
+                  <div className="text-[10px] text-slate-500" style={{ fontFamily: "'IBM Plex Mono', monospace" }}>
+                    {it.lat.toFixed(5)}, {it.lng.toFixed(5)}
+                  </div>
+                  {it.label && <div className="text-[10px] text-slate-400 mt-0.5 truncate">{it.label}</div>}
+                </div>
+                <button onClick={() => removeOne(it.id)}
+                  style={{ padding: "5px 10px", borderRadius: 6,
+                    background: "rgba(239,68,68,0.15)", color: "#fca5a5",
+                    border: "1px solid rgba(239,68,68,0.4)",
+                    fontFamily: "'Jua', sans-serif", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>
+                  삭제
+                </button>
+              </div>
+            );
+          })}
         </div>
       </div>
     </div>
@@ -4860,6 +5006,7 @@ function App() {
   const [showViaEditor, setShowViaEditor] = useState(false);
   const [showZoneEditor, setShowZoneEditor] = useState(false);
   const [showNoticeEditor, setShowNoticeEditor] = useState(false);
+  const [showStickerEditor, setShowStickerEditor] = useState(false);
   const [showBackup, setShowBackup] = useState(false);
   const openMentBackup = () => { setMentMsg(""); setMentBackup(JSON.stringify(ments, null, 2)); };
   const copyMent = () => {
@@ -6707,6 +6854,9 @@ function App() {
               <ActBtn Icon={Megaphone} color="#fca5a5"
                 label="공지·재난 안내 발송" sub="모든 승객 지도에 일괄 공지"
                 onClick={() => setShowNoticeEditor(true)} />
+              <ActBtn Icon={MapPin} color="#a78bfa"
+                label="지도 스티커 관리" sub="사용자 이모지 핀 개별 삭제 · 만료 정리"
+                onClick={() => setShowStickerEditor(true)} />
               <ActBtn Icon={BarChart} color="#22d65f"
                 label="오늘 승하차 통계" sub="회차·정류장별 합계 · CSV 추출"
                 onClick={() => setShowStats(true)} />
@@ -6894,6 +7044,8 @@ function App() {
       {showZoneEditor && <ZoneEditor onClose={() => setShowZoneEditor(false)} dbUrl={shareUrl} getAuth={() => authTokenRef.current}
         refreshAuth={async () => { try { const d = await firebaseSignIn(); if (d && d.idToken) { authTokenRef.current = d.idToken; tokenIssuedAtRef.current = Date.now(); return d.idToken; } } catch (_) {} return null; }} />}
       {showNoticeEditor && <NoticeEditor onClose={() => setShowNoticeEditor(false)} dbUrl={shareUrl} getAuth={() => authTokenRef.current}
+        refreshAuth={async () => { try { const d = await firebaseSignIn(); if (d && d.idToken) { authTokenRef.current = d.idToken; tokenIssuedAtRef.current = Date.now(); return d.idToken; } } catch (_) {} return null; }} />}
+      {showStickerEditor && <StickerEditor onClose={() => setShowStickerEditor(false)} dbUrl={shareUrl} getAuth={() => authTokenRef.current}
         refreshAuth={async () => { try { const d = await firebaseSignIn(); if (d && d.idToken) { authTokenRef.current = d.idToken; tokenIssuedAtRef.current = Date.now(); return d.idToken; } } catch (_) {} return null; }} />}
       {showBackup && <BackupModal onClose={() => setShowBackup(false)} counts={counts} dateKey={dateKey} />}
 
