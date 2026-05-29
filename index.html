@@ -87,6 +87,16 @@
   .leaflet-tooltip.fest-stop::before { display: none; }
   .leaflet-tooltip.fest-stop.dir-out { border-color: #EE6B2E; box-shadow: 1.5px 1.5px 0 #EE6B2E; color: #C2521D; }
   .leaflet-tooltip.fest-stop.dir-in  { border-color: #16A89E; box-shadow: 1.5px 1.5px 0 #16A89E; color: #0F786E; }
+  /* 운영자 폼 입력 — 포커스/호버 상태 일관화 */
+  .mds-input { width: 100%; min-height: 44px; padding: 10px 12px; border-radius: 8px;
+    background: #0a0b0f; color: #cbd5e1; border: 1px solid #3a3f54;
+    font-family: 'IBM Plex Mono', monospace; font-size: 12px;
+    transition: border-color 0.15s, box-shadow 0.15s, background 0.15s; }
+  .mds-input::placeholder { color: #475569; }
+  .mds-input:hover { border-color: #4b5169; }
+  .mds-input:focus { outline: none; border-color: #fbbf24;
+    box-shadow: 0 0 0 3px rgba(251, 191, 36, 0.15); background: #0d0f17; }
+  .mds-input:disabled { opacity: 0.5; cursor: not-allowed; }
 </style>
 </head>
 <body>
@@ -100,7 +110,7 @@
 
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef, useMemo } = React;
-const BUILD = "b286"; /* 화면 우하단 표시 — 최신 배포 확인용 */
+const BUILD = "b287"; /* 화면 우하단 표시 — 최신 배포 확인용 */
 
 /* 실시간 위치 공유용 Firebase DB 주소. 여기에 한 번 넣어두면 승객 링크가 ?view=map 만 남아 깔끔해집니다. */
 const SHARE_DB = "https://innum-bus-default-rtdb.firebaseio.com";
@@ -6386,69 +6396,105 @@ function App() {
         </div>
         )}
 
-        {/* 연결 탭 — 실시간 위치 공유 (DB·busId·로그인·QR). 통일된 액션 버튼 */}
+        {/* 연결 탭 — 실시간 위치 공유 (DB·busId·로그인·QR). 그룹화된 입력 폼 + 통일 액션 버튼 */}
         {advTab === "연결" && (
-        <div className="px-5 py-4 space-y-3"
+        <div className="px-5 py-4"
           style={{ background: "#0e1018", borderColor: "#3a3f54", borderBottom: "1px solid #3a3f54" }}>
-          <div className="text-xs font-bold" style={{ color: "#cbd5e1", fontFamily: "'Jua', sans-serif" }}>실시간 위치 공유</div>
-          <input type="text" value={shareUrl} onChange={(e) => setShareUrl(e.target.value)}
-            placeholder="Firebase DB 주소 (https://...firebasedatabase.app)"
-            className="w-full px-2 py-1.5 rounded text-[11px]"
-            style={{ background: "#0a0b0f", border: "1px solid #3a3f54", color: "#cbd5e1", fontFamily: "'IBM Plex Mono', monospace" }} />
-          <div className="flex items-center gap-2">
-            <label className="text-[11px] text-slate-400">버스 번호</label>
-            <input type="text" value={busId} onChange={(e) => setBusId(e.target.value)}
-              className="w-16 px-2 py-1 rounded text-[11px]"
-              style={{ background: "#0a0b0f", border: "1px solid #3a3f54", color: "#cbd5e1", fontFamily: "'IBM Plex Mono', monospace" }} />
-            <button onClick={toggleSharing} disabled={!shareUrl}
-              style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
-                minHeight: 44, borderRadius: 8, padding: "0 14px",
-                background: sharing ? "#22d65f" : "rgba(34,214,95,0.12)",
-                color: sharing ? "#0a0b0f" : "#22d65f",
-                border: `1px solid ${sharing ? "#22d65f" : "rgba(34,214,95,0.4)"}`,
-                fontFamily: "'Jua', sans-serif", fontSize: 13, fontWeight: 700,
-                opacity: !shareUrl ? 0.4 : 1, cursor: !shareUrl ? "default" : "pointer" }}>
-              <Navigation size={14} />
-              {sharing ? "위치 공유 중 (끄기)" : "내 위치 공유 시작"}
-            </button>
+          {/* 그룹 1 — DB 연결 식별 */}
+          <div style={{ padding: "12px 14px", borderRadius: 10, background: "#13151c",
+            border: "1px solid #2c3142", marginBottom: 12 }}>
+            <div className="flex items-center gap-1.5 mb-3">
+              <Settings size={12} style={{ color: "#94a3b8" }} />
+              <span className="text-[11px] tracking-wider" style={{ color: "#cbd5e1",
+                fontFamily: "'Jua', sans-serif", letterSpacing: 1 }}>DB 연결 · 차량 식별</span>
+            </div>
+            <div className="space-y-3">
+              <div>
+                <label className="block text-[11px] mb-1.5" style={{ color: "#94a3b8", fontFamily: "'Jua', sans-serif" }}>
+                  Firebase Realtime DB 주소
+                </label>
+                <input type="text" value={shareUrl} onChange={(e) => setShareUrl(e.target.value)}
+                  placeholder="https://...firebasedatabase.app" className="mds-input" />
+                <div className="text-[10px] text-slate-600 mt-1">승객·기사가 공유하는 실시간 DB · 이 주소가 비면 송신 불가</div>
+              </div>
+              <div>
+                <label className="block text-[11px] mb-1.5" style={{ color: "#94a3b8", fontFamily: "'Jua', sans-serif" }}>
+                  버스 번호
+                </label>
+                <input type="text" value={busId} onChange={(e) => setBusId(e.target.value)}
+                  placeholder="1" className="mds-input"
+                  style={{ maxWidth: 90, textAlign: "center", fontSize: 16, fontWeight: 700 }} />
+                <div className="text-[10px] text-slate-600 mt-1">차량마다 다른 번호 · 승객 지도 마커에 표시</div>
+              </div>
+              <button onClick={toggleSharing} disabled={!shareUrl}
+                style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
+                  minHeight: 44, borderRadius: 8, padding: "0 14px", marginTop: 4,
+                  background: sharing ? "#22d65f" : "rgba(34,214,95,0.12)",
+                  color: sharing ? "#0a0b0f" : "#22d65f",
+                  border: `1px solid ${sharing ? "#22d65f" : "rgba(34,214,95,0.4)"}`,
+                  fontFamily: "'Jua', sans-serif", fontSize: 13, fontWeight: 700,
+                  opacity: !shareUrl ? 0.4 : 1, cursor: !shareUrl ? "default" : "pointer" }}>
+                <Navigation size={14} />
+                {sharing ? "위치 공유 중 (끄기)" : "내 위치 공유 시작"}
+              </button>
+              <button onClick={() => setManualWaiting((v) => !v)} disabled={!sharing}
+                style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
+                  minHeight: 44, borderRadius: 8, padding: "0 14px",
+                  background: manualWaiting ? "#60a5fa" : "rgba(96,165,250,0.12)",
+                  color: manualWaiting ? "#0a0b0f" : "#60a5fa",
+                  border: `1px solid ${manualWaiting ? "#60a5fa" : "rgba(96,165,250,0.4)"}`,
+                  fontFamily: "'Jua', sans-serif", fontSize: 13, fontWeight: 700,
+                  opacity: !sharing ? 0.4 : 1, cursor: !sharing ? "default" : "pointer" }}>
+                <Pause size={14} />
+                {manualWaiting ? "출발 대기 표시 중 (해제)" : "출발 대기 표시"}
+              </button>
+            </div>
           </div>
-          <button onClick={() => setManualWaiting((v) => !v)} disabled={!sharing}
-            style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
-              minHeight: 44, borderRadius: 8, padding: "0 14px",
-              background: manualWaiting ? "#60a5fa" : "rgba(96,165,250,0.12)",
-              color: manualWaiting ? "#0a0b0f" : "#60a5fa",
-              border: `1px solid ${manualWaiting ? "#60a5fa" : "rgba(96,165,250,0.4)"}`,
-              fontFamily: "'Jua', sans-serif", fontSize: 13, fontWeight: 700,
-              opacity: !sharing ? 0.4 : 1, cursor: !sharing ? "default" : "pointer" }}>
-            <Pause size={14} />
-            {manualWaiting ? "출발 대기 표시 중 (해제)" : "출발 대기 표시"}
-          </button>
-          <input type="email" value={driverEmail} onChange={(e) => setDriverEmail(e.target.value)}
-            placeholder="(선택) 기사 로그인 이메일 — 비워두면 테스트 모드"
-            autoComplete="off"
-            className="w-full px-2 py-1.5 rounded text-[11px]"
-            style={{ background: "#0a0b0f", border: "1px solid #3a3f54", color: "#cbd5e1", fontFamily: "'IBM Plex Mono', monospace" }} />
-          <input type="password" value={driverPass} onChange={(e) => setDriverPass(e.target.value)}
-            placeholder="(선택) 기사 로그인 비밀번호"
-            autoComplete="off"
-            className="w-full px-2 py-1.5 rounded text-[11px]"
-            style={{ background: "#0a0b0f", border: "1px solid #3a3f54", color: "#cbd5e1", fontFamily: "'IBM Plex Mono', monospace" }} />
-          <input type="password" value={apiKey} onChange={(e) => setApiKey(e.target.value)}
-            placeholder="(선택) 웹 API 키 — 콘솔 프로젝트 설정에서 복사"
-            autoComplete="off"
-            className="w-full px-2 py-1.5 rounded text-[11px]"
-            style={{ background: "#0a0b0f", border: "1px solid #3a3f54", color: "#cbd5e1", fontFamily: "'IBM Plex Mono', monospace" }} />
-          <button onClick={testLogin}
-            style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
-              minHeight: 44, borderRadius: 8, padding: "0 14px",
-              background: "rgba(96,165,250,0.15)", color: "#60a5fa",
-              border: "1px solid rgba(96,165,250,0.4)",
-              fontFamily: "'Jua', sans-serif", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>
-            <KeyIcon size={14} /> 쓰기 로그인 테스트 · UID 확인
-          </button>
-          {authStatus && <div className="text-[10px] break-all" style={{ color: authStatus.startsWith("✅") ? "#22d65f" : authStatus.startsWith("❌") ? "#f87171" : "#94a3b8" }}>{authStatus}</div>}
-          <div className="text-[10px] text-slate-600">좌표 공유(📍 ON)는 GPS 자동이 켜져 있어야 동작. OFF면 GPS 없이 운행 정보(방향·회차·정류장)만 송신. 로그인을 채우면 승객은 읽기만 가능(쓰기 차단).</div>
-          <div className="text-[10px] text-slate-600">기사 화면 재진입: 주소 끝에 <span style={{ color: "#fbbf24", fontFamily: "'IBM Plex Mono', monospace" }}>?admin=1</span> 붙여 북마크하거나, 승객 화면 제목을 7번 탭하세요.</div>
+
+          {/* 그룹 2 — 기사 로그인 (선택) */}
+          <div style={{ padding: "12px 14px", borderRadius: 10, background: "#13151c",
+            border: "1px solid #2c3142", marginBottom: 12 }}>
+            <div className="flex items-center gap-1.5 mb-3">
+              <KeyIcon size={12} style={{ color: "#94a3b8" }} />
+              <span className="text-[11px] tracking-wider" style={{ color: "#cbd5e1",
+                fontFamily: "'Jua', sans-serif", letterSpacing: 1 }}>기사 로그인 (선택)</span>
+            </div>
+            <div className="space-y-3">
+              <div>
+                <label className="block text-[11px] mb-1.5" style={{ color: "#94a3b8", fontFamily: "'Jua', sans-serif" }}>
+                  이메일
+                </label>
+                <input type="email" value={driverEmail} onChange={(e) => setDriverEmail(e.target.value)}
+                  placeholder="driver@example.com" autoComplete="off" className="mds-input" />
+              </div>
+              <div>
+                <label className="block text-[11px] mb-1.5" style={{ color: "#94a3b8", fontFamily: "'Jua', sans-serif" }}>
+                  비밀번호
+                </label>
+                <input type="password" value={driverPass} onChange={(e) => setDriverPass(e.target.value)}
+                  placeholder="••••••••" autoComplete="off" className="mds-input" />
+              </div>
+              <div>
+                <label className="block text-[11px] mb-1.5" style={{ color: "#94a3b8", fontFamily: "'Jua', sans-serif" }}>
+                  웹 API 키
+                </label>
+                <input type="password" value={apiKey} onChange={(e) => setApiKey(e.target.value)}
+                  placeholder="콘솔 프로젝트 설정에서 복사" autoComplete="off" className="mds-input" />
+              </div>
+              <button onClick={testLogin}
+                style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
+                  minHeight: 44, borderRadius: 8, padding: "0 14px", marginTop: 4,
+                  background: "rgba(96,165,250,0.15)", color: "#60a5fa",
+                  border: "1px solid rgba(96,165,250,0.4)",
+                  fontFamily: "'Jua', sans-serif", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>
+                <KeyIcon size={14} /> 쓰기 로그인 테스트 · UID 확인
+              </button>
+              {authStatus && <div className="text-[10px] break-all" style={{ color: authStatus.startsWith("✅") ? "#22d65f" : authStatus.startsWith("❌") ? "#f87171" : "#94a3b8" }}>{authStatus}</div>}
+              <div className="text-[10px] text-slate-600 leading-relaxed">로그인을 채우면 승객은 읽기만 가능(쓰기 차단). 비워두면 테스트 모드로 동작.</div>
+            </div>
+          </div>
+
+          <div className="text-[10px] text-slate-600 leading-relaxed mb-2">기사 화면 재진입: 주소 끝에 <span style={{ color: "#fbbf24", fontFamily: "'IBM Plex Mono', monospace" }}>?admin=1</span> 붙여 북마크하거나, 승객 화면 제목을 7번 탭하세요.</div>
           {shareUrl && (() => {
             const norm = (s) => s.replace(/\/+$/, "");
             const baked = SHARE_DB && norm(shareUrl) === norm(SHARE_DB);
