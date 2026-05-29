@@ -86,7 +86,7 @@
 
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef, useMemo } = React;
-const BUILD = "b208"; /* 화면 우하단 표시 — 최신 배포 확인용 */
+const BUILD = "b209"; /* 화면 우하단 표시 — 최신 배포 확인용 */
 
 /* 실시간 위치 공유용 Firebase DB 주소. 여기에 한 번 넣어두면 승객 링크가 ?view=map 만 남아 깔끔해집니다. */
 const SHARE_DB = "https://innum-bus-default-rtdb.firebaseio.com";
@@ -142,6 +142,30 @@ function distanceMeters(a, b) {
 /* Time helper: HH:MM → minutes since midnight */
 const toMin = (hm) => { const [h, m] = hm.split(":").map(Number); return h * 60 + m; };
 const fromMin = (m) => { const x = ((m % (24 * 60)) + 24 * 60) % (24 * 60); return `${String(Math.floor(x / 60)).padStart(2, "0")}:${String(x % 60).padStart(2, "0")}`; };
+
+/* Phase 0.5: 가짜 시각/가속 — 행사 전 시연·테스트용. 영구 저장(localStorage) + URL 우선.
+   ?fake=2026-06-13T13:30 — 기준 시각, ?fakeSpeed=10 — 가속 배율(기본 1).
+   실제 시각 기록(broadcast ts, dateKey 등 데이터 무결성)은 Date.now() 그대로 사용. */
+const FAKE = (() => {
+  try {
+    const params = new URLSearchParams(window.location.search || "");
+    const fromUrl = params.get("fake") || null;
+    const fromLs = (typeof localStorage !== "undefined") ? (localStorage.getItem("shuttle:fakeNow") || null) : null;
+    const base = fromUrl || fromLs;
+    const speedRaw = params.get("fakeSpeed") || (typeof localStorage !== "undefined" ? localStorage.getItem("shuttle:fakeSpeed") : null) || "1";
+    const speed = parseFloat(speedRaw) || 1;
+    if (!base) return null;
+    const baseDate = new Date(base);
+    if (isNaN(baseDate.getTime())) return null;
+    return { baseMs: baseDate.getTime(), wallStart: Date.now(), speed };
+  } catch (_) { return null; }
+})();
+const getNow = () => {
+  if (!FAKE) return new Date();
+  const elapsed = Date.now() - FAKE.wallStart;
+  return new Date(FAKE.baseMs + elapsed * FAKE.speed);
+};
+const getNowMin = () => { const d = getNow(); return d.getHours() * 60 + d.getMinutes(); };
 
 /* Spoken-name helper — TTS reads "5·18" oddly, normalize before speaking */
 const spokenName = (name) => (name || "").replace(/5·18/g, "오일팔");
@@ -360,7 +384,7 @@ function MapPicker({ lat, lng, radius, onPick }) {
 
 /* 운행 시간표 모달 — 양방향 전체 회차×정류장 시각 표. 현재 시각 기준 운행 회차 강조 */
 function TimetableModal({ tripsToday, onClose }) {
-  const now = new Date();
+  const now = getNow();
   const nowMin = now.getHours() * 60 + now.getMinutes();
   // 하루 전체에서 현재 운행 중(또는 다음) 회차 1개 계산
   const all = [];
@@ -780,7 +804,7 @@ function VenueModal({ onClose, initialZone = 0 }) {
     if (item.time === "상시") return false;
     const end = (item.time.split("~")[1] || item.time).trim();
     if (!/^\d/.test(end)) return false;
-    const now = new Date();
+    const now = getNow();
     const m = now.getMonth(), d = now.getDate();
     const targetDay = dayKey === "day1" ? 13 : 14;
     if (m !== 5) return m > 5; // 6월이 아니면: 7월 이후=과거, 5월 이전=미래
@@ -1901,7 +1925,7 @@ function LiveMapView({ dbUrl }) {
     const seenShared = new Set();
     const allCoords = [];
     // 정류장 팝업용 — 오늘 회차 수, 현재 시각
-    const today = new Date();
+    const today = getNow();
     const tripsToday2 = today.getMonth() === 5 && today.getDate() === 14 ? 5 : ROUTES.outbound.trips.length;
     const nowMinNow2 = today.getHours() * 60 + today.getMinutes();
     const buildStopPopup = (stopName, sub, dirs) => {
@@ -1994,7 +2018,7 @@ function LiveMapView({ dbUrl }) {
     const L = window.L;
     zoneLayersRef.current.forEach((l) => map.removeLayer(l));
     zoneLayersRef.current = [];
-    const today = new Date();
+    const today = getNow();
     const isToday = today.getMonth() === 5 && (today.getDate() === 13 || today.getDate() === 14);
     // 행사 기간이면 그날의 일정, 아니면 day1을 기본 미리보기로
     const dayKey = (today.getMonth() === 5 && today.getDate() === 14) ? "day2" : "day1";
@@ -2169,7 +2193,7 @@ function LiveMapView({ dbUrl }) {
         let nSched = 0;
         let nResting = 0;
         {
-          const today = new Date();
+          const today = getNow();
           const tripsToday = today.getMonth() === 5 && today.getDate() === 14 ? 5 : ROUTES.outbound.trips.length;
           const nowMin = today.getHours() * 60 + today.getMinutes();
           const obFirstStop = ROUTES.outbound.stops[0];
@@ -2514,12 +2538,295 @@ function BusCard({ id, bus, agoText, nowMin, tripsToday, departedInfo }) {
   );
 }
 
+/* Phase 1: 승객 설정 인프라 — shuttle:psgr:* prefix, 운영자 키와 격리 */
+const PSGR_DEFAULTS = {
+  v: 1,
+  ttsEnabled: false,
+  ttsStops: [],         // 빈 배열 = 전 정류장
+  ttsDir: "both",       // outbound | inbound | both
+  ttsLead5: false,
+  ttsLead1: true,
+  ttsArrive: true,
+  ttsDepart: false,
+  ttsTerminus: true,
+  ttsLiveMute: true,    // 라이브 신호가 있는 회차는 시간표 안내 무음
+  ttsQuietEnabled: false,
+  ttsQuietStart: "22:00",
+  ttsQuietEnd: "07:00",
+  onboardSeen: false,
+};
+function usePassengerSettings() {
+  const [s, setS] = useState(() => {
+    const stored = LS.getJSON("psgr:settings", null);
+    return { ...PSGR_DEFAULTS, ...(stored || {}) };
+  });
+  useEffect(() => { LS.setJSON("psgr:settings", s); }, [s]);
+  const setOne = (key, val) => setS((p) => ({ ...p, [key]: val }));
+  const reset = () => setS({ ...PSGR_DEFAULTS });
+  return { settings: s, setOne, reset };
+}
+const ALL_STOP_NAMES = (() => {
+  const set = new Set();
+  ROUTES.outbound.stops.forEach((s) => set.add(s.name));
+  ROUTES.inbound.stops.forEach((s) => set.add(s.name));
+  return [...set];
+})();
+
+/* Phase 2: 승객 시간표 음성 안내 엔진.
+   시각표(ROUTES.trips)와 nowSec 비교로 정류장별 사전·도착·출발·종점 안내.
+   라이브 신호가 있는 회차는 옵션으로 무음. iOS 백그라운드 제약 존재 — 사용자 토글 시
+   primeTTS 후 동작. spokenRef 로 중복 발화 차단. */
+function useTimetableAnnouncer({ settings, buses, tripsToday }) {
+  const spokenRef = useRef(new Set());
+  const primedRef = useRef(false);
+  useEffect(() => {
+    // ttsEnabled 토글 OFF→ON 시 매번 새로 prime + 디둡 캐시 초기화 — 너무 오래된 키 제거
+    if (!settings.ttsEnabled) { primedRef.current = false; return; }
+    if (!primedRef.current) {
+      try {
+        const u = new SpeechSynthesisUtterance(" "); u.volume = 0;
+        window.speechSynthesis && window.speechSynthesis.speak(u);
+      } catch (_) {}
+      primedRef.current = true;
+    }
+    const speak = (text) => {
+      try {
+        const u = new SpeechSynthesisUtterance(text);
+        u.lang = "ko-KR"; u.rate = 1.0;
+        window.speechSynthesis && window.speechSynthesis.speak(u);
+      } catch (_) {}
+    };
+    const inQuiet = () => {
+      if (!settings.ttsQuietEnabled) return false;
+      const n = getNow();
+      const nowM = n.getHours() * 60 + n.getMinutes();
+      const sM = toMin(settings.ttsQuietStart || "22:00");
+      const eM = toMin(settings.ttsQuietEnd || "07:00");
+      if (sM <= eM) return nowM >= sM && nowM < eM;
+      return nowM >= sM || nowM < eM;
+    };
+    const tick = () => {
+      if (inQuiet()) return;
+      const n = getNow();
+      const nowSec = n.getHours() * 3600 + n.getMinutes() * 60 + n.getSeconds();
+      const stopFilter = (settings.ttsStops && settings.ttsStops.length > 0)
+        ? new Set(settings.ttsStops) : null;
+      const liveSet = new Set();
+      Object.values(buses || {}).forEach((b) => {
+        if (!b || !b.dir || !b.trip) return;
+        liveSet.add(`${b.dir === "inbound" ? "inbound" : "outbound"}|${b.trip}`);
+      });
+      const dirs = settings.ttsDir === "both" ? ["outbound", "inbound"]
+        : [settings.ttsDir === "inbound" ? "inbound" : "outbound"];
+      dirs.forEach((dir) => {
+        for (let ti = 0; ti < tripsToday; ti++) {
+          if (settings.ttsLiveMute && liveSet.has(`${dir}|${ti + 1}`)) continue;
+          const sched = ROUTES[dir].trips[ti]; if (!sched) continue;
+          sched.forEach((t, idx) => {
+            const stop = ROUTES[dir].stops[idx]; if (!stop || !t) return;
+            if (stopFilter && !stopFilter.has(stop.name)) return;
+            const schedSec = toMin(t) * 60;
+            const delta = schedSec - nowSec; // +면 도착 전, -면 도착 후
+            const isTerminus = !!stop.terminus || idx === sched.length - 1;
+            const baseKey = `${dir}|${ti}|${idx}|${t}`;
+            const fire = (event, text) => {
+              const key = `${baseKey}|${event}`;
+              if (spokenRef.current.has(key)) return;
+              spokenRef.current.add(key);
+              speak(text);
+            };
+            // 5분 전 (270 < delta <= 330 — tick 마진)
+            if (settings.ttsLead5 && delta > 270 && delta <= 330) {
+              fire("L5", `약 5분 후 ${ti + 1}회차 셔틀이 ${spokenName(stop.name)}에 도착합니다`);
+            }
+            // 1분 전 (30 < delta <= 90)
+            if (settings.ttsLead1 && delta > 30 && delta <= 90) {
+              fire("L1", `잠시 후 ${spokenName(stop.name)}에 도착합니다`);
+            }
+            // 도착 (-30 < delta <= 30) — 종점은 별도 멘트
+            if (delta > -30 && delta <= 30) {
+              if (isTerminus && settings.ttsTerminus) {
+                fire("TERM", `종점 ${spokenName(stop.name)}입니다. 안전하게 내려 주세요`);
+              } else if (!isTerminus && settings.ttsArrive) {
+                fire("AR", `${spokenName(stop.name)} 정류장입니다`);
+              }
+            }
+            // 출발 (-90 <= delta < -30)
+            if (settings.ttsDepart && delta < -30 && delta >= -90) {
+              if (idx < sched.length - 1) {
+                const nxt = ROUTES[dir].stops[idx + 1];
+                const tail = nxt ? ` 다음은 ${spokenName(nxt.name)}입니다` : "";
+                fire("DP", `${spokenName(stop.name)}에서 출발합니다.${tail}`);
+              }
+            }
+          });
+        }
+      });
+      // dedup 사이즈 제한
+      if (spokenRef.current.size > 200) {
+        const arr = [...spokenRef.current].slice(-100);
+        spokenRef.current = new Set(arr);
+      }
+    };
+    tick();
+    const id = setInterval(tick, 15000); // 15초 간격
+    return () => clearInterval(id);
+  }, [settings, buses, tripsToday]);
+}
+
+/* 승객 설정 모달 — 시간표 음성 안내 카드(MVP). 추후 즐겨찾기·표시·언어 카드 확장. */
+function SettingsModal({ onClose, settings, setOne, reset }) {
+  const testSpeak = () => {
+    try {
+      const u = new SpeechSynthesisUtterance("음성 안내 테스트입니다. 잠시 후 다음 정류장에 도착합니다.");
+      u.lang = "ko-KR"; u.rate = 1.0;
+      window.speechSynthesis.speak(u);
+    } catch (_) {}
+  };
+  const toggleStop = (name) => {
+    const cur = settings.ttsStops || [];
+    setOne("ttsStops", cur.includes(name) ? cur.filter((x) => x !== name) : [...cur, name]);
+  };
+  const isAllStops = (settings.ttsStops || []).length === 0;
+  const chip = (on, onClick, label, key) => (
+    <button key={key} onClick={onClick} type="button"
+      style={{ padding: "5px 10px", borderRadius: 999, fontSize: 11,
+        background: on ? FT.orange : "#fff",
+        color: on ? "#fff" : FT.ink,
+        border: "1.5px solid " + FT.ink, fontFamily: "'Jua', sans-serif", fontWeight: 700,
+        boxShadow: on ? "1.5px 1.5px 0 " + FT.ink : "none", cursor: "pointer" }}>
+      {label}
+    </button>
+  );
+  const sectionLabel = (txt) => (
+    <div style={{ fontSize: 11, color: FT.inkSoft, fontFamily: "'Jua', sans-serif", fontWeight: 700, marginTop: 12, marginBottom: 5 }}>{txt}</div>
+  );
+  return (
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-2"
+      style={{ background: "rgba(0,0,0,0.5)" }} onClick={onClose}>
+      <div className="w-full max-w-md rounded-2xl p-4 space-y-3 max-h-[92vh] overflow-y-auto"
+        style={{ background: "#fff", border: "2.5px solid " + FT.ink, boxShadow: "3px 3px 0 " + FT.ink }}
+        onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between">
+          <div style={{ fontFamily: "'Jua', sans-serif", fontWeight: 700, fontSize: 16, color: FT.ink }}>⚙ 설정</div>
+          <button onClick={onClose} aria-label="설정 닫기"
+            style={{ background: "transparent", border: "none", fontSize: 22, color: FT.inkSoft, padding: "0 6px", cursor: "pointer" }}>×</button>
+        </div>
+
+        {/* 카드: 시간표 음성 안내 */}
+        <div style={{ border: "1.5px solid " + FT.ink, borderRadius: 12, padding: 12, background: FT.paper }}>
+          <div className="flex items-start justify-between gap-2">
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: 13, fontWeight: 700, color: FT.ink, fontFamily: "'Jua', sans-serif" }}>🔔 시간표 음성 안내</div>
+              <div style={{ fontSize: 10, color: FT.inkSoft, fontFamily: "'Jua', sans-serif", marginTop: 2 }}>
+                시각표에 따라 내 정류장 도착·출발을 음성으로 안내. GPS 없이도 동작.
+              </div>
+            </div>
+            <button onClick={() => setOne("ttsEnabled", !settings.ttsEnabled)} role="switch" aria-checked={settings.ttsEnabled}
+              style={{ position: "relative", width: 44, height: 24, borderRadius: 999,
+                background: settings.ttsEnabled ? FT.orange : "#cbd5e1",
+                border: "1.5px solid " + FT.ink, flexShrink: 0, cursor: "pointer" }}>
+              <div style={{ position: "absolute", top: 1, left: settings.ttsEnabled ? 21 : 1,
+                width: 18, height: 18, borderRadius: "50%", background: "#fff", border: "1px solid " + FT.ink,
+                transition: "left 0.18s" }} />
+            </button>
+          </div>
+
+          {settings.ttsEnabled && (
+            <>
+              {sectionLabel(`내 정류장 (${isAllStops ? "전 정류장" : (settings.ttsStops || []).length + "개 선택"})`)}
+              <div className="flex flex-wrap gap-1.5">
+                {chip(isAllStops, () => setOne("ttsStops", []), "전 정류장", "all")}
+                {ALL_STOP_NAMES.map((nm) => chip((settings.ttsStops || []).includes(nm), () => toggleStop(nm), nm, nm))}
+              </div>
+
+              {sectionLabel("알림 시점")}
+              <div className="flex flex-wrap gap-1.5">
+                {chip(settings.ttsLead5, () => setOne("ttsLead5", !settings.ttsLead5), "5분 전", "l5")}
+                {chip(settings.ttsLead1, () => setOne("ttsLead1", !settings.ttsLead1), "1분 전", "l1")}
+                {chip(settings.ttsArrive, () => setOne("ttsArrive", !settings.ttsArrive), "도착", "ar")}
+                {chip(settings.ttsDepart, () => setOne("ttsDepart", !settings.ttsDepart), "출발", "dp")}
+                {chip(settings.ttsTerminus, () => setOne("ttsTerminus", !settings.ttsTerminus), "종점 안내", "tm")}
+              </div>
+
+              {sectionLabel("방향")}
+              <div className="flex flex-wrap gap-1.5">
+                {chip(settings.ttsDir === "both", () => setOne("ttsDir", "both"), "양방향", "db")}
+                {chip(settings.ttsDir === "outbound", () => setOne("ttsDir", "outbound"), "축제장 방향", "do")}
+                {chip(settings.ttsDir === "inbound", () => setOne("ttsDir", "inbound"), "광장 방향", "di")}
+              </div>
+
+              <div className="mt-3 flex items-center justify-between" style={{ fontSize: 11, color: FT.inkSoft, fontFamily: "'Jua', sans-serif" }}>
+                <div>
+                  <div style={{ color: FT.ink, fontWeight: 700 }}>라이브 신호 우선</div>
+                  <div style={{ fontSize: 10 }}>운영자가 송신 중인 회차는 시간표 안내 무음</div>
+                </div>
+                <button onClick={() => setOne("ttsLiveMute", !settings.ttsLiveMute)} role="switch" aria-checked={settings.ttsLiveMute}
+                  style={{ position: "relative", width: 36, height: 20, borderRadius: 999,
+                    background: settings.ttsLiveMute ? FT.teal : "#cbd5e1",
+                    border: "1.5px solid " + FT.ink, flexShrink: 0, cursor: "pointer" }}>
+                  <div style={{ position: "absolute", top: 1, left: settings.ttsLiveMute ? 17 : 1,
+                    width: 14, height: 14, borderRadius: "50%", background: "#fff", border: "1px solid " + FT.ink,
+                    transition: "left 0.18s" }} />
+                </button>
+              </div>
+
+              <div className="mt-2 flex items-center justify-between gap-2" style={{ fontSize: 11, color: FT.inkSoft, fontFamily: "'Jua', sans-serif" }}>
+                <div>
+                  <div style={{ color: FT.ink, fontWeight: 700 }}>무음 시간대</div>
+                  <div style={{ fontSize: 10 }}>해당 시간대엔 안내 발화 안 함</div>
+                </div>
+                <button onClick={() => setOne("ttsQuietEnabled", !settings.ttsQuietEnabled)} role="switch" aria-checked={settings.ttsQuietEnabled}
+                  style={{ position: "relative", width: 36, height: 20, borderRadius: 999,
+                    background: settings.ttsQuietEnabled ? FT.teal : "#cbd5e1",
+                    border: "1.5px solid " + FT.ink, flexShrink: 0, cursor: "pointer" }}>
+                  <div style={{ position: "absolute", top: 1, left: settings.ttsQuietEnabled ? 17 : 1,
+                    width: 14, height: 14, borderRadius: "50%", background: "#fff", border: "1px solid " + FT.ink,
+                    transition: "left 0.18s" }} />
+                </button>
+              </div>
+              {settings.ttsQuietEnabled && (
+                <div className="mt-2 flex items-center gap-2" style={{ fontSize: 11, fontFamily: "'Jua', sans-serif", color: FT.inkSoft }}>
+                  <input type="time" value={settings.ttsQuietStart} onChange={(e) => setOne("ttsQuietStart", e.target.value)}
+                    style={{ padding: "3px 6px", border: "1.5px solid " + FT.ink, borderRadius: 6, fontFamily: "'IBM Plex Mono', monospace", fontSize: 11 }} />
+                  <span>~</span>
+                  <input type="time" value={settings.ttsQuietEnd} onChange={(e) => setOne("ttsQuietEnd", e.target.value)}
+                    style={{ padding: "3px 6px", border: "1.5px solid " + FT.ink, borderRadius: 6, fontFamily: "'IBM Plex Mono', monospace", fontSize: 11 }} />
+                </div>
+              )}
+
+              <button onClick={testSpeak}
+                className="mt-3 w-full py-2 rounded text-[12px]"
+                style={{ background: "#fff", border: "2px solid " + FT.ink, fontFamily: "'Jua', sans-serif", fontWeight: 700, color: FT.ink,
+                  boxShadow: "2px 2px 0 " + FT.ink }}>
+                ▶ 음성 테스트
+              </button>
+            </>
+          )}
+        </div>
+
+        <button onClick={() => { if (window.confirm("승객 설정을 모두 초기값으로 되돌립니다.")) reset(); }}
+          className="w-full py-2 rounded text-[11px]"
+          style={{ background: "rgba(239,68,68,0.08)", color: "#dc2626", border: "1px solid rgba(239,68,68,0.3)", fontFamily: "'Jua', sans-serif", fontWeight: 700 }}>
+          기본값 복원
+        </button>
+      </div>
+    </div>
+  );
+}
+
 /* 승객 기본 화면 — 실시간 버스 목록(버스안내판 스타일) + 지도 탭. 제목 7번 탭하면 운영자(히든) 진입 */
 function PassengerView({ dbUrl, onAdmin, initialTab = "list" }) {
   const [buses, setBuses] = useState({});
   const [tab, setTab] = useState(initialTab);
   const [conn, setConn] = useState("loading"); // loading | ok | error
   const [showTimetable, setShowTimetable] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
+  const { settings: psgrSettings, setOne: setPsgrOne, reset: resetPsgr } = usePassengerSettings();
+  // 시간표 음성 안내 엔진 — psgrSettings.ttsEnabled 이면 백그라운드 tick 으로 발화
+  useTimetableAnnouncer({ settings: psgrSettings, buses, tripsToday: (() => {
+    const dd = getNow(); return dd.getMonth() === 5 && dd.getDate() === 14 ? 5 : ROUTES.outbound.trips.length;
+  })() });
   const [showVenue, setShowVenue] = useState(false);
   const [venueZone, setVenueZone] = useState(0);
   const [notice, setNotice] = useState(null); // P1-2: 운영자 공지/재난 안내
@@ -2604,7 +2911,7 @@ function PassengerView({ dbUrl, onAdmin, initialTab = "list" }) {
   };
 
   // 시간표(승객용) — 일요일(6.14)은 5회차, 그 외 6회차
-  const d = new Date();
+  const d = getNow();
   const tripsToday = d.getMonth() === 5 && d.getDate() === 14 ? 5 : ROUTES.outbound.trips.length;
   const nowMin = d.getHours() * 60 + d.getMinutes();
 
@@ -2744,6 +3051,15 @@ function PassengerView({ dbUrl, onAdmin, initialTab = "list" }) {
               style={{ position: "absolute", top: 12, right: 12, width: 12, height: 12, borderRadius: "50%",
                 background: conn === "error" ? "#B91C1C" : live.length > 0 ? FT.teal : FT.mute,
                 border: "1.5px solid " + FT.ink, boxShadow: "1px 1px 0 " + FT.ink }} />
+            <button onClick={() => setShowSettings(true)} aria-label="설정"
+              title={psgrSettings.ttsEnabled ? "설정 (🔔 음성 안내 ON)" : "설정"}
+              style={{ position: "absolute", top: 30, right: 8, width: 32, height: 32, borderRadius: 8,
+                background: psgrSettings.ttsEnabled ? FT.orange : "#fff",
+                color: psgrSettings.ttsEnabled ? "#fff" : FT.ink,
+                border: "1.5px solid " + FT.ink, boxShadow: "1.5px 1.5px 0 " + FT.ink,
+                display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", padding: 0 }}>
+              <Settings size={16} />
+            </button>
           </div>
 
 
@@ -3026,6 +3342,7 @@ function PassengerView({ dbUrl, onAdmin, initialTab = "list" }) {
       </div>
       {showTimetable && <TimetableModal tripsToday={tripsToday} onClose={() => setShowTimetable(false)} />}
       {showVenue && <VenueModal onClose={() => setShowVenue(false)} initialZone={venueZone} />}
+      {showSettings && <SettingsModal onClose={() => setShowSettings(false)} settings={psgrSettings} setOne={setPsgrOne} reset={resetPsgr} />}
     </div>
   );
 }
@@ -3224,7 +3541,7 @@ function App() {
   // 안내에 사용할 축제일 결정 (수동 지정 우선, 아니면 오늘 날짜로 판단)
   const resolveFestivalDay = () => {
     if (festivalDay === "day1" || festivalDay === "day2") return festivalDay;
-    const d = new Date();
+    const d = getNow();
     if (d.getMonth() === 5 && d.getDate() === 13) return "day1";
     if (d.getMonth() === 5 && d.getDate() === 14) return "day2";
     return null;
@@ -3239,7 +3556,7 @@ function App() {
   const tripsToday = useMemo(() => {
     if (festivalDay === "day2") return 5;
     if (festivalDay === "day1") return ROUTES.outbound.trips.length;
-    const d = new Date();
+    const d = getNow();
     if (d.getMonth() === 5 && d.getDate() === 14) return 5;
     return ROUTES.outbound.trips.length;
   }, [nowTick, festivalDay]);
@@ -3280,7 +3597,7 @@ function App() {
 
   /* --- 현재 시각 기준으로 운행 중/다음 회차 선택 (마운트 시 1회 + 수동 재설정 버튼) --- */
   const selectLegByClock = () => {
-    const now = new Date();
+    const now = getNow();
     const nowMin = now.getHours() * 60 + now.getMinutes();
     const all = [];
     ["outbound", "inbound"].forEach(dir => {
@@ -3578,7 +3895,7 @@ function App() {
           if (progTimeBase === "trip") {
             arrivalMin = toMin(trip[trip.length - 1]);
           } else {
-            const now = new Date();
+            const now = getNow();
             const remain = Math.max(0, toMin(trip[trip.length - 1]) - toMin(trip[idx]));
             arrivalMin = now.getHours() * 60 + now.getMinutes() + remain;
           }
@@ -3596,7 +3913,7 @@ function App() {
         : `이번 정류장은 ${curSay}입니다. 이번 정류장이 종점입니다. 안전하게 내려주세요.`;
       if (nextLegInfo) {
         // 출발 예정 시각이 이미 지났으면(지연 운행) 절대 시각 대신 '잠시 후'로 안내
-        const nowMin = new Date().getHours() * 60 + new Date().getMinutes();
+        const nowMin = getNowMin();
         const onTime = toMin(nextLegInfo.departTime) >= nowMin;
         const when = onTime ? `${spokenTime(nextLegInfo.departTime)}에` : "잠시 후";
         text = `${base} ${when} ${nextLegInfo.label} ${nextLegInfo.tripNum}회차 셔틀버스가 출발합니다.`;
@@ -3860,7 +4177,7 @@ function App() {
     const tick = () => {
       // P1-1 / A4: manualWaiting 진행 잠금 — 해제 직후 catch-up 표식
       if (manualWaiting) { ttWasWaitingRef.current = true; return; }
-      const now = new Date();
+      const now = getNow();
       const nowSec = now.getHours() * 3600 + now.getMinutes() * 60 + now.getSeconds();
       // A1: 시각표 범위 가드 — 시각표가 없거나 첫 출발 전 / 종점 후엔 진행 X
       const startT = trip && trip[0] ? toMin(trip[0]) : null;
@@ -4305,7 +4622,7 @@ function App() {
 
   /* --- Trip status (출발 전/운행 중/지연/종료) — 지연 운행을 '종료'로 오표시하지 않음 --- */
   const tripStatus = useMemo(() => {
-    const now = new Date(); const nowMin = now.getHours() * 60 + now.getMinutes();
+    const now = getNow(); const nowMin = now.getHours() * 60 + now.getMinutes();
     const start = toMin(trip[0]); const end = toMin(trip[trip.length - 1]);
     if (nowMin < start) return { state: "upcoming", label: `${start - nowMin}분 후 출발`, color: "#22d65f" };
     if (nowMin <= end + 5) return { state: "active", label: "운행 중", color: "#fbbf24" };
