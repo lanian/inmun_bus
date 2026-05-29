@@ -29,6 +29,7 @@ P0-5: 행사 당일 누구나 `/zones`, `/counts`, `/buses` 같은 운영 데이
 | `/zones` | 누구나 | **admin 만** |
 | `/notice` | 누구나 | driver 또는 admin |
 | `/drivers`, `/admins` | admin | admin |
+| `/stickers/{id}` | 누구나 | **신규(create) 는 누구나** · 수정/삭제는 driver·admin |
 
 ## 주의
 - 익명 읽기는 의도적으로 허용(승객 페이지가 누구나 접근). API 키 노출은

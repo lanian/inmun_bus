@@ -110,7 +110,7 @@
 
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef, useMemo } = React;
-const BUILD = "b292"; /* 화면 우하단 표시 — 최신 배포 확인용 */
+const BUILD = "b293"; /* 화면 우하단 표시 — 최신 배포 확인용 */
 
 /* 실시간 위치 공유용 Firebase DB 주소. 여기에 한 번 넣어두면 승객 링크가 ?view=map 만 남아 깔끔해집니다. */
 const SHARE_DB = "https://innum-bus-default-rtdb.firebaseio.com";
@@ -2136,6 +2136,25 @@ function LiveMapView({ dbUrl, onHome }) {
   const zoneLayersRef = useRef([]);
   const hasFitRef = useRef(false);
 
+  /* ===== 스티커 (사용자/운영자 핀) =====
+     5종 이모지: 👍 좋아요 / 📸 포토스팟 / 💤 쉬는 곳 / 🚻 화장실 / 🍱 음식
+     2시간 자동 소멸 (클라이언트 필터) · 익명 create 허용, driver/admin 만 수정·삭제 */
+  const STICKER_KINDS = [
+    { k: "👍", t: "좋아요" },
+    { k: "📸", t: "포토스팟" },
+    { k: "💤", t: "쉬는 곳" },
+    { k: "🚻", t: "화장실" },
+    { k: "🍱", t: "음식" },
+  ];
+  const STICKER_TTL_MS = 2 * 60 * 60 * 1000; // 2시간
+  const [stickers, setStickers] = useState({});
+  const [stickerKind, setStickerKind] = useState(null); // null = idle, 'X' = place mode
+  const [paletteOpen, setPaletteOpen] = useState(false);
+  const [stickerMsg, setStickerMsg] = useState(""); // '잠시 후 사라져요' 같은 토스트
+  const stickerKindRef = useRef(null);
+  useEffect(() => { stickerKindRef.current = stickerKind; }, [stickerKind]);
+  const stickerLayersRef = useRef({});
+
   // 좌표 lookup — override(공유 키) 우선, 없으면 ROUTES 기본값
   const getCoord = (dir, s) => {
     const k = SHARED_STOPS.has(s.name) ? s.name : `${dir}|${s.name}`;
@@ -2157,10 +2176,82 @@ function LiveMapView({ dbUrl, onHome }) {
     map.createPane("zonePane"); map.getPane("zonePane").style.zIndex = 390;
     map.createPane("routePane"); map.getPane("routePane").style.zIndex = 395;
     map.setView([35.135, 126.94], 14);
+    // 스티커 place mode: 지도 클릭 시 현재 선택한 이모지로 신규 스티커 생성
+    map.on("click", async (e) => {
+      const kind = stickerKindRef.current; if (!kind) return;
+      const url = dbUrl ? dbUrl.replace(/\/+$/, "") : "";
+      if (!url) { setStickerMsg("서버 연결 정보가 없어 저장 못해요"); setTimeout(() => setStickerMsg(""), 2200); return; }
+      const body = { lat: +e.latlng.lat.toFixed(6), lng: +e.latlng.lng.toFixed(6), kind, ts: Date.now() };
+      try {
+        const r = await fetch(`${url}/stickers.json`, { method: "POST", body: JSON.stringify(body) });
+        if (!r.ok) throw new Error("HTTP " + r.status);
+        setStickerMsg("스티커 등록 — 약 2시간 후 자동 사라져요");
+        setTimeout(() => setStickerMsg(""), 2400);
+      } catch (err) {
+        setStickerMsg("저장 실패: " + (err && err.message ? err.message : "네트워크 오류"));
+        setTimeout(() => setStickerMsg(""), 2800);
+      }
+      setStickerKind(null);
+    });
     mapRef.current = map;
     setTimeout(() => map.invalidateSize(), 100);
     return () => { map.remove(); mapRef.current = null; };
-  }, []);
+  }, [dbUrl]);
+
+  /* 스티커 폴링 — 8초 간격, 2시간 초과 항목은 클라이언트 필터에서 제외 */
+  useEffect(() => {
+    if (!dbUrl) return;
+    const base = dbUrl.replace(/\/+$/, "");
+    let stopped = false;
+    const poll = async () => {
+      try {
+        const r = await fetch(`${base}/stickers.json`, { cache: "no-store" });
+        if (!r.ok) return;
+        const d = await r.json();
+        if (!stopped) setStickers(d && typeof d === "object" ? d : {});
+      } catch (_) { /* 무시 */ }
+    };
+    poll();
+    const id = setInterval(poll, 8000);
+    return () => { stopped = true; clearInterval(id); };
+  }, [dbUrl]);
+
+  /* 스티커 마커 렌더 — stickers 변경 시 재계산 */
+  useEffect(() => {
+    const map = mapRef.current; if (!map || !window.L) return;
+    const L = window.L;
+    const cutoff = Date.now() - STICKER_TTL_MS;
+    const live = Object.entries(stickers || {}).filter(([, s]) =>
+      s && typeof s.lat === "number" && typeof s.lng === "number" && typeof s.ts === "number" && s.ts >= cutoff);
+    // 제거 대상: 더 이상 없거나 만료된 마커
+    const aliveIds = new Set(live.map(([id]) => id));
+    Object.entries(stickerLayersRef.current).forEach(([id, layer]) => {
+      if (!aliveIds.has(id)) { try { map.removeLayer(layer); } catch (_) {} delete stickerLayersRef.current[id]; }
+    });
+    // 추가/갱신
+    live.forEach(([id, s]) => {
+      const ageMin = Math.floor((Date.now() - s.ts) / 60000);
+      const left = Math.max(0, 120 - ageMin);
+      const popup = `<div style="font-family:'Jua',sans-serif;min-width:140px;text-align:center">`
+        + `<div style="font-size:24px;line-height:1">${s.kind || "📍"}</div>`
+        + (s.label ? `<div style="font-size:12px;color:#101113;margin-top:4px;font-weight:700">${s.label.replace(/</g,"&lt;")}</div>` : "")
+        + `<div style="font-size:10px;color:#4A4E55;margin-top:4px">${ageMin <= 0 ? "방금" : ageMin + "분 전"} · ${left}분 후 사라짐</div>`
+        + `</div>`;
+      if (stickerLayersRef.current[id]) {
+        // 위치/팝업 갱신
+        stickerLayersRef.current[id].setLatLng([s.lat, s.lng]);
+        stickerLayersRef.current[id].setPopupContent(popup);
+        return;
+      }
+      const icon = L.divIcon({
+        className: "mds-sticker",
+        html: `<div style="font-size:22px;line-height:1;filter:drop-shadow(0 1px 1px rgba(0,0,0,0.4))">${s.kind || "📍"}</div>`,
+        iconSize: [28, 28], iconAnchor: [14, 14],
+      });
+      const m = L.marker([s.lat, s.lng], { icon, pane: "markerPane" }).addTo(map).bindPopup(popup);
+      stickerLayersRef.current[id] = m;
+    });
+  }, [stickers]);
 
   // Firebase에서 viapoints + coords 가져오기 (운영자가 수정한 값)
   useEffect(() => {
@@ -2665,6 +2756,67 @@ function LiveMapView({ dbUrl, onHome }) {
           {count > 0 ? `운행 중 ${count}대` : status}
         </div>
       </div>
+
+      {/* 스티커 — 플로팅 버튼 (우하단 줌 위) + 팔레트 + 플레이스 모드 배너 + 토스트 */}
+      {stickerKind ? (
+        <div style={{ position: "fixed", left: 10, right: 10, top: "calc(70px + env(safe-area-inset-top, 0px))",
+          zIndex: 1200, pointerEvents: "none" }}>
+          <div style={{ pointerEvents: "auto", display: "flex", alignItems: "center", gap: 8,
+            background: "#fff", border: "2px solid " + FT.ink, borderRadius: 12,
+            boxShadow: "3px 3px 0 " + FT.ink, padding: "8px 12px",
+            fontFamily: "'Jua', sans-serif", fontSize: 13, color: FT.ink, fontWeight: 700 }}>
+            <span style={{ fontSize: 22, lineHeight: 1 }}>{stickerKind}</span>
+            <span style={{ flex: 1 }}>지도를 탭해서 위치에 스티커 남기기</span>
+            <button onClick={() => setStickerKind(null)}
+              style={{ background: FT.paper, border: "1.5px solid " + FT.ink, borderRadius: 8,
+                padding: "4px 10px", fontSize: 12, fontFamily: "'Jua', sans-serif", fontWeight: 700,
+                color: FT.ink, cursor: "pointer" }}>취소</button>
+          </div>
+        </div>
+      ) : null}
+      <button onClick={() => { setPaletteOpen((v) => !v); setStickerKind(null); }}
+        aria-label="스티커 남기기"
+        style={{ position: "fixed", right: 12, bottom: "calc(96px + env(safe-area-inset-bottom, 0px))",
+          width: 52, height: 52, borderRadius: "50%", zIndex: 1100,
+          background: paletteOpen ? FT.teal : "#fff", color: paletteOpen ? "#fff" : FT.ink,
+          border: "2px solid " + FT.ink, boxShadow: "3px 3px 0 " + FT.ink,
+          fontFamily: "'Jua', sans-serif", fontSize: 22, fontWeight: 700, cursor: "pointer",
+          display: "inline-flex", alignItems: "center", justifyContent: "center" }}>
+        {paletteOpen ? "×" : "💌"}
+      </button>
+      {paletteOpen && (
+        <div style={{ position: "fixed", right: 12, bottom: "calc(156px + env(safe-area-inset-bottom, 0px))",
+          zIndex: 1100, background: "#fff", border: "2px solid " + FT.ink, borderRadius: 14,
+          boxShadow: "3px 3px 0 " + FT.ink, padding: 10, width: 200, fontFamily: "'Jua', sans-serif" }}>
+          <div style={{ fontSize: 11, color: FT.inkSoft, marginBottom: 6, fontWeight: 700 }}>
+            스티커 선택 → 지도 탭
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 6 }}>
+            {STICKER_KINDS.map((s) => (
+              <button key={s.k} title={s.t}
+                onClick={() => { setStickerKind(s.k); setPaletteOpen(false); }}
+                style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 2,
+                  padding: "6px 0", background: FT.paper, border: "1.5px solid " + FT.ink, borderRadius: 8,
+                  cursor: "pointer", fontFamily: "'Jua', sans-serif" }}>
+                <span style={{ fontSize: 20, lineHeight: 1 }}>{s.k}</span>
+                <span style={{ fontSize: 9, color: FT.inkSoft }}>{s.t}</span>
+              </button>
+            ))}
+          </div>
+          <div style={{ fontSize: 9, color: FT.mute, marginTop: 6, lineHeight: 1.4 }}>
+            누구나 남길 수 있어요 · 약 2시간 후 자동 사라짐
+          </div>
+        </div>
+      )}
+      {stickerMsg && (
+        <div style={{ position: "fixed", left: "50%", bottom: "calc(80px + env(safe-area-inset-bottom, 0px))",
+          transform: "translateX(-50%)", zIndex: 1300,
+          background: FT.ink, color: "#fff", padding: "8px 14px", borderRadius: 999,
+          fontFamily: "'Jua', sans-serif", fontSize: 12, fontWeight: 700,
+          boxShadow: "2px 2px 0 " + FT.ink }}>
+          {stickerMsg}
+        </div>
+      )}
 
       {/* 범례 (좌하단) */}
       <div style={{ position: "absolute", bottom: 96, left: 10, zIndex: 1000,
