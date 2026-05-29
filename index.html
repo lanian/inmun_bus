@@ -110,7 +110,7 @@
 
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef, useMemo } = React;
-const BUILD = "b290"; /* 화면 우하단 표시 — 최신 배포 확인용 */
+const BUILD = "b291"; /* 화면 우하단 표시 — 최신 배포 확인용 */
 
 /* 실시간 위치 공유용 Firebase DB 주소. 여기에 한 번 넣어두면 승객 링크가 ?view=map 만 남아 깔끔해집니다. */
 const SHARE_DB = "https://innum-bus-default-rtdb.firebaseio.com";
@@ -2256,24 +2256,37 @@ function LiveMapView({ dbUrl, onHome }) {
     ["outbound", "inbound"].forEach((dir) => {
       const dirColor = dir === "outbound" ? FT.orange : FT.teal;
       const dash = dir === "inbound" ? "10,8" : null;
-      // 정류장 마커
+      // 정류장 마커. 라벨(tooltip)도 interactive 로 만들어 텍스트만 눌러도 popup 이 열리도록.
+      const wireLabelClick = (m) => {
+        const tt = m.getTooltip(); if (!tt) return;
+        tt.on("click", (ev) => {
+          try { L.DomEvent.stopPropagation(ev); } catch (_) {}
+          m.openPopup();
+        });
+        m.on("tooltipopen", (e) => {
+          const el = e.tooltip && e.tooltip.getElement();
+          if (el) el.style.cursor = "pointer";
+        });
+      };
       ROUTES[dir].stops.forEach((s) => {
         const c = getCoord(dir, s); if (!c) return;
         allCoords.push(c);
         if (SHARED_STOPS.has(s.name)) {
           if (seenShared.has(s.name)) return; seenShared.add(s.name);
-          const m = L.circleMarker(c, { radius: 5, color: FT.ink, fillColor: "#fff", fillOpacity: 1, weight: 2 })
-            .addTo(map).bindTooltip(s.name, { permanent: true, direction: "top", offset: [0, -4], className: "fest-stop" })
+          const m = L.circleMarker(c, { radius: 7, color: FT.ink, fillColor: "#fff", fillOpacity: 1, weight: 2 })
+            .addTo(map).bindTooltip(s.name, { permanent: true, direction: "top", offset: [0, -4], className: "fest-stop", interactive: true })
             .bindPopup(buildStopPopup(s.name, s.sub, ["outbound", "inbound"]));
+          wireLabelClick(m);
           stopLayersRef.current.push(m);
         } else {
           // 축제장행(outbound) 라벨은 마커 아래, 민주광장행(inbound) 라벨은 마커 위 — 위치+색으로 방향 구분
-          const m = L.circleMarker(c, { radius: 5, color: dirColor, fillColor: "#fff", fillOpacity: 1, weight: 2.5 })
+          const m = L.circleMarker(c, { radius: 7, color: dirColor, fillColor: "#fff", fillOpacity: 1, weight: 2.5 })
             .addTo(map).bindTooltip(s.name, { permanent: true,
               direction: dir === "outbound" ? "bottom" : "top",
               offset: [0, dir === "outbound" ? 4 : -4],
-              className: `fest-stop ${dir === "outbound" ? "dir-out" : "dir-in"}` })
+              className: `fest-stop ${dir === "outbound" ? "dir-out" : "dir-in"}`, interactive: true })
             .bindPopup(buildStopPopup(s.name, s.sub, [dir]));
+          wireLabelClick(m);
           stopLayersRef.current.push(m);
         }
       });
