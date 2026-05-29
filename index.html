@@ -86,7 +86,7 @@
 
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef, useMemo } = React;
-const BUILD = "b215"; /* 화면 우하단 표시 — 최신 배포 확인용 */
+const BUILD = "b216"; /* 화면 우하단 표시 — 최신 배포 확인용 */
 
 /* 실시간 위치 공유용 Firebase DB 주소. 여기에 한 번 넣어두면 승객 링크가 ?view=map 만 남아 깔끔해집니다. */
 const SHARE_DB = "https://innum-bus-default-rtdb.firebaseio.com";
@@ -5995,12 +5995,49 @@ function Root() {
 ReactDOM.createRoot(document.getElementById('root')).render(<Root />);
 </script>
 <script>
-  /* 서비스워커 미등록(캐시 문제로 제거). 기존에 설치된 옛 서비스워커가 있으면
-     업데이트를 강제해 자폭 sw.js로 교체 → 캐시 비우고 등록 해제되도록 한다. */
+  /* P1-3: 지도 타일 캐시 서비스워커 등록 + 행사장 영역 z14~16 prefetch.
+     이전 자폭 SW 가 설치돼 있어도 update 시점에 새 sw.js 로 교체됨.
+     SW 는 *.tile.openstreetmap.org 만 cache-first 로 가로채므로 index.html 등은 항상 네트워크. */
   if ("serviceWorker" in navigator) {
-    navigator.serviceWorker.getRegistrations()
-      .then((regs) => regs.forEach((r) => r.update()))
-      .catch(() => {});
+    window.addEventListener("load", () => {
+      navigator.serviceWorker.register("sw.js")
+        .then((reg) => {
+          // 행사장 영역 z14~16 타일 prefetch — 24h 안에 한 번만, LTE 약전계 대비
+          try {
+            const PREFETCH_KEY = "shuttle:tilesPrefetchAt";
+            const last = parseInt(localStorage.getItem(PREFETCH_KEY) || "0", 10);
+            if (Date.now() - last < 24 * 3600 * 1000) return;
+            const subdomains = ["a", "b", "c"];
+            const bounds = { latMin: 35.125, latMax: 35.150, lngMin: 126.915, lngMax: 126.970 };
+            const tileXY = (lat, lng, z) => {
+              const n = Math.pow(2, z);
+              const x = Math.floor((lng + 180) / 360 * n);
+              const y = Math.floor((1 - Math.log(Math.tan(lat * Math.PI / 180) + 1 / Math.cos(lat * Math.PI / 180)) / Math.PI) / 2 * n);
+              return { x, y };
+            };
+            const urls = [];
+            for (const z of [14, 15, 16]) {
+              const min = tileXY(bounds.latMax, bounds.lngMin, z);
+              const max = tileXY(bounds.latMin, bounds.lngMax, z);
+              for (let x = min.x; x <= max.x; x++) {
+                for (let y = min.y; y <= max.y; y++) {
+                  const s = subdomains[(x + y) % subdomains.length];
+                  urls.push(`https://${s}.tile.openstreetmap.org/${z}/${x}/${y}.png`);
+                }
+              }
+            }
+            const send = () => {
+              if (navigator.serviceWorker.controller) {
+                navigator.serviceWorker.controller.postMessage({ type: "PREFETCH_TILES", urls });
+                localStorage.setItem(PREFETCH_KEY, String(Date.now()));
+              }
+            };
+            if (navigator.serviceWorker.controller) send();
+            else navigator.serviceWorker.addEventListener("controllerchange", send, { once: true });
+          } catch (_) {}
+        })
+        .catch(() => {});
+    });
   }
 </script>
 </body>
