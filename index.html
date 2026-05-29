@@ -94,7 +94,7 @@
 
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef, useMemo } = React;
-const BUILD = "b261"; /* 화면 우하단 표시 — 최신 배포 확인용 */
+const BUILD = "b262"; /* 화면 우하단 표시 — 최신 배포 확인용 */
 
 /* 실시간 위치 공유용 Firebase DB 주소. 여기에 한 번 넣어두면 승객 링크가 ?view=map 만 남아 깔끔해집니다. */
 const SHARE_DB = "https://innum-bus-default-rtdb.firebaseio.com";
@@ -176,8 +176,12 @@ const getNow = () => {
 };
 const getNowMin = () => { const d = getNow(); return d.getHours() * 60 + d.getMinutes(); };
 
-/* Spoken-name helper — TTS reads "5·18" oddly, normalize before speaking */
-const spokenName = (name) => (name || "").replace(/5·18/g, "오일팔");
+/* Spoken-name helper — TTS reads "5·18" oddly(오십팔/오백십팔/오점일팔 등 엔진별 상이),
+   '오일팔 '(뒤 공백) 으로 정규화해 자연 발화. 가운뎃점만 있는 변형도 함께 처리. */
+const spokenName = (name) => (name || "")
+  .replace(/5·18/g, "오일팔 ")
+  .replace(/5\.18/g, "오일팔 ")
+  .replace(/오일팔  +/g, "오일팔 "); // 중복 공백 제거
 
 /* Spoken-time helper — "09:45" → "9시 45분" so TTS doesn't read the colon */
 const spokenTime = (hm) => {
@@ -4229,6 +4233,8 @@ function App() {
     if (!window.speechSynthesis) { setTtsStatus("unsupported"); return; }
     if (window.speechSynthesis.paused) window.speechSynthesis.resume();
     window.speechSynthesis.cancel();
+    // 모든 발화에 spokenName 정규화 강제 — '5·18' 누락 사고 방지
+    text = spokenName(text);
     const wantURI = voiceRef.current || selectedVoiceURI;
     const chosen = voices.find(v => v.voiceURI === wantURI)
       || voices.find(v => v.lang === "ko-KR" || v.lang.startsWith("ko"));
