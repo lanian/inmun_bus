@@ -94,7 +94,7 @@
 
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef, useMemo } = React;
-const BUILD = "b256"; /* 화면 우하단 표시 — 최신 배포 확인용 */
+const BUILD = "b257"; /* 화면 우하단 표시 — 최신 배포 확인용 */
 
 /* 실시간 위치 공유용 Firebase DB 주소. 여기에 한 번 넣어두면 승객 링크가 ?view=map 만 남아 깔끔해집니다. */
 const SHARE_DB = "https://innum-bus-default-rtdb.firebaseio.com";
@@ -3426,9 +3426,8 @@ function PassengerView({ dbUrl, onAdmin, initialTab = "list" }) {
               );
             })()}
 
-            {/* 행사 안내 — D-day 강조 배지 + 진행 중 핀 + 단일 CTA (옵션 A+B) */}
-            <div style={{ marginTop: 16, padding: "14px 14px 12px",
-              background: FT.paper, border: "1.5px solid " + FT.mute + "88", borderRadius: 12 }}>
+            {/* 행사 안내 — 풀폭 그라데이션 배너 (옵션 B) */}
+            <div style={{ marginTop: 16 }}>
               {(() => {
                 const d = getNow();
                 const todayDay = d.getMonth() === 5 && d.getDate() === 13 ? "day1"
@@ -3444,38 +3443,22 @@ function PassengerView({ dbUrl, onAdmin, initialTab = "list" }) {
                 const today0 = new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
                 const day1Ts = new Date(2026, 5, 13).getTime();
                 const day2Ts = new Date(2026, 5, 14).getTime();
-                // 시점별 D-day 배지 + 보조 텍스트
-                let badgeText = "", badgeColor = FT.orange, badgeBg = FT.orangeSoft, subText = "6.13.(토) ~ 6.14.(일)";
+                let badgeText = "D-?", subText = "6.13.(토) ~ 6.14.(일)", urgent = false, ended = false;
                 if (today0 < day1Ts) {
                   const dn = Math.round((day1Ts - today0) / dayMs);
                   badgeText = `D-${dn}`;
-                  if (dn <= 7) { badgeColor = "#dc2626"; badgeBg = "#FEE2E2"; }
-                } else if (today0 === day1Ts) { badgeText = "D-DAY"; badgeColor = "#dc2626"; badgeBg = "#FEE2E2"; subText = "오늘 6.13.(토) · 1일차"; }
-                else if (today0 === day2Ts) { badgeText = "D-DAY"; badgeColor = "#dc2626"; badgeBg = "#FEE2E2"; subText = "오늘 6.14.(일) · 2일차"; }
-                else if (today0 > day2Ts) { badgeText = "종료"; badgeColor = FT.inkSoft; badgeBg = "#EEEFF1"; subText = "다음 회 안내 예정"; }
-                else { badgeText = "D-?"; }
+                  urgent = dn <= 7;
+                } else if (today0 === day1Ts) { badgeText = "D-DAY"; subText = "오늘 6.13.(토) · 1일차"; urgent = true; }
+                else if (today0 === day2Ts) { badgeText = "D-DAY"; subText = "오늘 6.14.(일) · 2일차"; urgent = true; }
+                else if (today0 > day2Ts) { badgeText = "종료"; subText = "다음 회 안내 예정"; ended = true; }
+                const bgGradient = ended
+                  ? "linear-gradient(135deg, #94a3b8 0%, #64748b 100%)"
+                  : urgent
+                    ? "linear-gradient(135deg, #ef4444 0%, #EE6B2E 60%, #f59e0b 100%)"
+                    : "linear-gradient(135deg, " + FT.orange + " 0%, #f59e0b 100%)";
                 return (
                   <>
-                    {/* 상단: 헤더 + 큰 D-day 배지 */}
-                    <div className="flex items-center justify-between" style={{ marginBottom: 10 }}>
-                      <div>
-                        <div style={{ color: FT.ink, fontFamily: "'Jua', sans-serif", fontWeight: 700, fontSize: 15 }}>
-                          🎪 무등생각 행사 안내
-                        </div>
-                        <div style={{ fontSize: 11, color: FT.inkSoft, fontFamily: "'Jua', sans-serif", marginTop: 1 }}>
-                          {subText}
-                        </div>
-                      </div>
-                      <div style={{ flexShrink: 0, display: "inline-flex", alignItems: "center", justifyContent: "center",
-                        minWidth: 60, padding: "6px 12px", borderRadius: 10,
-                        background: badgeBg, border: "2px solid " + badgeColor, color: badgeColor,
-                        fontFamily: "'Jua', sans-serif", fontWeight: 700, fontSize: 18,
-                        boxShadow: "2px 2px 0 " + badgeColor + "55" }}>
-                        {badgeText}
-                      </div>
-                    </div>
-
-                    {/* 행사 당일 진행 중 핀 */}
+                    {/* 진행 중 핀 — 행사 당일에만 배너 위에 별도 노출 */}
                     {liveProgs.length > 0 && (
                       <button onClick={() => { setVenueZone(0); setTab("venue"); }}
                         style={{ width: "100%", display: "flex", alignItems: "center", gap: 8, marginBottom: 10,
@@ -3496,14 +3479,28 @@ function PassengerView({ dbUrl, onAdmin, initialTab = "list" }) {
                       </button>
                     )}
 
-                    {/* 큰 단일 CTA — 행사장·프로그램 진입 */}
+                    {/* 풀폭 그라데이션 배너 — 좌 D-day 큰 배지 + 중앙 텍스트 + 우 → */}
                     <button onClick={() => { setVenueZone(0); setTab("venue"); }}
-                      style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
-                        background: FT.orange, color: "#fff", border: "2.5px solid " + FT.ink,
-                        borderRadius: 12, padding: "12px 14px", boxShadow: "3px 3px 0 " + FT.ink,
-                        fontFamily: "'Jua', sans-serif", fontWeight: 700, fontSize: 14, cursor: "pointer" }}>
-                      🎪 행사장·프로그램 보기
-                      <span style={{ fontSize: 16 }}>→</span>
+                      style={{ width: "100%", display: "flex", alignItems: "center", gap: 12,
+                        background: bgGradient, color: "#fff",
+                        border: "2.5px solid " + FT.ink, borderRadius: 12,
+                        padding: "12px 14px", boxShadow: "3px 3px 0 " + FT.ink,
+                        fontFamily: "'Jua', sans-serif", fontWeight: 700, cursor: "pointer", textAlign: "left" }}>
+                      {/* 좌측 D-day 배지 */}
+                      <span style={{ flexShrink: 0, display: "inline-flex", alignItems: "center", justifyContent: "center",
+                        minWidth: 58, height: 44, padding: "0 10px", borderRadius: 10,
+                        background: "#fff", color: urgent ? "#dc2626" : ended ? "#64748b" : FT.orangeDark,
+                        border: "2px solid " + FT.ink, fontSize: badgeText.length > 4 ? 13 : 16,
+                        fontWeight: 700, lineHeight: 1, boxShadow: "1.5px 1.5px 0 " + FT.ink + "55" }}>
+                        {badgeText}
+                      </span>
+                      {/* 중앙 텍스트 */}
+                      <span style={{ flex: 1, minWidth: 0, lineHeight: 1.2 }}>
+                        <div style={{ fontSize: 14, marginBottom: 2 }}>🎪 무등생각 행사 안내</div>
+                        <div style={{ fontSize: 11, opacity: 0.92, fontWeight: 400 }}>{subText}</div>
+                      </span>
+                      {/* 우측 화살표 */}
+                      <span style={{ fontSize: 22, flexShrink: 0, fontWeight: 700 }}>→</span>
                     </button>
                   </>
                 );
