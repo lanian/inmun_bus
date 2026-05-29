@@ -86,7 +86,7 @@
 
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef, useMemo } = React;
-const BUILD = "b230"; /* 화면 우하단 표시 — 최신 배포 확인용 */
+const BUILD = "b231"; /* 화면 우하단 표시 — 최신 배포 확인용 */
 
 /* 실시간 위치 공유용 Firebase DB 주소. 여기에 한 번 넣어두면 승객 링크가 ?view=map 만 남아 깔끔해집니다. */
 const SHARE_DB = "https://innum-bus-default-rtdb.firebaseio.com";
@@ -943,34 +943,28 @@ function VenueModal({ onClose, initialZone = 0, onOpenLiveMap, pageMode = false 
   const progSrc = progDay === "day1" ? "program-day1.png" : "program-day2.png";
   const progLabel = progDay === "day1" ? "6.13 (토)" : "6.14 (일)";
   return (
-    <div className={pageMode ? "w-full flex justify-center" : "fixed inset-0 z-50 flex items-center justify-center p-4"}
-      style={pageMode
-        ? { height: "100dvh", padding: "12px 12px calc(72px + env(safe-area-inset-bottom, 0px))",
-            background: FT.paper,
-            backgroundImage: "radial-gradient(circle at 15% -10%, rgba(22,168,158,0.12), transparent 45%), radial-gradient(circle at 85% 110%, rgba(238,107,46,0.10), transparent 45%)" }
-        : { background: "rgba(15,15,18,0.78)" }}
+    <div className={pageMode ? "" : "fixed inset-0 z-50 flex items-center justify-center p-4"}
+      style={pageMode ? {} : { background: "rgba(15,15,18,0.78)" }}
       onClick={pageMode ? undefined : onClose}>
-      <div className="w-full max-w-md p-4 space-y-3 overflow-y-auto"
-        style={pageMode
-          ? { background: "#fff", border: "2.5px solid " + FT.ink, borderRadius: 16, boxShadow: "4px 4px 0 " + FT.ink, height: "100%" }
-          : { background: "#fff", border: "2.5px solid " + FT.ink, borderRadius: 16, boxShadow: "4px 4px 0 " + FT.ink, maxHeight: "88vh" }}
-        onClick={(e) => e.stopPropagation()}>
-        <div className="flex items-center justify-between sticky"
-          style={{ top: -16, marginLeft: -16, marginRight: -16, marginTop: -16, paddingLeft: 16, paddingRight: 16, paddingTop: 12, paddingBottom: 10,
-            background: "#fff", borderBottom: "1.5px solid " + FT.mute + "55", zIndex: 5 }}>
-          <div>
-            <div style={{ fontSize: 11, color: FT.inkSoft, fontFamily: "'Jua', sans-serif" }}>Festival Map · Program</div>
-            <div style={{ color: FT.ink, fontFamily: "'Jua', sans-serif", fontWeight: 700, fontSize: 16 }}>
-              행사장·프로그램 <span style={{ color: FT.orange }}>· 무등생각</span>
+      <div className={pageMode ? "space-y-3" : "w-full max-w-md p-4 space-y-3 overflow-y-auto"}
+        style={pageMode ? {} : { background: "#fff", border: "2.5px solid " + FT.ink, borderRadius: 16, boxShadow: "4px 4px 0 " + FT.ink, maxHeight: "88vh" }}
+        onClick={pageMode ? undefined : (e) => e.stopPropagation()}>
+        {!pageMode && (
+          <div className="flex items-center justify-between sticky"
+            style={{ top: -16, marginLeft: -16, marginRight: -16, marginTop: -16, paddingLeft: 16, paddingRight: 16, paddingTop: 12, paddingBottom: 10,
+              background: "#fff", borderBottom: "1.5px solid " + FT.mute + "55", zIndex: 5 }}>
+            <div>
+              <div style={{ fontSize: 11, color: FT.inkSoft, fontFamily: "'Jua', sans-serif" }}>Festival Map · Program</div>
+              <div style={{ color: FT.ink, fontFamily: "'Jua', sans-serif", fontWeight: 700, fontSize: 16 }}>
+                행사장·프로그램 <span style={{ color: FT.orange }}>· 무등생각</span>
+              </div>
+              <div style={{ fontSize: 11, color: FT.inkSoft, fontFamily: "'Jua', sans-serif" }}>무등산국립공원 증심사지구 일원</div>
             </div>
-            <div style={{ fontSize: 11, color: FT.inkSoft, fontFamily: "'Jua', sans-serif" }}>무등산국립공원 증심사지구 일원</div>
+            <button onClick={onClose} aria-label="닫기"
+              style={{ width: 32, height: 32, lineHeight: 1, borderRadius: 8, border: "2px solid " + FT.ink,
+                background: "#fff", color: FT.ink, fontWeight: 700, fontFamily: "'Jua', sans-serif", fontSize: 18 }}>×</button>
           </div>
-          <button onClick={onClose} aria-label={pageMode ? "목록으로 돌아가기" : "닫기"}
-            style={{ padding: pageMode ? "0 10px" : 0, width: pageMode ? "auto" : 32, height: 32, lineHeight: 1, borderRadius: 8, border: "2px solid " + FT.ink,
-              background: "#fff", color: FT.ink, fontWeight: 700, fontFamily: "'Jua', sans-serif", fontSize: pageMode ? 12 : 18 }}>
-            {pageMode ? "← 목록" : "×"}
-          </button>
-        </div>
+        )}
 
         {/* 행사장 지도 — venue.png 안내도 + 실시간 지도 점프 (B) */}
         <div className="flex items-center justify-between" style={{ marginTop: 2 }}>
@@ -3089,33 +3083,56 @@ function PassengerView({ dbUrl, onAdmin, initialTab = "list" }) {
   }
   if (tab === "venue") {
     return (
-      <>
-        <VenueModal pageMode onClose={() => setTab("list")} initialZone={venueZone}
-          onOpenLiveMap={() => setTab("map")} />
-        {/* 풋터 액션 바 — 실시간 지도/행사장/시간표 일관 동선 (list 와 동일) */}
-        <div style={{ position: "fixed", left: 0, right: 0, bottom: 0, zIndex: 1100,
-          background: "#fff", borderTop: "2.5px solid " + FT.ink,
-          padding: "10px 12px calc(10px + env(safe-area-inset-bottom, 0px))" }}>
-          <div className="grid grid-cols-3 gap-2" style={{ maxWidth: 448, margin: "0 auto" }}>
-            <button onClick={() => setTab("map")} className="py-2.5 text-[12px]"
-              style={{ background: FT.teal, color: "#fff", border: "2px solid " + FT.ink, borderRadius: 10,
-                boxShadow: "2px 2px 0 " + FT.ink, fontFamily: "'Jua', sans-serif", fontWeight: 700 }}>
-              🗺️ 실시간 지도
-            </button>
-            <button onClick={() => setTab("list")} className="py-2.5 text-[12px]"
-              style={{ background: FT.orange, color: "#fff", border: "2px solid " + FT.ink, borderRadius: 10,
-                boxShadow: "2px 2px 0 " + FT.ink, fontFamily: "'Jua', sans-serif", fontWeight: 700 }}>
-              🎪 행사장 (현재)
-            </button>
-            <button onClick={() => setShowTimetable(true)} className="py-2.5 text-[12px]"
-              style={{ background: "#fff", color: FT.ink, border: "2px solid " + FT.ink, borderRadius: 10,
-                boxShadow: "2px 2px 0 " + FT.ink, fontFamily: "'Jua', sans-serif", fontWeight: 700 }}>
-              시간표
-            </button>
+      <div className="w-full p-3 sm:p-5 flex flex-col items-center"
+        style={{ height: "100dvh", overflow: "hidden", background: FT.paper,
+          backgroundImage: "radial-gradient(circle at 15% -10%, rgba(22,168,158,0.18), transparent 45%), radial-gradient(circle at 85% 110%, rgba(238,107,46,0.14), transparent 45%)" }}>
+        <div className="w-full max-w-md flex flex-col" style={{ flex: 1, minHeight: 0 }}>
+          <div className="flex flex-col" style={{ flex: 1, minHeight: 0, background: "#fff", border: "2.5px solid " + FT.ink, borderRadius: 18, boxShadow: "4px 4px 0 " + FT.ink, overflow: "hidden" }}>
+            {/* header — list 와 동일 구조: 로고 + 부제/제목 + ← 목록 버튼 */}
+            <div style={{ padding: "16px 18px 14px 18px", borderBottom: "2.5px solid " + FT.ink, background: "#fff", display: "flex", gap: 14, alignItems: "flex-start", position: "relative" }}>
+              <FestivalLogo size={44} />
+              <div style={{ flex: 1, minWidth: 0, paddingRight: 70 }}>
+                <div style={{ fontSize: 11, color: FT.inkSoft, fontFamily: "'Jua', sans-serif" }}>Festival Map · Program</div>
+                <div style={{ fontSize: 14, color: FT.ink, fontFamily: "'Jua', sans-serif", fontWeight: 700, marginTop: 2 }}>제4회 동구 무등산 인문축제</div>
+                <div style={{ fontSize: 18, color: FT.orange, fontFamily: "'Jua', sans-serif", fontWeight: 700, lineHeight: 1.15, marginTop: 4 }}>
+                  🎪 행사장·프로그램
+                </div>
+              </div>
+              <button onClick={() => setTab("list")} aria-label="목록으로 돌아가기"
+                style={{ position: "absolute", top: 12, right: 12, padding: "0 10px", height: 28, borderRadius: 8, border: "2px solid " + FT.ink,
+                  background: "#fff", color: FT.ink, fontWeight: 700, fontFamily: "'Jua', sans-serif", fontSize: 11, cursor: "pointer",
+                  boxShadow: "1.5px 1.5px 0 " + FT.ink }}>
+                ← 목록
+              </button>
+            </div>
+            {/* body — VenueModal pageMode 콘텐츠 스크롤 */}
+            <div style={{ background: FT.paper, padding: 12, flex: 1, minHeight: 0, overflowY: "auto" }}>
+              <VenueModal pageMode onClose={() => setTab("list")} initialZone={venueZone}
+                onOpenLiveMap={() => setTab("map")} />
+            </div>
+            {/* footer — list 와 동일 3-버튼 */}
+            <div className="grid grid-cols-3 gap-2"
+              style={{ background: "#fff", borderTop: "2.5px solid " + FT.ink, padding: 10, flexShrink: 0 }}>
+              <button onClick={() => setTab("map")} className="py-2.5 text-[12px]"
+                style={{ background: FT.teal, color: "#fff", border: "2px solid " + FT.ink, borderRadius: 10,
+                  boxShadow: "2px 2px 0 " + FT.ink, fontFamily: "'Jua', sans-serif", fontWeight: 700 }}>
+                🗺️ 실시간 지도
+              </button>
+              <button onClick={() => setTab("list")} className="py-2.5 text-[12px]"
+                style={{ background: FT.orange, color: "#fff", border: "2px solid " + FT.ink, borderRadius: 10,
+                  boxShadow: "2px 2px 0 " + FT.ink, fontFamily: "'Jua', sans-serif", fontWeight: 700 }}>
+                🎪 행사장
+              </button>
+              <button onClick={() => setShowTimetable(true)} className="py-2.5 text-[12px]"
+                style={{ background: "#fff", color: FT.ink, border: "2px solid " + FT.ink, borderRadius: 10,
+                  boxShadow: "2px 2px 0 " + FT.ink, fontFamily: "'Jua', sans-serif", fontWeight: 700 }}>
+                시간표
+              </button>
+            </div>
           </div>
         </div>
         {showTimetable && <TimetableModal tripsToday={tripsToday} onClose={closeTable} focusTrip={tableFocus} />}
-      </>
+      </div>
     );
   }
 
