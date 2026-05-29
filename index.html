@@ -86,7 +86,7 @@
 
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef, useMemo } = React;
-const BUILD = "b234"; /* 화면 우하단 표시 — 최신 배포 확인용 */
+const BUILD = "b235"; /* 화면 우하단 표시 — 최신 배포 확인용 */
 
 /* 실시간 위치 공유용 Firebase DB 주소. 여기에 한 번 넣어두면 승객 링크가 ?view=map 만 남아 깔끔해집니다. */
 const SHARE_DB = "https://innum-bus-default-rtdb.firebaseio.com";
@@ -2088,7 +2088,7 @@ function ViaEditor({ onClose, dbUrl, getAuth }) {
 }
 
 /* 승객용 실시간 위치 지도 — ?view=map&db=<DB주소> 로 진입. Firebase RTDB REST 폴링 */
-function LiveMapView({ dbUrl }) {
+function LiveMapView({ dbUrl, onHome }) {
   const elRef = useRef(null), mapRef = useRef(null), markersRef = useRef({}), schedMarkersRef = useRef({});
   const [count, setCount] = useState(0);
   const [status, setStatus] = useState("연결 중…");
@@ -2587,11 +2587,20 @@ function LiveMapView({ dbUrl }) {
       {/* 제목 + 운행 대수 칩 — 뷰포트 기준 고정(스크롤·줌에도 항상 노출) */}
       <div style={{ position: "fixed", top: "calc(10px + env(safe-area-inset-top, 0px))", left: 10, right: 10, zIndex: 1100,
         display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, pointerEvents: "none" }}>
-        <div style={{ background: "#fff", color: FT.ink, padding: "7px 12px", borderRadius: 10,
-          border: "2px solid " + FT.ink, fontFamily: "'Jua', sans-serif", fontSize: 13,
-          boxShadow: "3px 3px 0 " + FT.ink, fontWeight: 700 }}>
-          <span style={{ color: FT.orange }}>무등생각</span> 지도
-        </div>
+        {onHome ? (
+          <button onClick={onHome} aria-label="홈으로"
+            style={{ background: "#fff", color: FT.ink, padding: "7px 12px", borderRadius: 10,
+              border: "2px solid " + FT.ink, fontFamily: "'Jua', sans-serif", fontSize: 13,
+              boxShadow: "3px 3px 0 " + FT.ink, fontWeight: 700, cursor: "pointer", pointerEvents: "auto" }}>
+            ← <span style={{ color: FT.orange }}>무등생각</span> 지도
+          </button>
+        ) : (
+          <div style={{ background: "#fff", color: FT.ink, padding: "7px 12px", borderRadius: 10,
+            border: "2px solid " + FT.ink, fontFamily: "'Jua', sans-serif", fontSize: 13,
+            boxShadow: "3px 3px 0 " + FT.ink, fontWeight: 700 }}>
+            <span style={{ color: FT.orange }}>무등생각</span> 지도
+          </div>
+        )}
         <div style={{ display: "inline-flex", alignItems: "center", gap: 6,
           background: count > 0 ? FT.tealSoft : "#EEEFF1",
           border: "2px solid " + FT.ink, color: count > 0 ? FT.tealDark : FT.inkSoft,
@@ -3105,15 +3114,7 @@ function PassengerView({ dbUrl, onAdmin, initialTab = "list" }) {
     return (
       <div style={{ height: "100dvh", display: "flex", flexDirection: "column", overflow: "hidden", background: "#000" }}>
         <div style={{ flex: 1, minHeight: 0, position: "relative" }}>
-          <LiveMapView dbUrl={dbUrl} />
-          {/* 좌상단 명시적 홈 버튼 — 지도에서 즉시 빠져나가는 진입로 */}
-          <button onClick={() => setTab("list")} aria-label="홈으로"
-            style={{ position: "absolute", top: "calc(10px + env(safe-area-inset-top, 0px))", left: 10, zIndex: 1100,
-              padding: "0 12px", height: 36, borderRadius: 8, border: "2.5px solid " + FT.ink,
-              background: "#fff", color: FT.ink, fontWeight: 700, fontFamily: "'Jua', sans-serif", fontSize: 12,
-              boxShadow: "2px 2px 0 " + FT.ink, cursor: "pointer" }}>
-            ← 홈
-          </button>
+          <LiveMapView dbUrl={dbUrl} onHome={() => setTab("list")} />
         </div>
         {renderFooter("map")}
         {showTimetable && <TimetableModal tripsToday={tripsToday} onClose={closeTable} focusTrip={tableFocus} />}
