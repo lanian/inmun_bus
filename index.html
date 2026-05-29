@@ -77,6 +77,9 @@
   /* 운행모드 하단 플랫 타일 — 누름 시 살짝 톤다운만 */
   .op-tile { transition: background 0.12s, opacity 0.12s; }
   .op-tile:active { opacity: 0.82; }
+  /* 풋터 타일 그리드 슬라이드 업 애니메이션 */
+  @keyframes opPanelUp { 0% { transform: translateY(20px); opacity: 0; } 100% { transform: translateY(0); opacity: 1; } }
+  .op-panel-grid { animation: opPanelUp 0.22s cubic-bezier(0.2, 0.9, 0.3, 1) both; }
   /* 정류장 상시 라벨 — 무등생각 테마(흰 박스 + 검정 외곽선 + 입체 그림자) */
   .leaflet-tooltip.fest-stop { background: #fff; color: #101113; border: 1.5px solid #101113;
     border-radius: 6px; padding: 1px 7px; font-family: 'Jua', sans-serif; font-size: 11px; font-weight: 700;
@@ -97,7 +100,7 @@
 
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef, useMemo } = React;
-const BUILD = "b269"; /* 화면 우하단 표시 — 최신 배포 확인용 */
+const BUILD = "b270"; /* 화면 우하단 표시 — 최신 배포 확인용 */
 
 /* 실시간 위치 공유용 Firebase DB 주소. 여기에 한 번 넣어두면 승객 링크가 ?view=map 만 남아 깔끔해집니다. */
 const SHARE_DB = "https://innum-bus-default-rtdb.firebaseio.com";
@@ -5554,17 +5557,24 @@ function App() {
               {manualWaiting ? "🅿️ 대기 해제 (출발)" : "▶ 운행 중 — 탭하여 대기"}
             </button>
           )}
-          {/* 본문 끝 spacer — 실제 풋터 높이에 맞춤(handle 38 + 타일 2행 200 = 238 / 접힘 38).
-              여분 빈 공간 제거해 불필요한 스크롤 차단 */}
-          <div aria-hidden="true" style={{ height: bottomPanelOpen ? "calc(240px + env(safe-area-inset-bottom, 0px))" : "calc(44px + env(safe-area-inset-bottom, 0px))" }} />
+          {/* 본문 끝 작은 spacer — 항상 보이는 핸들 가림 방지(44px) */}
+          <div aria-hidden="true" style={{ height: "calc(44px + env(safe-area-inset-bottom, 0px))" }} />
 
-          {/* 하단 고정 설정 패널 — 핸들 + 펼침 시 타일 그리드 */}
+          {/* 펼침 시 본문 어둡게 — 탭하면 패널 닫기 */}
+          {bottomPanelOpen && (
+            <div onClick={() => setBottomPanelOpen(false)} aria-hidden="true"
+              style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.35)",
+                zIndex: 89, transition: "opacity 0.18s" }} />
+          )}
+
+          {/* 하단 오버레이 설정 패널 — 핸들은 항상 노출, 타일은 펼침 시만 슬라이드 업 */}
           <div style={{ position: "fixed", left: 0, right: 0, bottom: 0, zIndex: 90,
-            background: "linear-gradient(180deg, rgba(10,11,15,0.92) 0%, #0a0b0f 60%)",
-            backdropFilter: "blur(6px)",
+            background: "linear-gradient(180deg, rgba(10,11,15,0.96) 0%, #0a0b0f 50%)",
+            backdropFilter: "blur(8px)",
             borderTop: "1px solid #1c1f2b",
             paddingBottom: "env(safe-area-inset-bottom, 0px)",
-            transition: "transform 0.18s",
+            boxShadow: bottomPanelOpen ? "0 -8px 24px rgba(0,0,0,0.5)" : "none",
+            transition: "box-shadow 0.18s",
           }}>
             <button onClick={() => setBottomPanelOpen((v) => !v)}
               aria-expanded={bottomPanelOpen}
@@ -5579,7 +5589,7 @@ function App() {
               </span>
             </button>
             {bottomPanelOpen && (
-            <div className="grid grid-cols-3 gap-3 px-3 pb-3">
+            <div className="grid grid-cols-3 gap-3 px-3 pb-3 op-panel-grid">
             {(() => {
               const tileStyle = (active, color, off = "#94a3b8") => ({
                 display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 6,
