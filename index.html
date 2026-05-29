@@ -86,7 +86,7 @@
 
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef, useMemo } = React;
-const BUILD = "b216"; /* 화면 우하단 표시 — 최신 배포 확인용 */
+const BUILD = "b217"; /* 화면 우하단 표시 — 최신 배포 확인용 */
 
 /* 실시간 위치 공유용 Firebase DB 주소. 여기에 한 번 넣어두면 승객 링크가 ?view=map 만 남아 깔끔해집니다. */
 const SHARE_DB = "https://innum-bus-default-rtdb.firebaseio.com";
@@ -3225,6 +3225,180 @@ function PassengerView({ dbUrl, onAdmin, initialTab = "list" }) {
   );
 }
 
+/* P2-3: 운영자 본부 대시보드 — ?view=ops 로 진입. 다중 셔틀 한 화면 모니터링.
+   읽기 전용 — 송신/제어 없음. /buses(5초 폴) + /counts/{date} 만 읽어 표시. */
+function OpsDashboard({ dbUrl }) {
+  const [buses, setBuses] = useState({});
+  const [counts, setCounts] = useState({});
+  const [conn, setConn] = useState("loading");
+  const [refreshAt, setRefreshAt] = useState(0);
+  const [autoRefresh, setAutoRefresh] = useState(true);
+
+  useEffect(() => {
+    if (!dbUrl) { setConn("error"); return; }
+    const base = dbUrl.replace(/\/+$/, "");
+    let stopped = false;
+    const fmtDate = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+    const poll = async () => {
+      try {
+        const dateKey = fmtDate(getNow());
+        const [r1, r2] = await Promise.all([
+          fetch(`${base}/buses.json`, { cache: "no-store" }),
+          fetch(`${base}/counts/${dateKey}.json`, { cache: "no-store" }),
+        ]);
+        const d1 = await r1.json();
+        const d2 = await r2.json();
+        if (stopped) return;
+        setBuses(d1 || {});
+        setCounts(d2 || {});
+        setConn("ok");
+        setRefreshAt(Date.now());
+      } catch (_) { if (!stopped) setConn("error"); }
+    };
+    poll();
+    if (!autoRefresh) return () => { stopped = true; };
+    const id = setInterval(() => { if (!stopped) poll(); }, 5000);
+    return () => { stopped = true; clearInterval(id); };
+  }, [dbUrl, autoRefresh]);
+
+  const onboardOf = (b) => {
+    if (!b.trip || !b.dir) return null;
+    const dirKey = b.dir === "inbound" ? "inbound" : "outbound";
+    const tripData = counts[dirKey]?.[String(b.trip)];
+    if (!tripData || typeof tripData !== "object") return null;
+    let board = 0, alight = 0;
+    Object.values(tripData).forEach((v) => {
+      if (!v || typeof v !== "object") return;
+      board += Number(v.board) || 0;
+      alight += Number(v.alight) || 0;
+    });
+    return Math.max(0, board - alight);
+  };
+
+  const now = Date.now();
+  const list = Object.entries(buses || {})
+    .map(([id, b]) => {
+      if (!b) return null;
+      const ts = b.ts || 0;
+      const ago = ts ? Math.round((now - ts) / 1000) : null;
+      const stale = ago == null || ago > 60;
+      return { id, b, ago, stale, onboard: onboardOf(b) };
+    })
+    .filter(Boolean)
+    .sort((a, b) => {
+      const da = a.b.dir === "inbound" ? 1 : 0;
+      const db = b.b.dir === "inbound" ? 1 : 0;
+      if (da !== db) return da - db;
+      return ((a.b.trip || 0) - (b.b.trip || 0)) || a.id.localeCompare(b.id);
+    });
+
+  const totals = {
+    n: list.length,
+    normal: list.filter((x) => !x.stale && !x.b.waiting).length,
+    waiting: list.filter((x) => x.b.waiting).length,
+    stale: list.filter((x) => x.stale).length,
+    onboard: list.reduce((s, x) => s + (x.onboard || 0), 0),
+  };
+
+  const th = { padding: "8px 10px", textAlign: "left", fontSize: 11, color: "#94a3b8", fontWeight: 700, fontFamily: "'Jua', sans-serif", whiteSpace: "nowrap" };
+  const td = { padding: "8px 10px", fontSize: 12, fontFamily: "'Jua', sans-serif" };
+  const tdMono = { ...td, fontFamily: "'IBM Plex Mono', monospace", color: "#cbd5e1" };
+
+  return (
+    <div style={{ minHeight: "100vh", background: "radial-gradient(ellipse at top, #1a1d29 0%, #0a0b10 60%, #050608 100%)", padding: "16px", color: "#cbd5e1" }}>
+      <div style={{ maxWidth: 1080, margin: "0 auto" }}>
+        <div className="flex items-center justify-between" style={{ marginBottom: 12, gap: 8, flexWrap: "wrap" }}>
+          <div>
+            <div style={{ fontSize: 10, color: "#94a3b8", letterSpacing: 2, fontFamily: "'Jua', sans-serif" }}>OPERATIONS DASHBOARD · ?view=ops</div>
+            <div style={{ fontSize: 22, fontWeight: 700, color: "#fbbf24", fontFamily: "'Jua', sans-serif" }}>🚌 본부 운영자 대시보드</div>
+            <div style={{ fontSize: 10, color: "#64748b", fontFamily: "'IBM Plex Mono', monospace", marginTop: 2 }}>
+              {autoRefresh ? "5초 폴링" : "수동 갱신"} · 마지막 {refreshAt ? new Date(refreshAt).toLocaleTimeString() : "—"}
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <span style={{ fontSize: 11, color: conn === "ok" ? "#22d65f" : conn === "error" ? "#fca5a5" : "#fbbf24", fontFamily: "'Jua', sans-serif" }}>
+              ● {conn === "ok" ? "연결됨" : conn === "error" ? "연결 오류" : "연결 중…"}
+            </span>
+            <button onClick={() => setAutoRefresh((v) => !v)}
+              style={{ padding: "5px 10px", borderRadius: 8, fontSize: 11, fontFamily: "'Jua', sans-serif", fontWeight: 700,
+                background: autoRefresh ? "rgba(34,214,95,0.15)" : "rgba(100,116,139,0.15)",
+                color: autoRefresh ? "#22d65f" : "#94a3b8",
+                border: "1px solid " + (autoRefresh ? "rgba(34,214,95,0.3)" : "#3a3f54"), cursor: "pointer" }}>
+              {autoRefresh ? "자동 ON" : "자동 OFF"}
+            </button>
+          </div>
+        </div>
+
+        {list.length === 0 ? (
+          <div style={{ background: "#13151c", border: "1px solid #2c3142", borderRadius: 10, padding: 32, textAlign: "center", color: "#64748b", fontFamily: "'Jua', sans-serif" }}>
+            {conn === "error" ? "Firebase 연결 실패 — 잠시 후 다시 시도합니다."
+              : conn === "loading" ? "데이터 불러오는 중…"
+              : "현재 송신 중인 셔틀이 없습니다."}
+          </div>
+        ) : (
+          <div style={{ background: "#13151c", border: "1px solid #2c3142", borderRadius: 10, overflow: "auto" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse" }}>
+              <thead>
+                <tr style={{ background: "#1c2030", borderBottom: "1px solid #2c3142" }}>
+                  <th style={th}>버스</th>
+                  <th style={th}>방향</th>
+                  <th style={th}>회차</th>
+                  <th style={th}>정류장</th>
+                  <th style={th}>탑승</th>
+                  <th style={th}>대기</th>
+                  <th style={th}>마지막 송신</th>
+                  <th style={th}>GPS</th>
+                  <th style={th}>상태</th>
+                </tr>
+              </thead>
+              <tbody>
+                {list.map(({ id, b, ago, stale, onboard }) => {
+                  const dirColor = b.dir === "inbound" ? "#22d3ee" : "#fb923c";
+                  const rowBg = stale ? "rgba(239,68,68,0.10)" : (b.waiting ? "rgba(96,165,250,0.06)" : "transparent");
+                  return (
+                    <tr key={id} style={{ borderBottom: "1px solid #1c2030", background: rowBg }}>
+                      <td style={{ ...tdMono, color: "#fbbf24", fontWeight: 700 }}>{id}</td>
+                      <td style={{ ...td, color: dirColor, fontWeight: 700 }}>
+                        {b.dir === "inbound" ? "← 광장" : "축제장 →"}
+                      </td>
+                      <td style={tdMono}>{b.trip != null ? `${b.trip}회` : "-"}</td>
+                      <td style={td}>
+                        {b.stop || "-"}
+                        {b.arrived && <span style={{ color: "#22d65f", marginLeft: 4 }}>●도착</span>}
+                        {b.departedFrom && <span style={{ color: "#94a3b8", marginLeft: 4 }}>← {b.departedFrom}</span>}
+                      </td>
+                      <td style={tdMono}>{onboard != null ? `${onboard}명` : "-"}</td>
+                      <td style={{ ...td, color: b.waiting ? "#60a5fa" : "#475569" }}>{b.waiting ? "🅿 대기" : "—"}</td>
+                      <td style={{ ...tdMono, color: stale ? "#fca5a5" : "#94a3b8" }}>
+                        {ago == null ? "?" : ago < 60 ? `${ago}초 전` : `${Math.floor(ago / 60)}분 전`}
+                      </td>
+                      <td style={{ ...tdMono, color: b.lat != null ? "#22d65f" : "#64748b" }}>{b.lat != null ? "✓" : "—"}</td>
+                      <td style={{ ...td, color: stale ? "#ef4444" : b.waiting ? "#60a5fa" : "#22d65f", fontWeight: 700 }}>
+                        {stale ? "⚠ STALE" : b.waiting ? "대기" : "정상"}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        <div style={{ marginTop: 12, fontSize: 11, color: "#64748b", display: "flex", justifyContent: "space-between", fontFamily: "'Jua', sans-serif", flexWrap: "wrap", gap: 6 }}>
+          <div>
+            총 <span style={{ color: "#cbd5e1", fontWeight: 700 }}>{totals.n}</span>대 ·
+            정상 <span style={{ color: "#22d65f", fontWeight: 700 }}>{totals.normal}</span> ·
+            대기 <span style={{ color: "#60a5fa", fontWeight: 700 }}>{totals.waiting}</span> ·
+            stale <span style={{ color: "#ef4444", fontWeight: 700 }}>{totals.stale}</span> ·
+            총 탑승 <span style={{ color: "#fbbf24", fontWeight: 700 }}>{totals.onboard}</span>명
+          </div>
+          <div style={{ fontFamily: "'IBM Plex Mono', monospace" }}>BUILD {BUILD}</div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function App() {
   const [mode, setMode] = useState(() => LS.get("mode", "simple"));
   const [direction, setDirection] = useState("outbound");
@@ -5988,6 +6162,8 @@ function Root() {
   const [ready, setReady] = useState(false);
   useEffect(() => { const t = setTimeout(() => setReady(true), 1000); return () => clearTimeout(t); }, []);
   if (!ready) return <Intro />;
+  // P2-3: ?view=ops — 운영자 본부 대시보드 (Intro 끝난 뒤 즉시 진입)
+  if (params.get("view") === "ops") return <OpsDashboard dbUrl={params.get("db") || SHARE_DB} />;
   if (admin) return <App />;
   const initialTab = params.get("view") === "map" ? "map" : "list";
   return <PassengerView dbUrl={params.get("db") || SHARE_DB} onAdmin={() => setAdmin(true)} initialTab={initialTab} />;
