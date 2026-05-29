@@ -86,7 +86,7 @@
 
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef, useMemo } = React;
-const BUILD = "b206"; /* 화면 우하단 표시 — 최신 배포 확인용 */
+const BUILD = "b207"; /* 화면 우하단 표시 — 최신 배포 확인용 */
 
 /* 실시간 위치 공유용 Firebase DB 주소. 여기에 한 번 넣어두면 승객 링크가 ?view=map 만 남아 깔끔해집니다. */
 const SHARE_DB = "https://innum-bus-default-rtdb.firebaseio.com";
@@ -2151,10 +2151,10 @@ function LiveMapView({ dbUrl }) {
           if (!validIds.has(id)) { map.removeLayer(markersRef.current[id]); delete markersRef.current[id]; }
         });
 
-        // 시간표 기반 추정 위치 — 라이브 운행 정보가 들어올 때만 보조 표시
+        // 시간표 기반 추정 위치 — 라이브 신호가 없어도 항상 표시(라이브로 같은 회차 송신 시만 해당 회차 skip)
         const schedKeys = new Set();
         let nSched = 0;
-        if (validIds.size > 0) {
+        {
           const today = new Date();
           const tripsToday = today.getMonth() === 5 && today.getDate() === 14 ? 5 : ROUTES.outbound.trips.length;
           const nowMin = today.getHours() * 60 + today.getMinutes();
@@ -2783,6 +2783,76 @@ function PassengerView({ dbUrl, onAdmin, initialTab = "list" }) {
                 {live.map(([id, b]) => <BusCard key={id} id={id} bus={b} agoText={agoText} nowMin={nowMin} tripsToday={tripsToday} departedInfo={getDepartedInfo(id, b)} />)}
               </React.Fragment>
             )}
+
+            {/* 시간표상 운행 중인 셔틀 — 라이브 데이터 없어도 시각표에 따라 진행 추정 */}
+            {(() => {
+              const liveSet = new Set(live.map(([, b]) => `${b.dir === "inbound" ? "inbound" : "outbound"}|${b.trip || 1}`));
+              const items = [];
+              ["outbound", "inbound"].forEach((dir) => {
+                for (let ti = 0; ti < tripsToday; ti++) {
+                  if (liveSet.has(`${dir}|${ti + 1}`)) continue;
+                  const pos = scheduledBusPos(dir, ti, nowMin);
+                  if (!pos) continue;
+                  const sched = ROUTES[dir].trips[ti];
+                  const startMin = toMin(sched[0]);
+                  const endMin = toMin(sched[sched.length - 1]);
+                  const dur = endMin - startMin;
+                  const progress = dur > 0 ? Math.max(0, Math.min(1, (nowMin - startMin) / dur)) : 0;
+                  let nextIdx = -1;
+                  for (let i = 0; i < sched.length; i++) { if (toMin(sched[i]) > nowMin) { nextIdx = i; break; } }
+                  const nextStopName = nextIdx >= 0 ? ROUTES[dir].stops[nextIdx]?.name : null;
+                  const nextSchedAt = nextIdx >= 0 ? sched[nextIdx] : null;
+                  const mins = nextSchedAt ? (toMin(nextSchedAt) - nowMin) : null;
+                  items.push({ dir, ti, pos, sched, progress, route: ROUTES[dir], nextStopName, nextSchedAt, mins });
+                }
+              });
+              if (items.length === 0) return null;
+              return (
+                <div style={{ marginTop: live.length > 0 ? 8 : 12 }}>
+                  <div className="flex items-center justify-between mb-2">
+                    <div style={{ fontSize: 12, color: FT.ink, fontFamily: "'Jua', sans-serif", fontWeight: 700 }}>
+                      🕒 시간표상 운행 중 <span style={{ color: FT.orange }}>· {items.length}대</span>
+                    </div>
+                    <div style={{ fontSize: 10, color: FT.inkSoft, fontFamily: "'Jua', sans-serif" }}>
+                      {live.length === 0 ? "라이브 신호 없음 — 시각표 기준" : "라이브에 없는 회차"}
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    {items.map((it) => {
+                      const c = it.dir === "outbound" ? FT.orange : FT.teal;
+                      return (
+                        <div key={`${it.dir}|${it.ti}`}
+                          style={{ background: "#fff", border: "2px dashed " + FT.ink, borderRadius: 12,
+                            padding: "9px 11px 9px 13px", borderLeft: "8px solid " + c,
+                            boxShadow: "1.5px 1.5px 0 " + FT.ink }}>
+                          <div className="flex items-center gap-2" style={{ marginBottom: 4 }}>
+                            <span style={{ fontSize: 10, padding: "1px 6px", borderRadius: 4, background: c, color: "#fff",
+                              fontFamily: "'Jua', sans-serif", fontWeight: 700 }}>예정</span>
+                            <span style={{ fontSize: 11, color: c, fontFamily: "'Jua', sans-serif", fontWeight: 700 }}>{it.route.label}</span>
+                            <span style={{ fontSize: 10, color: FT.mute, fontFamily: "'Jua', sans-serif" }}>{it.ti + 1}회차</span>
+                            <span style={{ marginLeft: "auto", fontSize: 10, color: FT.mute, fontFamily: "'IBM Plex Mono', monospace" }}>
+                              {it.sched[0]}~{it.sched[it.sched.length - 1]}
+                            </span>
+                          </div>
+                          <div style={{ fontSize: 13, color: FT.ink, fontFamily: "'Jua', sans-serif", fontWeight: 700 }}>
+                            {it.pos.fromName} → {it.pos.toName}
+                          </div>
+                          {it.nextStopName && it.mins != null && (
+                            <div style={{ fontSize: 11, color: FT.inkSoft, marginTop: 2, fontFamily: "'Jua', sans-serif" }}>
+                              다음 <b style={{ color: c }}>{it.nextStopName}</b> · {it.nextSchedAt}
+                              <span style={{ color: c, marginLeft: 4 }}>({it.mins > 0 ? `약 ${it.mins}분 후` : "잠시 후"})</span>
+                            </div>
+                          )}
+                          <div style={{ marginTop: 5, height: 5, background: FT.mute + "33", borderRadius: 3, overflow: "hidden" }}>
+                            <div style={{ width: `${Math.round(it.progress * 100)}%`, height: "100%", background: c, transition: "width 0.4s" }} />
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })()}
 
             {/* 행사 안내 — 버스 위치 아래 항상 표시 */}
             <div style={{ marginTop: 12, paddingTop: 12, borderTop: "1.5px solid " + FT.mute + "55" }}>
