@@ -94,7 +94,7 @@
 
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef, useMemo } = React;
-const BUILD = "b257"; /* 화면 우하단 표시 — 최신 배포 확인용 */
+const BUILD = "b258"; /* 화면 우하단 표시 — 최신 배포 확인용 */
 
 /* 실시간 위치 공유용 Firebase DB 주소. 여기에 한 번 넣어두면 승객 링크가 ?view=map 만 남아 깔끔해집니다. */
 const SHARE_DB = "https://innum-bus-default-rtdb.firebaseio.com";
@@ -3427,7 +3427,7 @@ function PassengerView({ dbUrl, onAdmin, initialTab = "list" }) {
             })()}
 
             {/* 행사 안내 — 풀폭 그라데이션 배너 (옵션 B) */}
-            <div style={{ marginTop: 16 }}>
+            <div style={{ marginTop: 28, paddingTop: 14, borderTop: "1.5px dashed " + FT.mute + "66" }}>
               {(() => {
                 const d = getNow();
                 const todayDay = d.getMonth() === 5 && d.getDate() === 13 ? "day1"
