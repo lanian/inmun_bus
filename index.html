@@ -110,7 +110,7 @@
 
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef, useMemo } = React;
-const BUILD = "b288"; /* 화면 우하단 표시 — 최신 배포 확인용 */
+const BUILD = "b289"; /* 화면 우하단 표시 — 최신 배포 확인용 */
 
 /* 실시간 위치 공유용 Firebase DB 주소. 여기에 한 번 넣어두면 승객 링크가 ?view=map 만 남아 깔끔해집니다. */
 const SHARE_DB = "https://innum-bus-default-rtdb.firebaseio.com";
@@ -2896,6 +2896,120 @@ function BusCard({ id, bus, agoText, nowMin, tripsToday, departedInfo }) {
   );
 }
 
+/* 다가올 프로그램 랜덤 홍보 카드 — 행사 안내 배너 아래 노출.
+   오늘이 행사 당일이면 '곧 시작해요'(아직 시작 안 한 프로그램 중 랜덤),
+   행사 전후엔 '행사 미리보기'(양일 통합 랜덤). 9초마다 자동 로테이션 + 수동 셔플. */
+function UpcomingPromoCard({ onOpen }) {
+  const [tick, setTick] = useState(() => Math.floor(Math.random() * 1000));
+  useEffect(() => {
+    const id = setInterval(() => setTick((t) => t + 1), 9000);
+    return () => clearInterval(id);
+  }, []);
+
+  const d = getNow();
+  const todayDay = d.getMonth() === 5 && d.getDate() === 13 ? "day1"
+    : d.getMonth() === 5 && d.getDate() === 14 ? "day2" : null;
+  const nm = d.getHours() * 60 + d.getMinutes();
+
+  let candidates = [];
+  let mode = "preview";
+  if (todayDay) {
+    candidates = (FESTIVAL_PROGRAM[todayDay]?.items || []).filter((it) => {
+      if (!it.time) return false;
+      const mm = it.time.match(/^(\d\d:\d\d)~(\d\d:\d\d)$/);
+      if (!mm) return false;
+      return toMin(mm[1]) > nm; // 아직 시작 전인 프로그램만
+    }).map((it) => ({ ...it, _day: todayDay }));
+    if (candidates.length > 0) mode = "upcoming";
+  }
+  if (candidates.length === 0) {
+    candidates = [
+      ...(FESTIVAL_PROGRAM.day1?.items || []).map((it) => ({ ...it, _day: "day1" })),
+      ...(FESTIVAL_PROGRAM.day2?.items || []).map((it) => ({ ...it, _day: "day2" })),
+    ];
+    mode = "preview";
+  }
+  if (candidates.length === 0) return null;
+
+  const pick = candidates[tick % candidates.length];
+  const cDark = pick.zone % 2 ? FT.orangeDark : FT.tealDark;
+  const cSoft = pick.zone % 2 ? FT.orangeSoft : FT.tealSoft;
+  const dayLabel = pick._day === "day2" ? "6.14 (일)" : pick._day === "day1" ? "6.13 (토)" : "";
+
+  return (
+    <div style={{ marginTop: 12 }}>
+      {/* 헤더 라인 — 상태 + 셔플 버튼 */}
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
+        <div style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+          <span style={{ display: "inline-block", width: 6, height: 6, borderRadius: "50%", background: cDark }}
+            className="animate-pulse" />
+          <span style={{ fontSize: 11, color: FT.ink, fontWeight: 700, fontFamily: "'Jua', sans-serif", letterSpacing: 0.5 }}>
+            {mode === "upcoming" ? "곧 시작해요" : "행사 미리보기"}
+          </span>
+          <span style={{ fontSize: 10, color: FT.inkSoft, fontWeight: 400 }}>
+            · {candidates.length}건 중 랜덤
+          </span>
+        </div>
+        <button onClick={(e) => { e.stopPropagation(); setTick((t) => t + 1); }}
+          style={{ display: "inline-flex", alignItems: "center", gap: 4,
+            background: "transparent", border: "1px solid " + FT.mute + "66", borderRadius: 999,
+            padding: "3px 9px", fontSize: 10, color: FT.inkSoft, cursor: "pointer",
+            fontFamily: "'Jua', sans-serif", fontWeight: 700 }}>
+          ↻ 다른 프로그램
+        </button>
+      </div>
+      {/* 카드 */}
+      <button onClick={onOpen}
+        style={{ width: "100%", display: "flex", flexDirection: "column", gap: 6,
+          background: "#fff", color: FT.ink,
+          border: "2px solid " + FT.ink, borderRadius: 10,
+          padding: "10px 12px", boxShadow: "2px 2px 0 " + FT.ink,
+          fontFamily: "'Jua', sans-serif", cursor: "pointer", textAlign: "left" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+          {pick.cat && (
+            <span style={{ padding: "2px 8px", borderRadius: 999, background: cSoft, color: cDark,
+              border: "1.5px solid " + cDark, fontSize: 10, fontWeight: 700,
+              boxShadow: "1px 1px 0 " + cDark + "55", maxWidth: "70%",
+              overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+              {pick.cat}
+            </span>
+          )}
+          {pick.zone != null && (
+            <span style={{ padding: "2px 8px", borderRadius: 999, background: "#fff", color: cDark,
+              border: "1.5px solid " + cDark, fontSize: 10, fontWeight: 700 }}>
+              {pick.zone}존
+            </span>
+          )}
+          {mode === "preview" && dayLabel && (
+            <span style={{ padding: "2px 8px", borderRadius: 999, background: "#f1f5f9", color: FT.inkSoft,
+              border: "1.5px solid " + FT.mute, fontSize: 10, fontWeight: 700 }}>
+              {dayLabel}
+            </span>
+          )}
+        </div>
+        <div style={{ fontSize: 14, color: FT.ink, fontWeight: 700, lineHeight: 1.25 }}>
+          {pick.title}
+        </div>
+        {pick.desc && (
+          <div style={{ fontSize: 11, color: FT.inkSoft, lineHeight: 1.5,
+            display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical",
+            overflow: "hidden", fontWeight: 400 }}>
+            {pick.desc}
+          </div>
+        )}
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 2 }}>
+          <span style={{ fontSize: 11, color: cDark, fontFamily: "'IBM Plex Mono', monospace", fontWeight: 700 }}>
+            {pick.time}
+          </span>
+          <span style={{ fontSize: 11, color: cDark, fontWeight: 700 }}>
+            자세히 보기 →
+          </span>
+        </div>
+      </button>
+    </div>
+  );
+}
+
 /* 승객 기본 화면 — 실시간 버스 목록(버스안내판 스타일) + 지도 탭. 제목 7번 탭하면 운영자(히든) 진입 */
 function PassengerView({ dbUrl, onAdmin, initialTab = "list" }) {
   const [buses, setBuses] = useState({});
@@ -3535,6 +3649,11 @@ function PassengerView({ dbUrl, onAdmin, initialTab = "list" }) {
                       {/* 우측 화살표 */}
                       <span style={{ fontSize: 22, flexShrink: 0, fontWeight: 700 }}>→</span>
                     </button>
+
+                    {/* 다가올 프로그램 랜덤 홍보 — 행사 종료 후엔 숨김 */}
+                    {!ended && (
+                      <UpcomingPromoCard onOpen={() => { setVenueZone(0); setTab("venue"); }} />
+                    )}
                   </>
                 );
               })()}
