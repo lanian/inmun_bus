@@ -86,7 +86,7 @@
 
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef, useMemo } = React;
-const BUILD = "b212"; /* 화면 우하단 표시 — 최신 배포 확인용 */
+const BUILD = "b213"; /* 화면 우하단 표시 — 최신 배포 확인용 */
 
 /* 실시간 위치 공유용 Firebase DB 주소. 여기에 한 번 넣어두면 승객 링크가 ?view=map 만 남아 깔끔해집니다. */
 const SHARE_DB = "https://innum-bus-default-rtdb.firebaseio.com";
@@ -3350,22 +3350,39 @@ function App() {
     announcedRef.current = new Set();
   };
 
-  /* --- 현재 시각 기준으로 운행 중/다음 회차 선택 (마운트 시 1회 + 수동 재설정 버튼) --- */
+  /* --- 현재 시각 기준으로 운행 중/다음 회차 선택 (마운트 시 1회 + 수동 재설정 버튼)
+     R1: 모드 ref(lastAnnounceRef·arrivedStateRef·departedFromRef) 명시 리셋
+     R3: 결과 토스트 표시 (3초 후 자동 닫힘)
+     R4: timetableMode ON 시 ttLastAnnouncedRef 도 함께 -1 로 리셋해 다음 tick 에서 즉시 재안내
+     R6: '지연 40분 허용' 매직넘버를 다음 회차 출발 시각으로 자연 cutoff (whichever 더 작은) */
+  const RESET_GRACE_MIN = 40;
+  const [resetToast, setResetToast] = useState(null); // { text, at }
+  useEffect(() => {
+    if (!resetToast) return;
+    const id = setTimeout(() => setResetToast(null), 3000);
+    return () => clearTimeout(id);
+  }, [resetToast]);
   const selectLegByClock = () => {
     const now = getNow();
     const nowMin = now.getHours() * 60 + now.getMinutes();
     const all = [];
     ["outbound", "inbound"].forEach(dir => {
       ROUTES[dir].trips.forEach((t, i) => {
-        if (i >= tripsToday) return; // 6.14(일) 6회차 제외
+        if (i >= tripsToday) return;
         all.push({ dir, idx: i, dep: toMin(t[0]), arr: toMin(t[t.length - 1]) });
       });
     });
     all.sort((a, b) => a.dep - b.dep);
-    // 운행 중인 회차 (지연 40분까지 허용)
-    let target = all.find(l => nowMin >= l.dep && nowMin <= l.arr + 40);
-    if (!target) target = all.find(l => l.dep > nowMin); // 다음 예정 회차
-    if (!target) target = all[0];                        // 그 외 첫 회차
+    // R6: 현재 회차 cutoff = min(arr + GRACE, 다음 회차 dep). 휴식·점심 갭 자연 처리
+    let target = null;
+    for (let i = 0; i < all.length; i++) {
+      const l = all[i];
+      const nextDep = i + 1 < all.length ? all[i + 1].dep : Infinity;
+      const cutoff = Math.min(l.arr + RESET_GRACE_MIN, nextDep);
+      if (nowMin >= l.dep && nowMin < cutoff) { target = l; break; }
+    }
+    if (!target) target = all.find(l => l.dep > nowMin) || all[all.length - 1] || null;
+    if (!target) return;
 
     // GPS가 있으면 그 방향에서 현재 위치와 가장 가까운 정류장을 현재 승강장으로 설정
     let ni = 0;
@@ -3383,13 +3400,25 @@ function App() {
     setDirection(target.dir);
     setTripIdx(target.idx);
     if (sameLeg) {
-      // 레그가 그대로면 리셋 effect가 안 돌므로 직접 적용
       setCurrentIdx(ni);
       const set = new Set();
       for (let k = 0; k < ni; k++) set.add(k);
       announcedRef.current = set;
       resetStopRef.current = null;
     }
+    // R1: 모드 ref 일괄 리셋 — 재설정 직후 안내·도착 히스테리시스 깨끗하게 시작
+    lastAnnounceRef.current = { idx: -1, at: 0 };
+    arrivedStateRef.current = false;
+    departedFromRef.current = null;
+    // R4: timetableMode ON 이면 ttLastAnnouncedRef 리셋 — 다음 tick 이 새 currentIdx 부터 다시 안내
+    if (timetableMode) ttLastAnnouncedRef.current = -1;
+    // R3: 토스트 표시
+    const stopName = ROUTES[target.dir].stops[ni]?.name || "";
+    setResetToast({
+      text: `⟳ ${ROUTES[target.dir].label} ${target.idx + 1}회차${stopName ? ` · ${stopName}` : ""}`,
+      gps: !!userPos,
+      at: Date.now(),
+    });
   };
   useEffect(() => { selectLegByClock(); }, []); // mount only
 
@@ -4386,6 +4415,21 @@ function App() {
   }, [trip, nowTick]);
 
   /* ===== SIMPLE MODE — operator/driver view ===== */
+  // R3: 재설정 토스트 노드 — simple/advanced 양쪽 return 에서 재사용
+  const resetToastNode = resetToast ? (
+    <div role="status" aria-live="polite"
+      style={{ position: "fixed", top: 16, left: "50%", transform: "translateX(-50%)",
+        background: "#0a0b0f", color: "#fbbf24", padding: "10px 16px",
+        border: "2px solid #fbbf24", borderRadius: 12,
+        fontFamily: "'Jua', sans-serif", fontWeight: 700, fontSize: 13,
+        boxShadow: "3px 3px 0 #fbbf2466",
+        zIndex: 100, maxWidth: "92vw", textAlign: "center" }}>
+      {resetToast.text}
+      {!resetToast.gps && (
+        <div style={{ fontSize: 10, color: "#94a3b8", marginTop: 3, fontWeight: 400 }}>GPS OFF — 정류장은 출발지로 설정됨</div>
+      )}
+    </div>
+  ) : null;
   if (mode === "simple") {
     const arrivalDistText = distToNext != null ? fmtDist(distToNext) : null;
     // 시간표상 다음 정류장 예정 시각까지 남은 시간(초). +면 여유, -면 지연
@@ -4398,6 +4442,7 @@ function App() {
     return (
       <div className="min-h-screen w-full p-4 sm:p-6 flex items-start justify-center"
         style={{ background: "radial-gradient(ellipse at top, #1a1d29 0%, #0a0b10 60%, #050608 100%)" }}>
+        {resetToastNode}
         <div className="w-full max-w-md">
 
           {/* Compact header */}
@@ -4893,6 +4938,7 @@ function App() {
   return (
     <div className="min-h-screen w-full p-4 sm:p-6 flex items-center justify-center"
       style={{ background: "radial-gradient(ellipse at top, #1a1d29 0%, #0a0b10 60%, #050608 100%)" }}>
+      {resetToastNode}
       <div className="w-full max-w-md">
 
         {/* Header */}
@@ -4981,10 +5027,20 @@ function App() {
           </div>
           <div className="mt-2 flex gap-1">
             <button onClick={selectLegByClock}
+              title={timetableMode ? "시간표 자동 동기화 중 — 강제 1회 sync"
+                : userPos ? "GPS 좌표로 시각·정류장 동시 보정"
+                : "현재 시각 기준으로 회차 선택(GPS OFF — 정류장은 출발지)"}
               className="flex-1 py-1.5 rounded text-[11px] flex items-center justify-center gap-1"
-              style={{ background: "rgba(100,116,139,0.12)", color: "#94a3b8", border: "1px solid #3a3f54",
+              style={{ background: timetableMode ? "rgba(251,191,36,0.12)" : "rgba(100,116,139,0.12)",
+                color: timetableMode ? "#fbbf24" : "#94a3b8",
+                border: "1px solid " + (timetableMode ? "rgba(251,191,36,0.3)" : "#3a3f54"),
                 fontFamily: "'Jua', sans-serif" }}>
-              <Clock size={11} /> 현재 시각·위치 기준 재설정
+              <Clock size={11} />
+              {timetableMode
+                ? "시간표 강제 sync"
+                : userPos
+                  ? "현재 시각·위치 기준 재설정"
+                  : "현재 시각 기준 재설정"}
             </button>
             <button onClick={() => setShowTimetable(true)}
               className="flex-1 py-1.5 rounded text-[11px] flex items-center justify-center gap-1"
