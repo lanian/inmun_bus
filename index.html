@@ -36,6 +36,19 @@
   .boot .dot { width: 8px; height: 8px; border-radius: 50%; background: #EE6B2E; animation: bootDot 1.4s ease-in-out infinite; }
   .boot .dot:nth-child(2) { background: #16A89E; animation-delay: 0.18s; }
   .boot .dot:nth-child(3) { animation-delay: 0.36s; }
+  /* 인트로 토글 스위치 — '생각을 끄고, 생각을 켜다' 슬로건을 시각화 */
+  .intro-switches { display: inline-flex; gap: 26px; margin-top: 16px; }
+  .intro-switch { position: relative; width: 50px; height: 78px; background: #EE6B2E;
+    border: 3px solid #101113; border-radius: 6px; box-shadow: 3px 3px 0 #101113; }
+  .intro-switch::before, .intro-switch::after { content: ""; position: absolute; left: 50%;
+    width: 5px; height: 5px; background: #101113; border-radius: 50%; transform: translateX(-50%); }
+  .intro-switch::before { top: 6px; }
+  .intro-switch::after { bottom: 6px; }
+  .intro-switch .handle { position: absolute; left: 50%; top: 50%; width: 22px; height: 28px;
+    background: #fff; border: 2.5px solid #101113; border-radius: 4px; box-shadow: 1.5px 1.5px 0 #101113;
+    transform: translate(-50%, -50%); margin-top: 12px;
+    transition: margin-top 0.55s cubic-bezier(0.4, 1.4, 0.6, 1); }
+  .intro-switch.is-on .handle { margin-top: -12px; }
   @keyframes bootPulse { 0%,100% { transform: scale(1); } 50% { transform: scale(0.93); opacity: 0.9; } }
   @keyframes bootDot { 0%,100% { opacity: 0.3; transform: scale(0.8); } 50% { opacity: 1; transform: scale(1); } }
   /* Leaflet vs Tailwind preflight fix — keep map tiles/markers from being shrunk */
@@ -86,7 +99,7 @@
 
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef, useMemo } = React;
-const BUILD = "b241"; /* 화면 우하단 표시 — 최신 배포 확인용 */
+const BUILD = "b242"; /* 화면 우하단 표시 — 최신 배포 확인용 */
 
 /* 실시간 위치 공유용 Firebase DB 주소. 여기에 한 번 넣어두면 승객 링크가 ?view=map 만 남아 깔끔해집니다. */
 const SHARE_DB = "https://innum-bus-default-rtdb.firebaseio.com";
@@ -6532,9 +6545,19 @@ function App() {
 }
 
 function Intro() {
+  // 두 스위치 — 왼쪽은 OFF 유지(생각을 끄고), 오른쪽은 300ms 후 ON으로 flip(생각을 켜다)
+  const [rightOn, setRightOn] = useState(false);
+  useEffect(() => {
+    const t = setTimeout(() => setRightOn(true), 320);
+    return () => clearTimeout(t);
+  }, []);
   return (
     <div className="boot">
       <img src="logo.png" alt="무등생각" />
+      <div className="intro-switches" aria-hidden="true">
+        <div className="intro-switch" title="생각을 끄고"><div className="handle" /></div>
+        <div className={`intro-switch ${rightOn ? "is-on" : ""}`} title="생각을 켜다"><div className="handle" /></div>
+      </div>
       <div className="slogan">생각을 끄고, 생각을 켜다</div>
       <div className="who">제4회 동구 무등산 인문축제</div>
       <div className="accent">&lt;무등생각&gt; 셔틀버스 안내</div>
@@ -6546,7 +6569,7 @@ function Root() {
   const params = new URLSearchParams(window.location.search);
   const [admin, setAdmin] = useState(params.get("admin") === "1");
   const [ready, setReady] = useState(false);
-  useEffect(() => { const t = setTimeout(() => setReady(true), 1000); return () => clearTimeout(t); }, []);
+  useEffect(() => { const t = setTimeout(() => setReady(true), 1300); return () => clearTimeout(t); }, []);
   if (!ready) return <Intro />;
   // P2-3: ?view=ops — 운영자 본부 대시보드 (Intro 끝난 뒤 즉시 진입)
   if (params.get("view") === "ops") return <OpsDashboard dbUrl={params.get("db") || SHARE_DB} />;
