@@ -100,7 +100,7 @@
 
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef, useMemo } = React;
-const BUILD = "b274"; /* 화면 우하단 표시 — 최신 배포 확인용 */
+const BUILD = "b275"; /* 화면 우하단 표시 — 최신 배포 확인용 */
 
 /* 실시간 위치 공유용 Firebase DB 주소. 여기에 한 번 넣어두면 승객 링크가 ?view=map 만 남아 깔끔해집니다. */
 const SHARE_DB = "https://innum-bus-default-rtdb.firebaseio.com";
@@ -5543,12 +5543,12 @@ function App() {
             )}
           </div>
 
-          {/* 1차 액션 — 운행/대기 가로 세그먼트 바 (sharing 시) */}
+          {/* 1차 액션 — 운행/대기 가로 세그먼트 바 (sharing 시, 플랫) */}
           {sharing && (
             <div className="mt-3 grid grid-cols-2"
-              style={{ borderRadius: 12, overflow: "hidden",
-                border: `2px solid ${manualWaiting ? "rgba(96,165,250,0.5)" : "rgba(34, 214, 95, 0.4)"}`,
-                height: 48, transition: "border-color 0.18s" }}>
+              style={{ overflow: "hidden",
+                border: `1.5px solid ${manualWaiting ? "rgba(96,165,250,0.45)" : "rgba(34, 214, 95, 0.4)"}`,
+                height: 44, transition: "border-color 0.18s" }}>
               <button onClick={() => setManualWaiting(false)}
                 style={{
                   background: !manualWaiting ? "#22d65f" : "transparent",
