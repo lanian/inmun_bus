@@ -97,7 +97,7 @@
 
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef, useMemo } = React;
-const BUILD = "b266"; /* 화면 우하단 표시 — 최신 배포 확인용 */
+const BUILD = "b267"; /* 화면 우하단 표시 — 최신 배포 확인용 */
 
 /* 실시간 위치 공유용 Firebase DB 주소. 여기에 한 번 넣어두면 승객 링크가 ?view=map 만 남아 깔끔해집니다. */
 const SHARE_DB = "https://innum-bus-default-rtdb.firebaseio.com";
@@ -3833,6 +3833,9 @@ function App() {
   const [counts, setCounts] = useState({});
   const countsWriteTimerRef = useRef({}); // key별 디바운스 타이머
   const [showStats, setShowStats] = useState(false);
+  // 운행모드 하단 설정 패널 펼침/접힘 — LS 영속
+  const [bottomPanelOpen, setBottomPanelOpen] = useState(() => LS.get("opbottompanel", "1") === "1");
+  useEffect(() => LS.set("opbottompanel", bottomPanelOpen ? "1" : "0"), [bottomPanelOpen]);
   const [arrivedPulse, setArrivedPulse] = useState(0); // arrived 트리거 시점(ms)
   const [countsEnabled, setCountsEnabled] = useState(() => LS.get("countsenabled", "1") === "1");
   useEffect(() => LS.set("countsenabled", countsEnabled ? "1" : "0"), [countsEnabled]);
@@ -5551,8 +5554,31 @@ function App() {
               {manualWaiting ? "🅿️ 대기 해제 (출발)" : "▶ 운행 중 — 탭하여 대기"}
             </button>
           )}
-          {/* 2차 토글 — 타일 그리드 (3 cols, 큰 정사각 + 인터랙션) */}
-          <div className="mt-4 grid grid-cols-3 gap-3 px-3">
+          {/* 본문 끝에 풋터 패널 높이만큼 공간 확보 — fixed 풋터가 콘텐츠를 가리지 않게 */}
+          <div aria-hidden="true" style={{ height: bottomPanelOpen ? "calc(330px + env(safe-area-inset-bottom, 0px))" : "calc(56px + env(safe-area-inset-bottom, 0px))" }} />
+
+          {/* 하단 고정 설정 패널 — 핸들 + 펼침 시 타일 그리드 */}
+          <div style={{ position: "fixed", left: 0, right: 0, bottom: 0, zIndex: 90,
+            background: "linear-gradient(180deg, rgba(10,11,15,0.92) 0%, #0a0b0f 60%)",
+            backdropFilter: "blur(6px)",
+            borderTop: "1px solid #1c1f2b",
+            paddingBottom: "env(safe-area-inset-bottom, 0px)",
+            transition: "transform 0.18s",
+          }}>
+            <button onClick={() => setBottomPanelOpen((v) => !v)}
+              aria-expanded={bottomPanelOpen}
+              aria-label={bottomPanelOpen ? "설정 패널 숨기기" : "설정 패널 펼치기"}
+              style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
+                padding: "10px 14px", background: "transparent", border: "none", cursor: "pointer",
+                fontFamily: "'Jua', sans-serif", fontSize: 13, fontWeight: 700, color: "#94a3b8" }}>
+              <span style={{ fontSize: 16, lineHeight: 1 }}>{bottomPanelOpen ? "▼" : "▲"}</span>
+              <span>{bottomPanelOpen ? "설정 숨기기" : "설정 펼치기"}</span>
+              <span style={{ fontSize: 10, color: "#475569", fontFamily: "'IBM Plex Mono', monospace", marginLeft: 8 }}>
+                {currentIdx + 1}/{stops.length} · {tripsToday}회 · {BUILD}
+              </span>
+            </button>
+            {bottomPanelOpen && (
+            <div className="grid grid-cols-3 gap-3 px-3 pb-3">
             {(() => {
               const tileStyle = (active, color, off = "#94a3b8") => ({
                 display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 6,
@@ -5640,11 +5666,8 @@ function App() {
                 </>
               );
             })()}
-          </div>
-          {/* 운행 상태 표식 */}
-          <div className="mt-3 px-2 text-[11px] text-slate-600 tracking-wider text-center"
-            style={{ fontFamily: "'IBM Plex Mono', monospace" }}>
-            정류장 {currentIdx + 1}/{stops.length} · 회차 {tripsToday}회 · {BUILD}
+            </div>
+            )}
           </div>
 
           {showTimetable && <TimetableModal tripsToday={tripsToday} onClose={() => setShowTimetable(false)} />}
