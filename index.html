@@ -100,7 +100,7 @@
 
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef, useMemo } = React;
-const BUILD = "b271"; /* 화면 우하단 표시 — 최신 배포 확인용 */
+const BUILD = "b272"; /* 화면 우하단 표시 — 최신 배포 확인용 */
 
 /* 실시간 위치 공유용 Firebase DB 주소. 여기에 한 번 넣어두면 승객 링크가 ?view=map 만 남아 깔끔해집니다. */
 const SHARE_DB = "https://innum-bus-default-rtdb.firebaseio.com";
@@ -5418,10 +5418,11 @@ function App() {
               );
             })()}
           </div>
+          </div>{/* 중앙 가변 영역 끝 — 이후 next stop / leg / gps / controls 는 하단 고정 */}
 
-          {/* Next stop — 더 큰 시각 위계로 운전 중 빠른 인식(B+H) */}
-          <div className="px-5 py-5 flex items-center justify-between gap-3"
-            style={{ background: "#13151c", borderColor: "#3a3f54", borderBottom: "1px solid #3a3f54" }}>
+          {/* Next stop — 하단 고정 영역(안내 버튼 위) */}
+          <div className="px-5 py-4 flex items-center justify-between gap-3 flex-shrink-0"
+            style={{ background: "#13151c", borderTop: "1px solid #3a3f54" }}>
             <div className="flex-shrink-0 flex flex-col items-center px-3 py-1.5 rounded"
               style={{ background: "rgba(34, 214, 95, 0.12)", minWidth: 68 }}>
               <span className="text-[10px] tracking-widest text-emerald-400/80"
@@ -5452,12 +5453,11 @@ function App() {
             </div>
           </div>
 
-          {/* Next leg connection (only at terminus or end) */}
+          {/* Next leg connection (only at terminus or end) — 하단 고정 */}
           {nextLegInfo ? (
             isAtTerminus && (
-              <div className="px-5 py-3 flex items-center justify-between gap-3"
-                style={{ background: "rgba(34, 214, 95, 0.15)", borderColor: "#3a3f54",
-                  borderBottom: "1px solid #3a3f54" }}>
+              <div className="px-5 py-3 flex items-center justify-between gap-3 flex-shrink-0"
+                style={{ background: "rgba(34, 214, 95, 0.15)", borderTop: "1px solid #3a3f54" }}>
                 <div className="flex items-center gap-2 min-w-0">
                   <div className="flex flex-col items-center px-2 py-1 rounded"
                     style={{ background: "#22d65f" }}>
@@ -5483,20 +5483,18 @@ function App() {
               </div>
             )
           ) : isAtTerminus && (
-            <div className="px-5 py-3"
-              style={{ background: "rgba(100, 116, 139, 0.1)", borderColor: "#3a3f54",
-                borderBottom: "1px solid #3a3f54" }}>
+            <div className="px-5 py-3 flex-shrink-0"
+              style={{ background: "rgba(100, 116, 139, 0.1)", borderTop: "1px solid #3a3f54" }}>
               <div className="text-xs text-center text-slate-400" style={{ fontFamily: "'Jua', sans-serif" }}>
                 🏁 오늘 운행 종료
               </div>
             </div>
           )}
 
-          {/* GPS error banner (compact) — 운전 화면에서 바로 재시도 */}
+          {/* GPS error banner — 하단 고정 */}
           {(gpsError || permissionState === "denied") && (
-            <div className="px-5 py-2 flex items-center gap-2 text-xs"
-              style={{ background: "rgba(239,68,68,0.08)", borderColor: "#3a3f54",
-                borderBottom: "1px solid #3a3f54", color: "#fca5a5" }}>
+            <div className="px-5 py-2 flex items-center gap-2 text-xs flex-shrink-0"
+              style={{ background: "rgba(239,68,68,0.08)", borderTop: "1px solid #3a3f54", color: "#fca5a5" }}>
               <AlertCircle size={12} />
               <span className="flex-1">{permissionState === "denied" ? "위치 권한 차단됨" : gpsError}</span>
               <button onClick={retryPermission} className="text-emerald-400 underline">다시</button>
@@ -5504,7 +5502,6 @@ function App() {
                 className="text-amber-400 underline">설정</button>
             </div>
           )}
-          </div>{/* 중앙 가변 영역 끝 */}
 
           {/* Controls — 안내 버튼 영역, flex-shrink 0 으로 하단 고정 */}
           <div className="px-5 py-4 flex flex-col items-center gap-3 flex-shrink-0"
