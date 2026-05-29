@@ -86,7 +86,7 @@
 
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef, useMemo } = React;
-const BUILD = "b210"; /* 화면 우하단 표시 — 최신 배포 확인용 */
+const BUILD = "b211"; /* 화면 우하단 표시 — 최신 배포 확인용 */
 
 /* 실시간 위치 공유용 Firebase DB 주소. 여기에 한 번 넣어두면 승객 링크가 ?view=map 만 남아 깔끔해집니다. */
 const SHARE_DB = "https://innum-bus-default-rtdb.firebaseio.com";
@@ -2726,9 +2726,35 @@ function PassengerView({ dbUrl, onAdmin, initialTab = "list" }) {
     for (let i = 0; i < ts.length; i++) { if (toMin(ts[i][0]) >= nowMin) return { idx: i, time: ts[i][0] }; }
     return null;
   };
+  // 시간표상 운행 중(이동/휴식 포함) 셔틀 유무 — "라이브 없음" 메시지와 상충 방지용
+  const schedActive = (() => {
+    const liveSet = new Set(live.map(([, b]) => `${b.dir === "inbound" ? "inbound" : "outbound"}|${b.trip || 1}`));
+    for (const dir of ["outbound", "inbound"]) {
+      for (let ti = 0; ti < tripsToday; ti++) {
+        if (liveSet.has(`${dir}|${ti + 1}`)) continue;
+        if (scheduledBusPos(dir, ti, nowMin)) return true;
+      }
+    }
+    // 휴식 갭(outbound→inbound, inbound→outbound)
+    for (let ti = 0; ti < tripsToday; ti++) {
+      const ob = ROUTES.outbound.trips[ti], ib = ROUTES.inbound.trips[ti];
+      if (ob && ib) {
+        const a = toMin(ob[ob.length - 1]), b = toMin(ib[0]);
+        if (a < b && nowMin >= a && nowMin < b && !liveSet.has(`inbound|${ti + 1}`)) return true;
+      }
+      const ib2 = ROUTES.inbound.trips[ti], nob = ROUTES.outbound.trips[ti + 1];
+      if (ib2 && nob) {
+        const a = toMin(ib2[ib2.length - 1]), b = toMin(nob[0]);
+        if (a < b && nowMin >= a && nowMin < b && !liveSet.has(`outbound|${ti + 2}`)) return true;
+      }
+    }
+    return false;
+  })();
   const statusText = conn === "error" ? "연결 오류 — 잠시 후 다시 시도합니다"
     : conn === "loading" ? "연결 중…"
-    : live.length > 0 ? `실시간 운행 중 · ${live.length}대` : "현재 운행 중인 셔틀이 없습니다";
+    : live.length > 0 ? `실시간 운행 중 · ${live.length}대`
+    : schedActive ? "라이브 송신 없음 · 시간표 기준 진행 중"
+    : "현재 운행 중인 셔틀이 없습니다";
 
   if (tab === "map") {
     return (
@@ -2794,7 +2820,9 @@ function PassengerView({ dbUrl, onAdmin, initialTab = "list" }) {
             {live.length === 0 ? (
               <div className="py-2 space-y-2">
                 <div style={{ textAlign: "center", color: FT.inkSoft, fontFamily: "'Jua', sans-serif", fontSize: 13, lineHeight: 1.5, marginBottom: 6 }}>
-                  {conn === "error" ? "연결을 확인하는 중입니다…" : "지금은 운행 중인 셔틀이 없어요."}
+                  {conn === "error" ? "연결을 확인하는 중입니다…"
+                    : schedActive ? "📡 라이브 송신 중인 셔틀은 없어요. 시간표 기준 진행 상황은 아래를 확인해 주세요."
+                    : "지금은 운행 중인 셔틀이 없어요."}
                 </div>
                 <div style={{ fontSize: 11, color: FT.inkSoft, paddingLeft: 4, fontFamily: "'Jua', sans-serif" }}>다음 출발 예정</div>
                 {["outbound", "inbound"].map((dir) => {
