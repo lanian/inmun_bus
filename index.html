@@ -94,7 +94,7 @@
 
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef, useMemo } = React;
-const BUILD = "b262"; /* 화면 우하단 표시 — 최신 배포 확인용 */
+const BUILD = "b263"; /* 화면 우하단 표시 — 최신 배포 확인용 */
 
 /* 실시간 위치 공유용 Firebase DB 주소. 여기에 한 번 넣어두면 승객 링크가 ?view=map 만 남아 깔끔해집니다. */
 const SHARE_DB = "https://innum-bus-default-rtdb.firebaseio.com";
@@ -5548,100 +5548,93 @@ function App() {
               {manualWaiting ? "🅿️ 대기 해제 (출발)" : "▶ 운행 중 — 탭하여 대기"}
             </button>
           )}
-          {/* 2차 토글 row — 13px, 컴팩트하지만 가독성 ↑ */}
-          <div className="mt-3 flex items-center flex-wrap gap-2 px-2">
-            <button onClick={() => {
-                if (permissionState === "denied") { setMode("advanced"); return; }
-                if (!autoMode) {
-                  primeTTS();
-                  if (timetableMode) setTimetableMode(false);
-                  lastAnnounceRef.current = { idx: -1, at: 0 };
-                }
-                setAutoMode(!autoMode);
-              }}
-              className="flex items-center gap-2 px-3 py-2 rounded-full"
-              style={{
-                fontSize: 13,
-                background: autoMode ? "rgba(34, 214, 95, 0.15)" : "rgba(100, 116, 139, 0.1)",
-                color: autoMode ? "#22d65f" : "#94a3b8",
-                border: `1px solid ${autoMode ? "rgba(34, 214, 95, 0.3)" : "#3a3f54"}`,
-                fontFamily: "'Jua', sans-serif",
-              }}>
-              <Navigation size={13} />
-              GPS 자동 {autoMode ? (userPos ? (gpsStale ? "· 신호 약함" : `· ${triggerRadius}m`) : "· 신호 대기") : "OFF"}
-            </button>
-            <button onClick={() => {
-                if (!timetableMode) {
-                  primeTTS();
-                  if (autoMode) setAutoMode(false);
-                  lastAnnounceRef.current = { idx: -1, at: 0 };
-                }
-                setTimetableMode(!timetableMode);
-              }}
-              title="시간표 시각에 맞춰 자동으로 진행·안내"
-              className="flex items-center gap-2 px-3 py-2 rounded-full"
-              style={{
-                fontSize: 13,
-                background: timetableMode ? "rgba(251,191,36,0.18)" : "rgba(100, 116, 139, 0.1)",
-                color: timetableMode ? "#fbbf24" : "#94a3b8",
-                border: `1px solid ${timetableMode ? "rgba(251,191,36,0.4)" : "#3a3f54"}`,
-                fontFamily: "'Jua', sans-serif",
-              }}>
-              <Clock size={13} />
-              시간표 자동 {timetableMode ? "ON" : "OFF"}
-            </button>
-            <button onClick={toggleSharing}
-              className="flex items-center gap-1.5 px-3 py-2 rounded-full"
-              style={{
-                fontSize: 13,
-                background: sharing ? "rgba(96,165,250,0.18)" : "rgba(100, 116, 139, 0.1)",
-                color: sharing ? "#60a5fa" : "#94a3b8",
-                border: `1px solid ${sharing ? "rgba(96,165,250,0.35)" : "#3a3f54"}`,
-                fontFamily: "'Jua', sans-serif",
-              }}>
-              <span className={sharing ? "inline-block w-1.5 h-1.5 rounded-full animate-pulse" : "inline-block w-1.5 h-1.5 rounded-full"}
-                style={{ background: sharing ? "#60a5fa" : "#64748b" }} />
-              {sharing ? (locShare ? "공유 ON · 📍 위치+운행" : "공유 ON · 운행만") : "공유 OFF"}
-            </button>
-            {sharing && (
-              <button onClick={() => setLocShare((v) => !v)}
-                title={locShare ? "GPS 좌표 송신 중 — 끄면 운행 정보만" : "운행 정보만 송신 중 — 켜면 좌표도 송신"}
-                className="flex items-center gap-1 px-2.5 py-2 rounded-full"
-                style={{
-                  fontSize: 13,
-                  background: locShare ? "rgba(96,165,250,0.18)" : "rgba(100, 116, 139, 0.1)",
-                  color: locShare ? "#60a5fa" : "#94a3b8",
-                  border: `1px solid ${locShare ? "rgba(96,165,250,0.35)" : "#3a3f54"}`,
-                  fontFamily: "'Jua', sans-serif",
-                }}>
-                📍 {locShare ? "ON" : "OFF"}
-              </button>
-            )}
-            <button onClick={() => setShowTimetable(true)}
-              className="flex items-center gap-1 px-3 py-2 rounded-full"
-              style={{ fontSize: 13, background: "rgba(251, 191, 36, 0.1)", color: "#fbbf24",
-                border: "1px solid rgba(251, 191, 36, 0.3)", fontFamily: "'Jua', sans-serif" }}>
-              🕘 시간표
-            </button>
-            <button onClick={() => setShowStats(true)}
-              className="flex items-center gap-1 px-3 py-2 rounded-full"
-              style={{ fontSize: 13, background: "rgba(34, 214, 95, 0.12)", color: "#22d65f",
-                border: "1px solid rgba(34, 214, 95, 0.3)", fontFamily: "'Jua', sans-serif" }}>
-              승하차 통계
-            </button>
-            <button onClick={() => {
-                if (!document.fullscreenElement) document.documentElement.requestFullscreen?.();
-                else document.exitFullscreen?.();
-              }}
-              className="flex items-center gap-1 px-3 py-2 rounded-full"
-              style={{ fontSize: 13, background: "rgba(100, 116, 139, 0.12)", color: "#cbd5e1",
-                border: "1px solid #3a3f54", fontFamily: "'Jua', sans-serif" }}>
-              ⛶ 전체화면
-            </button>
-            <div className="ml-auto text-[10px] text-slate-600 tracking-wider"
-              style={{ fontFamily: "'IBM Plex Mono', monospace" }}>
-              {currentIdx + 1}/{stops.length} · {tripsToday}회 · {BUILD}
-            </div>
+          {/* 2차 토글 — 사각 그리드 (3 cols, 큰 터치 영역) */}
+          <div className="mt-3 grid grid-cols-3 gap-2 px-2">
+            {(() => {
+              const sqStyle = (active, color, off = "#94a3b8") => ({
+                display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 4,
+                padding: "12px 8px", borderRadius: 12, minHeight: 76,
+                background: active ? color.bg : "rgba(100, 116, 139, 0.1)",
+                color: active ? color.fg : off,
+                border: `1.5px solid ${active ? color.border : "#3a3f54"}`,
+                fontFamily: "'Jua', sans-serif", fontSize: 12, fontWeight: 700, lineHeight: 1.2, textAlign: "center",
+                cursor: "pointer",
+              });
+              return (
+                <>
+                  <button onClick={() => {
+                      if (permissionState === "denied") { setMode("advanced"); return; }
+                      if (!autoMode) {
+                        primeTTS();
+                        if (timetableMode) setTimetableMode(false);
+                        lastAnnounceRef.current = { idx: -1, at: 0 };
+                      }
+                      setAutoMode(!autoMode);
+                    }}
+                    style={sqStyle(autoMode, { bg: "rgba(34, 214, 95, 0.15)", fg: "#22d65f", border: "rgba(34, 214, 95, 0.3)" })}>
+                    <Navigation size={20} />
+                    <span>GPS 자동{autoMode ? "" : " · OFF"}</span>
+                    {autoMode && (
+                      <span style={{ fontSize: 10, opacity: 0.85 }}>
+                        {userPos ? (gpsStale ? "신호 약함" : `${triggerRadius}m`) : "신호 대기"}
+                      </span>
+                    )}
+                  </button>
+                  <button onClick={() => {
+                      if (!timetableMode) {
+                        primeTTS();
+                        if (autoMode) setAutoMode(false);
+                        lastAnnounceRef.current = { idx: -1, at: 0 };
+                      }
+                      setTimetableMode(!timetableMode);
+                    }}
+                    title="시간표 시각에 맞춰 자동으로 진행·안내"
+                    style={sqStyle(timetableMode, { bg: "rgba(251,191,36,0.18)", fg: "#fbbf24", border: "rgba(251,191,36,0.4)" })}>
+                    <Clock size={20} />
+                    <span>시간표 자동</span>
+                    <span style={{ fontSize: 10, opacity: 0.85 }}>{timetableMode ? "ON" : "OFF"}</span>
+                  </button>
+                  <button onClick={toggleSharing}
+                    style={sqStyle(sharing, { bg: "rgba(96,165,250,0.18)", fg: "#60a5fa", border: "rgba(96,165,250,0.35)" })}>
+                    <span className={sharing ? "inline-block w-2.5 h-2.5 rounded-full animate-pulse" : "inline-block w-2.5 h-2.5 rounded-full"}
+                      style={{ background: sharing ? "#60a5fa" : "#64748b" }} />
+                    <span>{sharing ? (locShare ? "공유 · 위치+운행" : "공유 · 운행만") : "공유 OFF"}</span>
+                  </button>
+                  {sharing && (
+                    <button onClick={() => setLocShare((v) => !v)}
+                      title={locShare ? "GPS 좌표 송신 중 — 끄면 운행 정보만" : "운행 정보만 송신 중 — 켜면 좌표도 송신"}
+                      style={sqStyle(locShare, { bg: "rgba(96,165,250,0.18)", fg: "#60a5fa", border: "rgba(96,165,250,0.35)" })}>
+                      <span style={{ fontSize: 22, lineHeight: 1 }}>📍</span>
+                      <span>위치 송신 {locShare ? "ON" : "OFF"}</span>
+                    </button>
+                  )}
+                  <button onClick={() => setShowTimetable(true)}
+                    style={sqStyle(false, {}, "#fbbf24")
+                    /* fbbf24 강제 — 항상 amber */ }>
+                    <Clock size={20} style={{ color: "#fbbf24" }} />
+                    <span style={{ color: "#fbbf24" }}>시간표</span>
+                  </button>
+                  <button onClick={() => setShowStats(true)}
+                    style={sqStyle(false, {}, "#22d65f")}>
+                    <span style={{ fontSize: 22, lineHeight: 1 }}>📊</span>
+                    <span style={{ color: "#22d65f" }}>승하차 통계</span>
+                  </button>
+                  <button onClick={() => {
+                      if (!document.fullscreenElement) document.documentElement.requestFullscreen?.();
+                      else document.exitFullscreen?.();
+                    }}
+                    style={sqStyle(false, {}, "#cbd5e1")}>
+                    <span style={{ fontSize: 22, lineHeight: 1 }}>⛶</span>
+                    <span>전체화면</span>
+                  </button>
+                </>
+              );
+            })()}
+          </div>
+          {/* 운행 상태 표식 */}
+          <div className="mt-3 px-2 text-[11px] text-slate-600 tracking-wider text-center"
+            style={{ fontFamily: "'IBM Plex Mono', monospace" }}>
+            정류장 {currentIdx + 1}/{stops.length} · 회차 {tripsToday}회 · {BUILD}
           </div>
 
           {showTimetable && <TimetableModal tripsToday={tripsToday} onClose={() => setShowTimetable(false)} />}
