@@ -100,7 +100,7 @@
 
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef, useMemo } = React;
-const BUILD = "b284"; /* 화면 우하단 표시 — 최신 배포 확인용 */
+const BUILD = "b285"; /* 화면 우하단 표시 — 최신 배포 확인용 */
 
 /* 실시간 위치 공유용 Firebase DB 주소. 여기에 한 번 넣어두면 승객 링크가 ?view=map 만 남아 깔끔해집니다. */
 const SHARE_DB = "https://innum-bus-default-rtdb.firebaseio.com";
@@ -3839,6 +3839,9 @@ function App() {
   // 운행모드 하단 설정 패널 펼침/접힘 — LS 영속
   const [bottomPanelOpen, setBottomPanelOpen] = useState(() => LS.get("opbottompanel", "1") === "1");
   useEffect(() => LS.set("opbottompanel", bottomPanelOpen ? "1" : "0"), [bottomPanelOpen]);
+  // 운영자 고급 설정 탭 — 운행·자동·안내·자료·연결. LS 영속
+  const [advTab, setAdvTabRaw] = useState(() => LS.get("advtab", "운행"));
+  const setAdvTab = (v) => { setAdvTabRaw(v); LS.set("advtab", v); };
   const [arrivedPulse, setArrivedPulse] = useState(0); // arrived 트리거 시점(ms)
   const [countsEnabled, setCountsEnabled] = useState(() => LS.get("countsenabled", "1") === "1");
   useEffect(() => LS.set("countsenabled", countsEnabled ? "1" : "0"), [countsEnabled]);
@@ -5770,7 +5773,29 @@ function App() {
           </div>
         </div>
 
-        {/* Trip selector */}
+        {/* 탭 바 — 운행 · 자동 · 안내 · 자료 · 연결 */}
+        <div className="grid grid-cols-5"
+          style={{ background: "#0e1018", borderBottom: "1px solid #3a3f54" }}>
+          {["운행", "자동", "안내", "자료", "연결"].map((t) => {
+            const active = advTab === t;
+            return (
+              <button key={t} onClick={() => setAdvTab(t)}
+                style={{
+                  padding: "10px 4px",
+                  background: active ? "rgba(251,191,36,0.12)" : "transparent",
+                  color: active ? "#fbbf24" : "#64748b",
+                  fontFamily: "'Jua', sans-serif", fontSize: 13, fontWeight: 700,
+                  borderBottom: active ? "2px solid #fbbf24" : "2px solid transparent",
+                  transition: "all 0.15s", cursor: "pointer", border: "none", borderRight: "1px solid #1a1d29",
+                }}>
+                {t}
+              </button>
+            );
+          })}
+        </div>
+
+        {/* 운행 탭 — Trip selector */}
+        {advTab === "운행" && (
         <div className="px-5 py-3"
           style={{ background: "#13151c", borderColor: "#3a3f54", borderBottom: "1px solid #3a3f54" }}>
           <div className="flex items-center justify-between mb-2">
@@ -5828,8 +5853,10 @@ function App() {
             </button>
           </div>
         </div>
+        )}
 
-        {/* LED Display */}
+        {/* 운행 탭 — LED Display */}
+        {advTab === "운행" && (
         <div className="px-5 py-6"
           style={{ background: "#0a0b0f", borderColor: "#3a3f54",
             backgroundImage: "repeating-linear-gradient(0deg, rgba(255,255,255,0.02) 0px, rgba(255,255,255,0.02) 1px, transparent 1px, transparent 3px)" }}>
@@ -5872,9 +5899,10 @@ function App() {
             </div>
           </div>
         </div>
+        )}
 
-        {/* Next leg connection card */}
-        {nextLegInfo ? (
+        {/* 운행 탭 — Next leg connection card */}
+        {advTab === "운행" && (nextLegInfo ? (
           <div className="px-5 py-3 flex items-center justify-between gap-3"
             style={{
               background: isAtTerminus ? "rgba(34, 214, 95, 0.15)" : "#13151c",
@@ -5920,9 +5948,10 @@ function App() {
               🏁 오늘 운행 종료 · 이용해 주셔서 감사합니다
             </div>
           </div>
-        )}
+        ))}
 
-        {/* Auto Mode toggle */}
+        {/* 자동 탭 — Auto Mode toggle */}
+        {advTab === "자동" && (
         <div className="px-5 py-3 flex items-center justify-between"
           style={{ background: autoMode ? "rgba(34, 214, 95, 0.08)" : "#13151c",
             borderColor: "#3a3f54", borderBottom: "1px solid #3a3f54" }}>
@@ -5960,8 +5989,10 @@ function App() {
               style={{ transform: autoMode ? "translateX(22px)" : "translateX(2px)", transition: "transform 0.2s" }} />
           </button>
         </div>
+        )}
 
-        {/* 시간표 자동 toggle — GPS 자동과 상호 배타. 시각표 시각에 맞춰 자동 안내·진행 */}
+        {/* 자동 탭 — 시간표 자동 toggle (GPS 자동과 상호 배타) */}
+        {advTab === "자동" && (
         <div className="px-5 py-3 flex items-center justify-between"
           style={{ background: timetableMode ? "rgba(251,191,36,0.08)" : "#13151c",
             borderColor: "#3a3f54", borderBottom: "1px solid #3a3f54" }}>
@@ -5994,54 +6025,12 @@ function App() {
               style={{ transform: timetableMode ? "translateX(22px)" : "translateX(2px)", transition: "transform 0.2s" }} />
           </button>
         </div>
+        )}
 
-        {/* 위치 공유 toggle (운행 페이지) */}
-        <div className="px-5 py-3 flex items-center justify-between"
-          style={{ background: sharing ? "rgba(96,165,250,0.08)" : "#13151c",
-            borderColor: "#3a3f54", borderBottom: "1px solid #3a3f54" }}>
-          <div className="flex items-center gap-2 min-w-0">
-            <span className="text-base flex-shrink-0">🅿️</span>
-            <div className="min-w-0">
-              <div className="text-sm font-bold"
-                style={{ color: sharing ? "#60a5fa" : "#cbd5e1", fontFamily: "'Jua', sans-serif" }}>
-                실시간 위치 공유 {manualWaiting ? "· 대기 표시 중" : ""}
-              </div>
-              <div className="text-[10px] text-slate-500 truncate">
-                {sharing ? `${busId || "1"}번 차량 ${locShare ? "위치+운행" : "운행 정보만"} 송신 중 · 3초 간격` : shareUrl ? "끄면 승객 지도에서 사라짐" : "고급 설정에서 DB 주소를 먼저 입력"}
-              </div>
-            </div>
-          </div>
-          <div className="flex items-center gap-2 flex-shrink-0">
-            {sharing && (
-              <button onClick={() => setLocShare((v) => !v)}
-                className="text-[10px] px-2 py-1 rounded-full"
-                style={{ background: locShare ? "#60a5fa" : "rgba(100,116,139,0.18)",
-                  color: locShare ? "#0a0b0f" : "#94a3b8",
-                  border: "1px solid " + (locShare ? "rgba(96,165,250,0.35)" : "#3a3f54"), fontFamily: "'Jua', sans-serif" }}
-                title={locShare ? "GPS 좌표 공유 중 — 끄면 운행 정보만 송신" : "운행 정보만 송신 중 — 켜면 GPS 좌표도 송신"}>
-                📍 {locShare ? "ON" : "OFF"}
-              </button>
-            )}
-            {sharing && (
-              <button onClick={() => setManualWaiting((v) => !v)}
-                className="text-[10px] px-2 py-1 rounded-full"
-                style={{ background: manualWaiting ? "#60a5fa" : "rgba(96,165,250,0.12)",
-                  color: manualWaiting ? "#0a0b0f" : "#60a5fa",
-                  border: "1px solid rgba(96,165,250,0.35)", fontFamily: "'Jua', sans-serif" }}>
-                대기 {manualWaiting ? "ON" : "OFF"}
-              </button>
-            )}
-            <button onClick={toggleSharing}
-              disabled={!shareUrl}
-              className="relative w-12 h-7 rounded-full disabled:opacity-40"
-              style={{ background: sharing ? "#60a5fa" : "#3a3f54" }}>
-              <div className="absolute top-0.5 w-6 h-6 rounded-full bg-white shadow"
-                style={{ transform: sharing ? "translateX(22px)" : "translateX(2px)", transition: "transform 0.2s" }} />
-            </button>
-          </div>
-        </div>
+        {/* (제거) 상단 위치공유 컴팩트 토글 — 연결 탭의 본 컨트롤로 통합됨 */}
 
-        {(gpsError || permissionState === "denied") && (
+        {/* 연결 탭 — GPS 에러 / 권한 안내 (연결 상태 진단) */}
+        {advTab === "연결" && (gpsError || permissionState === "denied") && (
           <div className="px-5 py-3 space-y-2"
             style={{ background: "rgba(239,68,68,0.08)", borderColor: "#3a3f54", borderBottom: "1px solid #3a3f54" }}>
             <div className="flex items-start gap-2">
@@ -6084,7 +6073,8 @@ function App() {
           </div>
         )}
 
-        {/* Stop list with schedule */}
+        {/* 운행 탭 — Stop list with schedule (정류장 좌표 편집 포함) */}
+        {advTab === "운행" && (
         <div className="px-5 py-4 max-h-80 overflow-y-auto"
           style={{ background: "#13151c", borderColor: "#3a3f54" }}>
           <div className="flex items-center justify-between gap-2 text-slate-400 text-xs tracking-widest mb-3">
@@ -6163,8 +6153,10 @@ function App() {
             })}
           </div>
         </div>
+        )}
 
-        {/* Settings */}
+        {/* 안내 탭 — 음성 안내 설정 (속도·벨소리·mp3) */}
+        {advTab === "안내" && (
         <div className="px-5 py-4 space-y-2"
           style={{ background: "#0e1018", borderColor: "#3a3f54", borderBottom: "1px solid #3a3f54" }}>
           <div className="flex items-center gap-3">
@@ -6196,6 +6188,13 @@ function App() {
                 style={{ transform: useClips ? "translateX(22px)" : "translateX(2px)", transition: "transform 0.2s" }} />
             </button>
           </div>
+        </div>
+        )}
+
+        {/* 자동 탭 — 자동 모드 세부 설정 (자동반경·자동전환·운행일·프로그램기준·화면갱신) */}
+        {advTab === "자동" && (
+        <div className="px-5 py-4 space-y-2"
+          style={{ background: "#0e1018", borderColor: "#3a3f54", borderBottom: "1px solid #3a3f54" }}>
           <div className="flex items-center gap-3">
             <label className="text-xs text-slate-400 w-16">자동반경</label>
             <input type="range" min="50" max="500" step="10" value={triggerRadius}
@@ -6276,7 +6275,13 @@ function App() {
               ))}
             </div>
           </div>
+        </div>
+        )}
 
+        {/* 안내 탭 — TTS 상태 + 음성 선택 + 멘트 편집 */}
+        {advTab === "안내" && (
+        <div className="px-5 py-4 space-y-2"
+          style={{ background: "#0e1018", borderColor: "#3a3f54", borderBottom: "1px solid #3a3f54" }}>
           <div className="pt-2 border-t" style={{ borderColor: "#3a3f54" }}>
             <div className="flex items-center justify-between gap-2 mb-2">
               <div className="flex items-center gap-2">
@@ -6317,6 +6322,15 @@ function App() {
                 fontFamily: "'Jua', sans-serif" }}>
               안내 멘트 편집·백업·복원
             </button>
+          </div>
+        </div>
+        )}
+
+        {/* 자료 탭 — 데이터 편집/공지/통계/백업 */}
+        {advTab === "자료" && (
+        <div className="px-5 py-4 space-y-2"
+          style={{ background: "#0e1018", borderColor: "#3a3f54", borderBottom: "1px solid #3a3f54" }}>
+          <div className="pt-2" style={{ borderColor: "#3a3f54" }}>
             <button onClick={() => setShowViaEditor(true)}
               className="mt-2 w-full py-1.5 rounded text-[11px] flex items-center justify-center gap-1"
               style={{ background: "rgba(96,165,250,0.12)", color: "#60a5fa", border: "1px solid rgba(96,165,250,0.3)",
@@ -6348,9 +6362,14 @@ function App() {
               🗂️ 전체 수정사항 백업·복원
             </button>
           </div>
+        </div>
+        )}
 
-          {/* 실시간 위치 공유 */}
-          <div className="pt-2 border-t space-y-2" style={{ borderColor: "#3a3f54" }}>
+        {/* 연결 탭 — 실시간 위치 공유 (DB·busId·로그인·QR) */}
+        {advTab === "연결" && (
+        <div className="px-5 py-4 space-y-2"
+          style={{ background: "#0e1018", borderColor: "#3a3f54", borderBottom: "1px solid #3a3f54" }}>
+          <div className="pt-2 space-y-2" style={{ borderColor: "#3a3f54" }}>
             <div className="text-xs font-bold" style={{ color: "#cbd5e1", fontFamily: "'Jua', sans-serif" }}>실시간 위치 공유</div>
             <input type="text" value={shareUrl} onChange={(e) => setShareUrl(e.target.value)}
               placeholder="Firebase DB 주소 (https://...firebasedatabase.app)"
@@ -6424,8 +6443,10 @@ function App() {
             })()}
           </div>
         </div>
+        )}
 
-        {/* Controls */}
+        {/* 운행 탭 — Controls (이전·안내·다음) */}
+        {advTab === "운행" && (
         <div className="px-5 py-5 flex items-center justify-center gap-3"
           style={{ background: "linear-gradient(180deg, #1c1f2b 0%, #13151c 100%)", borderColor: "#3a3f54" }}>
           <button onClick={prev} disabled={currentIdx === 0}
@@ -6450,6 +6471,7 @@ function App() {
             <SkipForward size={18} />
           </button>
         </div>
+        )}
 
         <div className="text-center mt-4 text-[10px] text-slate-600 tracking-wider leading-relaxed"
           style={{ fontFamily: "'IBM Plex Mono', monospace" }}>
