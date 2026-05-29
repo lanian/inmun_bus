@@ -86,7 +86,7 @@
 
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef, useMemo } = React;
-const BUILD = "b207"; /* 화면 우하단 표시 — 최신 배포 확인용 */
+const BUILD = "b208"; /* 화면 우하단 표시 — 최신 배포 확인용 */
 
 /* 실시간 위치 공유용 Firebase DB 주소. 여기에 한 번 넣어두면 승객 링크가 ?view=map 만 남아 깔끔해집니다. */
 const SHARE_DB = "https://innum-bus-default-rtdb.firebaseio.com";
@@ -193,7 +193,7 @@ const ROUTES = {
     label: "민주광장 방향",
     full: "축제장 → 5·18민주광장",
     stops: [
-      { name: "축제장", lat: 35.13334078976814, lng: 126.95942239875768 },
+      { name: "축제장", terminus: true, lat: 35.13334078976814, lng: 126.95942239875768 },
       { name: "학운초등학교", lat: 35.13310169245655, lng: 126.94788811002641 },
       { name: "운림중학교", lat: 35.13221866580787, lng: 126.94241924494327 },
       { name: "홍림교", lat: 35.132095930651055, lng: 126.93636507806373 },
@@ -1128,9 +1128,17 @@ function scheduledBusPos(dir, tripIdx, nowMin) {
       const sa = route.stops[i], sb = route.stops[i + 1];
       if (sa.lat == null || sb.lat == null) return null;
       const t = b > a ? (nowMin - a) / (b - a) : 0;
+      // A9: 폴리라인(approachVia 포함) 기반 보간 — 운영자측 operationBasedPos 와 위치 일치
+      let p;
+      try {
+        const poly = buildSegmentPolyline(dir, sa, sb);
+        p = interpolateAlongPolyline(poly, t);
+      } catch (_) { p = null; }
+      if (!p || typeof p.lat !== "number") {
+        p = { lat: sa.lat + (sb.lat - sa.lat) * t, lng: sa.lng + (sb.lng - sa.lng) * t };
+      }
       return {
-        lat: sa.lat + (sb.lat - sa.lat) * t,
-        lng: sa.lng + (sb.lng - sa.lng) * t,
+        lat: p.lat, lng: p.lng,
         fromName: sa.name, toName: sb.name,
         nearIdx: t < 0.5 ? i : i + 1,
       };
@@ -2090,6 +2098,11 @@ function LiveMapView({ dbUrl }) {
       const html = `<div style="display:inline-flex;align-items:center;gap:3px;background:#fff;color:${FT.ink};border:2px dashed ${c};border-radius:999px;padding:3px 9px;font-family:'Jua',sans-serif;font-weight:700;font-size:11px;white-space:nowrap;opacity:0.92;">${tripNum}회차 예상</div>`;
       return L.divIcon({ className: "", html, iconSize: [130, 26], iconAnchor: [65, 13] });
     };
+    // A8: 휴식(대기) 마커 — 종착지에서 다음 leg 출발까지의 휴식
+    const restIcon = (mins, terminus) => {
+      const html = `<div style="display:inline-flex;align-items:center;gap:3px;background:#f1f5f9;color:#475569;border:2px dashed #94a3b8;border-radius:999px;padding:3px 9px;font-family:'Jua',sans-serif;font-weight:700;font-size:11px;white-space:nowrap;">🅿 ${terminus} 휴식 · ${mins}분 후 출발</div>`;
+      return L.divIcon({ className: "", html, iconSize: [200, 26], iconAnchor: [100, 13] });
+    };
     const poll = async () => {
       try {
         const r = await fetch(`${base}/buses.json`, { cache: "no-store" });
@@ -2154,10 +2167,13 @@ function LiveMapView({ dbUrl }) {
         // 시간표 기반 추정 위치 — 라이브 신호가 없어도 항상 표시(라이브로 같은 회차 송신 시만 해당 회차 skip)
         const schedKeys = new Set();
         let nSched = 0;
+        let nResting = 0;
         {
           const today = new Date();
           const tripsToday = today.getMonth() === 5 && today.getDate() === 14 ? 5 : ROUTES.outbound.trips.length;
           const nowMin = today.getHours() * 60 + today.getMinutes();
+          const obFirstStop = ROUTES.outbound.stops[0];
+          const ibFirstStop = ROUTES.inbound.stops[0];
           ["outbound", "inbound"].forEach((dir) => {
             for (let ti = 0; ti < tripsToday; ti++) {
               const tripNum = ti + 1;
@@ -2178,16 +2194,52 @@ function LiveMapView({ dbUrl }) {
               m.bindTooltip(lbl, { direction: "top", offset: [0, -16] });
             }
           });
+          // A8: 휴식 갭 — 종착지(축제장 또는 5·18광장)에서 다음 leg 까지 대기 마커
+          const pushRest = (dir, ti, terminusStop, minsLeft, key) => {
+            if (!terminusStop || terminusStop.lat == null || liveTripSet.has(key) || schedKeys.has(key)) return;
+            schedKeys.add(key); nResting++;
+            const lbl = `🅿 ${terminusStop.name} 휴식 · ${ROUTES[dir].label} ${ti + 1}회차 · ${minsLeft}분 후 출발`;
+            let m = schedMarkersRef.current[key];
+            if (!m) {
+              m = L.marker([terminusStop.lat, terminusStop.lng], { icon: restIcon(minsLeft, terminusStop.name) }).addTo(map);
+              schedMarkersRef.current[key] = m;
+            } else {
+              m.setLatLng([terminusStop.lat, terminusStop.lng]);
+              m.setIcon(restIcon(minsLeft, terminusStop.name));
+            }
+            m.bindTooltip(lbl, { direction: "top", offset: [0, -16] });
+          };
+          // outbound n 종착(축제장) → inbound n 출발
+          for (let ti = 0; ti < tripsToday; ti++) {
+            const ob = ROUTES.outbound.trips[ti], ib = ROUTES.inbound.trips[ti];
+            if (!ob || !ib) continue;
+            const obEnd = toMin(ob[ob.length - 1]);
+            const ibStart = toMin(ib[0]);
+            if (obEnd < ibStart && nowMin >= obEnd && nowMin < ibStart) {
+              pushRest("inbound", ti, ibFirstStop, ibStart - nowMin, `inbound|${ti + 1}`);
+            }
+          }
+          // inbound n 종착(5·18광장) → outbound n+1 출발 (점심휴식 포함)
+          for (let ti = 0; ti < tripsToday; ti++) {
+            const ib = ROUTES.inbound.trips[ti], nob = ROUTES.outbound.trips[ti + 1];
+            if (!ib || !nob) continue;
+            const ibEnd = toMin(ib[ib.length - 1]);
+            const nobStart = toMin(nob[0]);
+            if (ibEnd < nobStart && nowMin >= ibEnd && nowMin < nobStart) {
+              pushRest("outbound", ti + 1, obFirstStop, nobStart - nowMin, `outbound|${ti + 2}`);
+            }
+          }
         }
         Object.keys(schedMarkersRef.current).forEach((k) => {
           if (!schedKeys.has(k)) { map.removeLayer(schedMarkersRef.current[k]); delete schedMarkersRef.current[k]; }
         });
 
         setCount(n);
-        const totalShown = n + nSched;
-        setStatus(n > 0 && nSched > 0 ? `실시간 ${n}대 · 예정 ${nSched}대`
+        const totalShown = n + nSched + nResting;
+        setStatus(n > 0 && nSched > 0 ? `실시간 ${n}대 · 예정 ${nSched}대${nResting > 0 ? ` · 휴식 ${nResting}대` : ""}`
           : n > 0 ? "실시간"
-          : nSched > 0 ? `시간표 기준 ${nSched}대`
+          : nSched > 0 ? `시간표 기준 ${nSched}대${nResting > 0 ? ` · 휴식 ${nResting}대` : ""}`
+          : nResting > 0 ? `🅿 ${nResting}대 휴식 중`
           : "운행 중인 셔틀이 없습니다");
       } catch (_) { setCount(0); setStatus("연결 오류 — 잠시 후 다시 시도"); }
     };
@@ -2784,13 +2836,17 @@ function PassengerView({ dbUrl, onAdmin, initialTab = "list" }) {
               </React.Fragment>
             )}
 
-            {/* 시간표상 운행 중인 셔틀 — 라이브 데이터 없어도 시각표에 따라 진행 추정 */}
+            {/* 시간표상 운행 중인 셔틀 — 라이브 데이터 없어도 시각표에 따라 진행 추정
+                A8: 회차 사이 휴식(15분) / 점심휴식(1시간 40분) 갭 동안 "휴식 중" 카드 표시 */}
             {(() => {
               const liveSet = new Set(live.map(([, b]) => `${b.dir === "inbound" ? "inbound" : "outbound"}|${b.trip || 1}`));
               const items = [];
+              const seen = new Set(); // dir|trip# — 중복 표시 방지
+              // 1) 운행 중 카드
               ["outbound", "inbound"].forEach((dir) => {
                 for (let ti = 0; ti < tripsToday; ti++) {
-                  if (liveSet.has(`${dir}|${ti + 1}`)) continue;
+                  const key = `${dir}|${ti + 1}`;
+                  if (liveSet.has(key)) continue;
                   const pos = scheduledBusPos(dir, ti, nowMin);
                   if (!pos) continue;
                   const sched = ROUTES[dir].trips[ti];
@@ -2803,9 +2859,42 @@ function PassengerView({ dbUrl, onAdmin, initialTab = "list" }) {
                   const nextStopName = nextIdx >= 0 ? ROUTES[dir].stops[nextIdx]?.name : null;
                   const nextSchedAt = nextIdx >= 0 ? sched[nextIdx] : null;
                   const mins = nextSchedAt ? (toMin(nextSchedAt) - nowMin) : null;
-                  items.push({ dir, ti, pos, sched, progress, route: ROUTES[dir], nextStopName, nextSchedAt, mins });
+                  items.push({ kind: "running", dir, ti, pos, sched, progress, route: ROUTES[dir], nextStopName, nextSchedAt, mins });
+                  seen.add(key);
                 }
               });
+              // 2) 휴식 카드 — outbound n 종착 → inbound n 출발 (축제장 휴식)
+              for (let ti = 0; ti < tripsToday; ti++) {
+                const ob = ROUTES.outbound.trips[ti], ib = ROUTES.inbound.trips[ti];
+                if (!ob || !ib) continue;
+                const obEnd = toMin(ob[ob.length - 1]);
+                const ibStart = toMin(ib[0]);
+                if (obEnd >= ibStart) continue;
+                if (nowMin >= obEnd && nowMin < ibStart) {
+                  const key = `inbound|${ti + 1}`;
+                  if (liveSet.has(key) || seen.has(key)) continue;
+                  items.push({ kind: "resting", dir: "inbound", ti, route: ROUTES.inbound,
+                    terminus: "축제장", startTime: ib[0], minsLeft: ibStart - nowMin, sched: ib });
+                  seen.add(key);
+                }
+              }
+              // 3) 휴식 카드 — inbound n 종착 → outbound n+1 출발 (즉시 환승 또는 점심휴식 1시간 40분)
+              for (let ti = 0; ti < tripsToday; ti++) {
+                const ib = ROUTES.inbound.trips[ti], nob = ROUTES.outbound.trips[ti + 1];
+                if (!ib || !nob) continue;
+                const ibEnd = toMin(ib[ib.length - 1]);
+                const nobStart = toMin(nob[0]);
+                if (ibEnd >= nobStart) continue;
+                if (nowMin >= ibEnd && nowMin < nobStart) {
+                  const key = `outbound|${ti + 2}`;
+                  if (liveSet.has(key) || seen.has(key)) continue;
+                  const minsLeft = nobStart - nowMin;
+                  items.push({ kind: "resting", dir: "outbound", ti: ti + 1, route: ROUTES.outbound,
+                    terminus: "5·18민주광장", startTime: nob[0], minsLeft,
+                    long: minsLeft >= 60, sched: nob });
+                  seen.add(key);
+                }
+              }
               if (items.length === 0) return null;
               return (
                 <div style={{ marginTop: live.length > 0 ? 8 : 12 }}>
@@ -2820,6 +2909,31 @@ function PassengerView({ dbUrl, onAdmin, initialTab = "list" }) {
                   <div className="space-y-2">
                     {items.map((it) => {
                       const c = it.dir === "outbound" ? FT.orange : FT.teal;
+                      if (it.kind === "resting") {
+                        return (
+                          <div key={`rest|${it.dir}|${it.ti}`}
+                            style={{ background: "#fff", border: "2px dashed " + FT.ink, borderRadius: 12,
+                              padding: "9px 11px 9px 13px", borderLeft: "8px solid " + FT.mute,
+                              boxShadow: "1.5px 1.5px 0 " + FT.ink, opacity: 0.95 }}>
+                            <div className="flex items-center gap-2" style={{ marginBottom: 4 }}>
+                              <span style={{ fontSize: 10, padding: "1px 6px", borderRadius: 4, background: FT.mute, color: "#fff",
+                                fontFamily: "'Jua', sans-serif", fontWeight: 700 }}>🅿 휴식</span>
+                              <span style={{ fontSize: 11, color: c, fontFamily: "'Jua', sans-serif", fontWeight: 700 }}>{it.route.label}</span>
+                              <span style={{ fontSize: 10, color: FT.mute, fontFamily: "'Jua', sans-serif" }}>{it.ti + 1}회차 출발 대기</span>
+                              <span style={{ marginLeft: "auto", fontSize: 10, color: FT.mute, fontFamily: "'IBM Plex Mono', monospace" }}>
+                                {it.startTime} 출발
+                              </span>
+                            </div>
+                            <div style={{ fontSize: 13, color: FT.ink, fontFamily: "'Jua', sans-serif", fontWeight: 700 }}>
+                              {it.terminus}에서 {it.long ? "점심휴식 중" : "휴식 중"}
+                            </div>
+                            <div style={{ fontSize: 11, color: FT.inkSoft, marginTop: 2, fontFamily: "'Jua', sans-serif" }}>
+                              다음 출발 <b style={{ color: c }}>{it.startTime}</b>
+                              <span style={{ color: c, marginLeft: 4 }}>({it.minsLeft > 0 ? `약 ${it.minsLeft}분 후` : "잠시 후"})</span>
+                            </div>
+                          </div>
+                        );
+                      }
                       return (
                         <div key={`${it.dir}|${it.ti}`}
                           style={{ background: "#fff", border: "2px dashed " + FT.ink, borderRadius: 12,
@@ -3132,8 +3246,9 @@ function App() {
 
   /* --- Circular route: next leg computation ---
      outbound n → inbound n (15분 후, 축제장 휴식)
-     inbound n → outbound n+1 (즉시 환승, 같은 시각)
-     마지막 회차 → 운행 종료 */
+     inbound n → outbound n+1 (즉시 환승, 같은 시각 — 단 inbound 1 → outbound 2 는 점심휴식 1h40m)
+     마지막 회차 → 운행 종료
+     A10: 점심휴식·15분 휴식은 시간표 데이터 자체에 반영됨 — timetableMode tick 이 nextLeg trips[0] 시각까지 대기 */
   const nextLeg = useMemo(() => {
     if (direction === "outbound") return { direction: "inbound", tripIdx };
     if (tripIdx < tripsToday - 1)
@@ -3731,14 +3846,28 @@ function App() {
 
   useEffect(() => { if (!autoMode) { announcedRef.current = new Set(); legSwitchArmedRef.current = false; legDepartCountRef.current = 0; } }, [autoMode]);
 
-  /* --- 시간표 자동 모드 — 시각표에 따라 currentIdx 진행 + 자동 안내 + 회차 전환 --- */
+  /* --- 시간표 자동 모드 — 시각표에 따라 currentIdx 진행 + 자동 안내 + 회차 전환 ---
+     Phase 0 패치:
+       A1) 시각표 범위 밖(첫 회차 전, 종료 1h 후) 가드 — wrap/잘못된 점프 방지
+       A3) nextLeg trip 데이터 누락 시 NaN 데드락 방지
+       A4) manualWaiting 해제 직후 catch-up — 바로 직전 누락 정류장 1개 발화
+       A5) effect deps 에 stops/trip/nextLeg 추가 — stale closure 방지 */
+  const ttWasWaitingRef = useRef(false);
   useEffect(() => {
     if (!timetableMode) return;
-    const TT_LEAD_SEC = 30; // 정류장 예정 시각 30초 전 안내
+    const TT_LEAD_SEC = 30;
+    const TT_TAIL_SEC = 60 * 60; // 종점 시각 1시간 이후엔 자동 OFF
     const tick = () => {
-      if (manualWaiting) return; // 대기(일시정지) 중에는 진행 잠금
+      // P1-1 / A4: manualWaiting 진행 잠금 — 해제 직후 catch-up 표식
+      if (manualWaiting) { ttWasWaitingRef.current = true; return; }
       const now = new Date();
       const nowSec = now.getHours() * 3600 + now.getMinutes() * 60 + now.getSeconds();
+      // A1: 시각표 범위 가드 — 시각표가 없거나 첫 출발 전 / 종점 후엔 진행 X
+      const startT = trip && trip[0] ? toMin(trip[0]) : null;
+      const endT = trip && trip[trip.length - 1] ? toMin(trip[trip.length - 1]) : null;
+      if (startT == null || endT == null) return;
+      const tripStartSec = startT * 60, tripEndSec = endT * 60;
+      if (nowSec < tripStartSec - TT_LEAD_SEC * 2) return; // 첫 회차 전 — 휴식 카드만 노출
       // 시각표상 현재 시점에 도달해야 할 최신 정류장 인덱스
       let k = -1;
       for (let i = 0; i < stops.length; i++) {
@@ -3746,34 +3875,50 @@ function App() {
         const sched = toMin(t) * 60;
         if (sched - TT_LEAD_SEC <= nowSec) k = i;
       }
-      if (k < 0) return; // 아직 첫 출발 시각 전
+      if (k < 0) return;
       const cIdx = currentIdxRef.current;
+      // A4: 대기 직후엔 누락 1개 catch-up 발화(jump>1 인 경우만, 중복 안내는 announceStop 의 10초 쿨다운으로 방지)
+      const resuming = ttWasWaitingRef.current;
+      ttWasWaitingRef.current = false;
       if (k > cIdx) {
         for (let i = cIdx + 1; i < k; i++) announcedRef.current.add(i);
         announcedRef.current.add(k);
         setCurrentIdx(k);
       }
+      if (resuming && k - 1 > ttLastAnnouncedRef.current && k - 1 > cIdx) {
+        announceStop(k - 1);
+        ttLastAnnouncedRef.current = k - 1;
+      }
       if (k > ttLastAnnouncedRef.current) {
         announceStop(k);
         ttLastAnnouncedRef.current = k;
       }
-      // 종점 도달 + 다음 leg 의 출발 시각 지나면 자동 회차 전환
+      // 종점 도달 + 다음 leg 출발 시각 지나면 자동 회차 전환 (A3: 데이터 누락 시 데드락 방지)
       if (k === stops.length - 1 && nextLeg) {
         legSwitchArmedRef.current = true;
-        const nl = ROUTES[nextLeg.direction].trips[nextLeg.tripIdx];
+        const nl = ROUTES[nextLeg.direction]?.trips?.[nextLeg.tripIdx];
         if (nl && nl[0]) {
           const nlSec = toMin(nl[0]) * 60;
-          if (nowSec >= nlSec) goToNextLeg();
+          if (Number.isFinite(nlSec) && nowSec >= nlSec) goToNextLeg();
         }
+      }
+      // 종점 시각 1시간 이상 지났는데 nextLeg 없으면 모드 자동 OFF — 운행 종료 상태
+      if (!nextLeg && nowSec > tripEndSec + TT_TAIL_SEC) {
+        setTimetableMode(false);
       }
     };
     tick();
-    const id = setInterval(tick, 5000); // 5초 단위 점검
+    const id = setInterval(tick, 5000);
     return () => clearInterval(id);
-  }, [timetableMode, direction, tripIdx, manualWaiting]);
+  }, [timetableMode, direction, tripIdx, manualWaiting, stops, trip, nextLeg]);
 
-  // 시간표 모드 OFF 시 announced/leg 플래그 리셋(다시 켤 때 깨끗하게 시작)
-  useEffect(() => { if (!timetableMode) { ttLastAnnouncedRef.current = -1; } }, [timetableMode]);
+  // 시간표 모드 OFF 시 announced/last/wait 플래그 리셋(다시 켤 때 깨끗하게 시작)
+  useEffect(() => {
+    if (!timetableMode) {
+      ttLastAnnouncedRef.current = -1;
+      ttWasWaitingRef.current = false;
+    }
+  }, [timetableMode]);
 
   /* 같은 busId로 다른 세션이 송신 중인지 검사 — 충돌 시 자동 송신 중지 + 경고 */
   useEffect(() => {
@@ -4269,7 +4414,19 @@ function App() {
               // GPS 자동만 켜진 경우(공유 OFF) — 자체 진행만
               : autoMode && userPos ? { c: "#22d65f", bg: "rgba(34,214,95,0.15)", t: "GPS 자동 · 위치 정상", pulse: false }
               : autoMode ? { c: "#fbbf24", bg: "rgba(251,191,36,0.12)", t: "GPS 자동 · 신호 대기", pulse: true }
-              : timetableMode ? { c: "#fbbf24", bg: "rgba(251,191,36,0.15)", t: `🕒 시간표 자동 · ${trip[currentIdx] || "—"}`, pulse: false }
+              : timetableMode ? (() => {
+                  // A6: 지연 표시 — 예정 vs 실제 분
+                  const planned = trip[currentIdx];
+                  const _now = new Date();
+                  const _nowMin = _now.getHours() * 60 + _now.getMinutes();
+                  const pMin = planned ? toMin(planned) : null;
+                  const delay = pMin != null ? (_nowMin - pMin) : null;
+                  let txt = `🕒 시간표 자동 · ${planned || "—"}`;
+                  if (delay != null && delay !== 0) txt += ` · ${delay > 0 ? `${delay}분 지연` : `${-delay}분 빠름`}`;
+                  const col = (delay != null && delay >= 3) ? "#ef4444" : "#fbbf24";
+                  const bg = (delay != null && delay >= 3) ? "rgba(239,68,68,0.15)" : "rgba(251,191,36,0.15)";
+                  return { c: col, bg, t: txt, pulse: false };
+                })()
               : { c: "#94a3b8", bg: "rgba(100,116,139,0.12)", t: "수동 대기 중", pulse: false };
             return (
               <div className="px-3 py-2 border-x-2 flex items-center justify-between gap-2"
@@ -4553,7 +4710,11 @@ function App() {
           <div className="mt-3 flex items-center flex-wrap gap-2 px-2">
             <button onClick={() => {
                 if (permissionState === "denied") { setMode("advanced"); return; }
-                if (!autoMode) { primeTTS(); if (timetableMode) setTimetableMode(false); }
+                if (!autoMode) {
+                  primeTTS();
+                  if (timetableMode) setTimetableMode(false);
+                  lastAnnounceRef.current = { idx: -1, at: 0 }; // A2: 쿨다운 잔존 방지
+                }
                 setAutoMode(!autoMode);
               }}
               className="flex items-center gap-2 text-xs px-3 py-1.5 rounded-full"
@@ -4567,7 +4728,11 @@ function App() {
               GPS 자동 {autoMode ? (userPos ? (gpsStale ? "· 신호 약함" : `· ${triggerRadius}m`) : "· 신호 대기") : "OFF"}
             </button>
             <button onClick={() => {
-                if (!timetableMode) { primeTTS(); if (autoMode) setAutoMode(false); }
+                if (!timetableMode) {
+                  primeTTS();
+                  if (autoMode) setAutoMode(false);
+                  lastAnnounceRef.current = { idx: -1, at: 0 }; // A2
+                }
                 setTimetableMode(!timetableMode);
               }}
               title="시간표 시각에 맞춰 자동으로 진행·안내"
@@ -4874,7 +5039,11 @@ function App() {
           <button
             onClick={() => {
               if (permissionState === "denied") { setGpsError("위치 권한이 차단되어 있어요"); return; }
-              if (!autoMode) { primeTTS(); if (timetableMode) setTimetableMode(false); }
+              if (!autoMode) {
+                primeTTS();
+                if (timetableMode) setTimetableMode(false);
+                lastAnnounceRef.current = { idx: -1, at: 0 }; // A2
+              }
               setAutoMode(!autoMode);
             }}
             disabled={permissionState === "denied"}
@@ -4906,7 +5075,11 @@ function App() {
           </div>
           <button
             onClick={() => {
-              if (!timetableMode) { primeTTS(); if (autoMode) setAutoMode(false); }
+              if (!timetableMode) {
+                primeTTS();
+                if (autoMode) setAutoMode(false);
+                lastAnnounceRef.current = { idx: -1, at: 0 }; // A2
+              }
               setTimetableMode(!timetableMode);
             }}
             className="relative w-12 h-7 rounded-full flex-shrink-0"
