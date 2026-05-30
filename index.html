@@ -154,7 +154,7 @@
 
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef, useMemo } = React;
-const BUILD = "b386"; /* 화면 우하단 표시 — 최신 배포 확인용 */
+const BUILD = "b387"; /* 화면 우하단 표시 — 최신 배포 확인용 */
 
 /* 실시간 위치 공유용 Firebase DB 주소. 여기에 한 번 넣어두면 승객 링크가 ?view=map 만 남아 깔끔해집니다. */
 const SHARE_DB = "https://innum-bus-default-rtdb.firebaseio.com";
@@ -8486,6 +8486,26 @@ function App() {
       )}
     </div>
   ) : null;
+  // 신규 스티커 알림 토스트 + StickerEditor — simple/advanced 두 모드 공통.
+  // (이전: advanced return 안에만 있어 simple 모드 운영자는 알림 못 봄.)
+  const stickerNotifNode = stickerNotifMsg ? (
+    <button onClick={() => { setStickerNotifMsg(""); markStickersSeen(); setShowStickerEditor(true); }}
+      aria-label={`신규 스티커 알림: ${stickerNotifMsg}`}
+      style={{ position: "fixed", right: 16, bottom: "calc(80px + env(safe-area-inset-bottom, 0px))",
+        zIndex: 5500, background: "#a78bfa", color: "#fff",
+        border: "2px solid #fff", borderRadius: 14, padding: "10px 14px",
+        boxShadow: "3px 3px 0 rgba(0,0,0,0.4), 0 0 18px rgba(167,139,250,0.4)",
+        fontFamily: "'Jua', sans-serif", fontSize: 12, fontWeight: 700,
+        display: "flex", alignItems: "center", gap: 8, maxWidth: 280, cursor: "pointer",
+        animation: "opPanelUp 0.25s cubic-bezier(0.2, 0.9, 0.3, 1) both" }}>
+      <span aria-hidden style={{ fontSize: 16 }}>🔔</span>
+      <span style={{ flex: 1, textAlign: "left", lineHeight: 1.3, whiteSpace: "normal" }}>{stickerNotifMsg}</span>
+    </button>
+  ) : null;
+  const stickerEditorNode = showStickerEditor ? (
+    <StickerEditor onClose={() => setShowStickerEditor(false)} dbUrl={shareUrl} getAuth={() => authTokenRef.current}
+      refreshAuth={async () => { try { const d = await firebaseSignIn(); if (d && d.idToken) { authTokenRef.current = d.idToken; tokenIssuedAtRef.current = Date.now(); return d.idToken; } } catch (_) {} return null; }} />
+  ) : null;
   if (mode === "simple") {
     const arrivalDistText = distToNext != null ? fmtDist(distToNext) : null;
     // 시간표상 다음 정류장 예정 시각까지 남은 시간(초). +면 여유, -면 지연. FAKE 모드도 따라감.
@@ -9091,6 +9111,8 @@ function App() {
 
           {showTimetable && <TimetableModal tripsToday={tripsToday} onClose={() => setShowTimetable(false)} />}
           {showStats && <StatsModal counts={counts} dateKey={dateKey} onClose={() => setShowStats(false)} onReset={resetCountsToday} busCapacity={busCapacity} setBusCapacity={setBusCapacity} countsEnabled={countsEnabled} setCountsEnabled={setCountsEnabled} />}
+          {stickerEditorNode}
+          {stickerNotifNode}
         </div>
       </div>
     );
@@ -10055,23 +10077,8 @@ function App() {
         refreshAuth={async () => { try { const d = await firebaseSignIn(); if (d && d.idToken) { authTokenRef.current = d.idToken; tokenIssuedAtRef.current = Date.now(); return d.idToken; } } catch (_) {} return null; }} />}
       {showNoticeEditor && <NoticeEditor onClose={() => setShowNoticeEditor(false)} dbUrl={shareUrl} getAuth={() => authTokenRef.current}
         refreshAuth={async () => { try { const d = await firebaseSignIn(); if (d && d.idToken) { authTokenRef.current = d.idToken; tokenIssuedAtRef.current = Date.now(); return d.idToken; } } catch (_) {} return null; }} />}
-      {showStickerEditor && <StickerEditor onClose={() => setShowStickerEditor(false)} dbUrl={shareUrl} getAuth={() => authTokenRef.current}
-        refreshAuth={async () => { try { const d = await firebaseSignIn(); if (d && d.idToken) { authTokenRef.current = d.idToken; tokenIssuedAtRef.current = Date.now(); return d.idToken; } } catch (_) {} return null; }} />}
-      {/* 신규 스티커 알림 토스트 — 우측 하단. 클릭하면 StickerEditor 열림 + 확인 처리 */}
-      {stickerNotifMsg && (
-        <button onClick={() => { setStickerNotifMsg(""); markStickersSeen(); setShowStickerEditor(true); }}
-          aria-label={`신규 스티커 알림: ${stickerNotifMsg}`}
-          style={{ position: "fixed", right: 16, bottom: "calc(80px + env(safe-area-inset-bottom, 0px))",
-            zIndex: 5500, background: "#a78bfa", color: "#fff",
-            border: "2px solid #fff", borderRadius: 14, padding: "10px 14px",
-            boxShadow: "3px 3px 0 rgba(0,0,0,0.4), 0 0 18px rgba(167,139,250,0.4)",
-            fontFamily: "'Jua', sans-serif", fontSize: 12, fontWeight: 700,
-            display: "flex", alignItems: "center", gap: 8, maxWidth: 280, cursor: "pointer",
-            animation: "opPanelUp 0.25s cubic-bezier(0.2, 0.9, 0.3, 1) both" }}>
-          <span aria-hidden style={{ fontSize: 16 }}>🔔</span>
-          <span style={{ flex: 1, textAlign: "left", lineHeight: 1.3, whiteSpace: "normal" }}>{stickerNotifMsg}</span>
-        </button>
-      )}
+      {stickerEditorNode}
+      {stickerNotifNode}
       {showUsageStats && <UsageStatsViewer onClose={() => setShowUsageStats(false)} dbUrl={shareUrl} getAuth={() => authTokenRef.current}
         refreshAuth={async () => { try { const d = await firebaseSignIn(); if (d && d.idToken) { authTokenRef.current = d.idToken; tokenIssuedAtRef.current = Date.now(); return d.idToken; } } catch (_) {} return null; }} />}
       {showDemoMode && <DemoModeEditor onClose={() => setShowDemoMode(false)} />}
