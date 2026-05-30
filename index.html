@@ -143,7 +143,7 @@
 
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef, useMemo } = React;
-const BUILD = "b362"; /* 화면 우하단 표시 — 최신 배포 확인용 */
+const BUILD = "b363"; /* 화면 우하단 표시 — 최신 배포 확인용 */
 
 /* 실시간 위치 공유용 Firebase DB 주소. 여기에 한 번 넣어두면 승객 링크가 ?view=map 만 남아 깔끔해집니다. */
 const SHARE_DB = "https://innum-bus-default-rtdb.firebaseio.com";
@@ -6482,10 +6482,6 @@ function App() {
   // 기본 route — 도착 시각 예측·표시 정확. 짧은 우회/잘못 매칭에 약하면 straight 로 전환.
   const [distanceMode, setDistanceMode] = useState(() => LS.get("distmode", "route"));
   useEffect(() => LS.set("distmode", distanceMode), [distanceMode]);
-  // 축제장행 중간 정류장 통과 안내 — 기본 OFF. ON 이면 promo·programStop 없는 정류장에서
-  // "정차하지 않고 통과합니다" 일괄 발화. 보통은 정류장별 promo + 정류장별 타이밍 설정 권장.
-  const [outboundPassAnnounce, setOutboundPassAnnounce] = useState(() => LS.get("outpass", "0") === "1");
-  useEffect(() => LS.set("outpass", outboundPassAnnounce ? "1" : "0"), [outboundPassAnnounce]);
   // 자동 안내 기본 타이밍 — 정류장별 설정이 없을 때 사용. enter | arrive | pass
   const [autoAnnTiming, setAutoAnnTiming] = useState(() => LS.get("anntiming", "enter"));
   useEffect(() => LS.set("anntiming", autoAnnTiming), [autoAnnTiming]);
@@ -7100,11 +7096,7 @@ function App() {
           return;
         }
         if (ments.promos[cur.name]) { speakOrClip(ments.promos[cur.name], AUDIO_KEYS[cur.name]); return; }
-        // 컨텐츠 없는 중간 정류장 — 정류장별 통과 타이밍이거나 글로벌 통과 안내 ON 이면 통과 멘트 발화
-        const stopTiming = getStopTiming("outbound", cur.name);
-        if (stopTiming === "pass" || outboundPassAnnounce) {
-          chimeThenSpeak(`이번 정류장은 ${curSay}입니다. 정차하지 않고 통과합니다.`);
-        }
+        // promo·programStop 없는 중간 정류장은 침묵. 정류장별 promo 추가하거나 타이밍 조정 권장.
         return;
       }
       // 민주광장 방향: 하차가 많으므로 정류장 안내 전체 유지
@@ -7427,15 +7419,18 @@ function App() {
     const nearStopRadius = stops[nearestIdx]?.radius || triggerRadius;
     if (nearestDist <= nearStopRadius && !announcedRef.current.has(nearestIdx)) {
       // 건너뛴 앞쪽 정류장들 처리 — 통과 큐(pendingPassRef) 에 있는 stop 은 발화 후 마킹.
-      // 그냥 announced 만 추가하면 통과 대기 발화가 누락됨(빠른 통과 시 다음 정류장 진입에 흡수)
+      // 발화 발생 시 같은 tick 에 nearestIdx 안내까지 동시 발화하지 않도록 firedInLoop 로 다음 tick 으로 미룸.
+      let firedInLoop = false;
       for (let k = currentIdx; k < nearestIdx; k++) {
         if (pendingPassRef.current.has(k)) {
           announceStop(k);
           pendingPassRef.current.delete(k);
+          firedInLoop = true;
         }
         announcedRef.current.add(k);
       }
       setCurrentIdx(nearestIdx);
+      if (firedInLoop) return; // nearestIdx 안내는 다음 tick 에서 처리(두 안내 동시 발화 방지)
       const nearTiming = getStopTiming(direction, stops[nearestIdx].name);
       if (nearTiming === "pass") {
         // 이미 지나간 상태(폴리라인 투영 past + 다음 정류장이 더 가까움) 면 즉시 통과 발화.
@@ -9149,20 +9144,6 @@ function App() {
               style={{ background: useClips ? "#22d65f" : "#3a3f54" }}>
               <div className="absolute top-0.5 w-6 h-6 rounded-full bg-white shadow"
                 style={{ transform: useClips ? "translateX(22px)" : "translateX(2px)", transition: "transform 0.2s" }} />
-            </button>
-          </div>
-          <div className="flex items-center justify-between gap-3">
-            <div className="min-w-0">
-              <div className="text-xs text-slate-400">축제장행 중간 정류장 통과 안내</div>
-              <div className="text-[10px] text-slate-600">
-                ON: 통과 시 "이번 정류장은 X, 정차하지 않고 통과합니다" 발화 · OFF: 홍보·프로그램 정류장만 안내
-              </div>
-            </div>
-            <button onClick={() => setOutboundPassAnnounce(!outboundPassAnnounce)}
-              className="relative w-12 h-7 rounded-full flex-shrink-0"
-              style={{ background: outboundPassAnnounce ? "#22d65f" : "#3a3f54" }}>
-              <div className="absolute top-0.5 w-6 h-6 rounded-full bg-white shadow"
-                style={{ transform: outboundPassAnnounce ? "translateX(22px)" : "translateX(2px)", transition: "transform 0.2s" }} />
             </button>
           </div>
         </div>
