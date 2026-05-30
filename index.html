@@ -143,7 +143,7 @@
 
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef, useMemo } = React;
-const BUILD = "b314"; /* 화면 우하단 표시 — 최신 배포 확인용 */
+const BUILD = "b315"; /* 화면 우하단 표시 — 최신 배포 확인용 */
 
 /* 실시간 위치 공유용 Firebase DB 주소. 여기에 한 번 넣어두면 승객 링크가 ?view=map 만 남아 깔끔해집니다. */
 const SHARE_DB = "https://innum-bus-default-rtdb.firebaseio.com";
@@ -2997,9 +2997,16 @@ function LiveMapView({ dbUrl, onHome }) {
         const remainQuota = Math.max(0, STICKER_QUOTA_LIMIT - stickerHistoryRef.current.length);
         setStickerMsg(`스티커 등록 — 1분 내 ${remainQuota}개 더 가능 · '완료' 로 종료`);
         setTimeout(() => setStickerMsg(""), 1800);
+        // 통계 — 이모지 종류별 카운트 (ASCII 슬러그)
+        try {
+          const STICKER_STAT_KEY = { "👍": "like", "📸": "photo", "💤": "rest", "🚻": "wc", "🍱": "food" };
+          const k = STICKER_STAT_KEY[kind] || "other";
+          window.__mdsStats && window.__mdsStats.track(`sticker.place.${k}`);
+        } catch (__) {}
       } catch (err) {
         setStickerMsg("저장 실패: " + (err && err.message ? err.message : "네트워크 오류"));
         setTimeout(() => setStickerMsg(""), 2400);
+        try { window.__mdsStats && window.__mdsStats.track("error.sticker.save"); } catch (__) {}
       }
       // 연속 등록 — stickerKind 유지 (사용자가 '완료' 누르기 전까지 place mode 지속)
     });
@@ -3249,8 +3256,18 @@ function LiveMapView({ dbUrl, onHome }) {
     ["outbound", "inbound"].forEach((dir) => {
       const dirColor = dir === "outbound" ? FT.orange : FT.teal;
       const dash = dir === "inbound" ? "10,8" : null;
+      // 정류장명 → 통계 키(영문 슬러그). DB 화이트리스트가 ASCII 만 허용해 한글 키 안 됨.
+      const STOP_STAT_KEY = {
+        "5·18민주광장": "square518",
+        "하늘마당": "haneul",
+        "학동증심사역": "hakdong",
+        "홍림교": "hongnim",
+        "운림중학교": "unrim",
+        "학운초등학교": "hakun",
+        "축제장": "festival",
+      };
       // 정류장 마커. 라벨(tooltip)도 interactive 로 만들어 텍스트만 눌러도 popup 이 열리도록.
-      const wireLabelClick = (m) => {
+      const wireLabelClick = (m, stopName) => {
         const tt = m.getTooltip(); if (!tt) return;
         tt.on("click", (ev) => {
           try { L.DomEvent.stopPropagation(ev); } catch (_) {}
@@ -3259,6 +3276,9 @@ function LiveMapView({ dbUrl, onHome }) {
         m.on("tooltipopen", (e) => {
           const el = e.tooltip && e.tooltip.getElement();
           if (el) el.style.cursor = "pointer";
+        });
+        m.on("popupopen", () => {
+          try { const k = STOP_STAT_KEY[stopName]; if (k && window.__mdsStats) window.__mdsStats.track(`stop.popup.${k}`); } catch (_) {}
         });
       };
       ROUTES[dir].stops.forEach((s) => {
@@ -3269,7 +3289,7 @@ function LiveMapView({ dbUrl, onHome }) {
           const m = L.circleMarker(c, { radius: 7, color: FT.ink, fillColor: "#fff", fillOpacity: 1, weight: 2 })
             .addTo(map).bindTooltip(s.name, { permanent: true, direction: "top", offset: [0, -4], className: "fest-stop", interactive: true })
             .bindPopup(buildStopPopup(s.name, s.sub, ["outbound", "inbound"]));
-          wireLabelClick(m);
+          wireLabelClick(m, s.name);
           stopLayersRef.current.push(m);
         } else {
           // 축제장행(outbound) 라벨은 마커 아래, 민주광장행(inbound) 라벨은 마커 위 — 위치+색으로 방향 구분
@@ -3279,7 +3299,7 @@ function LiveMapView({ dbUrl, onHome }) {
               offset: [0, dir === "outbound" ? 4 : -4],
               className: `fest-stop ${dir === "outbound" ? "dir-out" : "dir-in"}`, interactive: true })
             .bindPopup(buildStopPopup(s.name, s.sub, [dir]));
-          wireLabelClick(m);
+          wireLabelClick(m, s.name);
           stopLayersRef.current.push(m);
         }
       });
@@ -3639,7 +3659,7 @@ function LiveMapView({ dbUrl, onHome }) {
           : postFestival ? "행사 종료"
           : preFestival ? `행사 전 · D-${Math.max(1, Math.round((day1Ts - today0) / 86400000))}`
           : "운행 중인 셔틀이 없습니다");
-      } catch (_) { setCount(0); setStatus("연결 오류 — 잠시 후 다시 시도"); }
+      } catch (_) { setCount(0); setStatus("연결 오류 — 잠시 후 다시 시도"); try { window.__mdsStats && window.__mdsStats.track("error.conn.live"); } catch (__) {} }
     };
     poll();
     let id = setInterval(() => { if (!stopped && !document.hidden) poll(); }, 3000);
@@ -4143,8 +4163,17 @@ function UpcomingPromoCard({ onOpen }) {
 function PassengerView({ dbUrl, onAdmin, initialTab = "list" }) {
   const [buses, setBuses] = useState({});
   const [tab, setTab] = useState(initialTab);
-  // 탭 변경 시 통계 — 첫 마운트(initialTab) 포함
-  useEffect(() => { try { statsRef.current && statsRef.current.track(`view.${tab}`); } catch (_) {} }, [tab]);
+  // 탭 변경 시 통계 — view.{tab} + 펀넬용 transition.{from}_to_{to}
+  const prevTabRef = useRef(null);
+  useEffect(() => {
+    try {
+      if (prevTabRef.current && prevTabRef.current !== tab) {
+        statsRef.current && statsRef.current.track(`transition.${prevTabRef.current}_to_${tab}`);
+      }
+      statsRef.current && statsRef.current.track(`view.${tab}`);
+    } catch (_) {}
+    prevTabRef.current = tab;
+  }, [tab]);
   const [conn, setConn] = useState("loading"); // loading | ok | error
   const [showTimetable, setShowTimetable] = useState(false);
   const [tableFocus, setTableFocus] = useState(null); // { dir, ti } — 다음 출발 카드 탭 시 해당 회차 강조
@@ -4153,10 +4182,18 @@ function PassengerView({ dbUrl, onAdmin, initialTab = "list" }) {
   const [venueZone, setVenueZone] = useState(0);
   // 익명 사용 통계 — 행사 후 운영자가 분석. 개인정보 비수집, 카운트만.
   const statsRef = useRef(null);
+  const tabRef = useRef(initialTab);
+  useEffect(() => { tabRef.current = tab; }, [tab]);
   useEffect(() => {
     statsRef.current = createStatsTracker(dbUrl);
+    // 전역 노출 — LiveMapView 등 자식 컴포넌트에서 직접 호출
+    try { window.__mdsStats = { track: (k, n) => { try { statsRef.current && statsRef.current.track(k, n); } catch (_) {} } }; } catch (_) {}
     statsRef.current.track("session.start");
-    return () => { try { statsRef.current && statsRef.current.destroy(); } catch (_) {} };
+    return () => {
+      try { statsRef.current && statsRef.current.track(`session.endView.${tabRef.current}`); } catch (_) {}
+      try { statsRef.current && statsRef.current.destroy(); } catch (_) {}
+      try { delete window.__mdsStats; } catch (_) {}
+    };
   }, [dbUrl]);
   const trackStat = (key, n) => { try { statsRef.current && statsRef.current.track(key, n); } catch (_) {} };
   const [notice, setNotice] = useState(null); // P1-2: 운영자 공지/재난 안내
@@ -4173,7 +4210,7 @@ function PassengerView({ dbUrl, onAdmin, initialTab = "list" }) {
         const d = await r.json();
         setBuses(d || {});
         setConn("ok");
-      } catch (_) { setConn("error"); }
+      } catch (_) { setConn("error"); try { statsRef.current && statsRef.current.track("error.conn.buses"); } catch (__) {} }
     };
     poll();
     const id = setInterval(() => { if (!stopped && !document.hidden) poll(); }, 3000);
