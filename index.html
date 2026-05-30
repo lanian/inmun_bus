@@ -143,7 +143,7 @@
 
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef, useMemo } = React;
-const BUILD = "b320"; /* 화면 우하단 표시 — 최신 배포 확인용 */
+const BUILD = "b321"; /* 화면 우하단 표시 — 최신 배포 확인용 */
 
 /* 실시간 위치 공유용 Firebase DB 주소. 여기에 한 번 넣어두면 승객 링크가 ?view=map 만 남아 깔끔해집니다. */
 const SHARE_DB = "https://innum-bus-default-rtdb.firebaseio.com";
@@ -3076,7 +3076,7 @@ function ViaEditor({ onClose, dbUrl, getAuth }) {
 }
 
 /* 승객용 실시간 위치 지도 — ?view=map&db=<DB주소> 로 진입. Firebase RTDB REST 폴링 */
-function LiveMapView({ dbUrl, onHome }) {
+function LiveMapView({ dbUrl, onHome, onOpenVenue }) {
   const elRef = useRef(null), mapRef = useRef(null), markersRef = useRef({}), schedMarkersRef = useRef({});
   const [count, setCount] = useState(0);
   const [status, setStatus] = useState("연결 중…");
@@ -3996,6 +3996,18 @@ function LiveMapView({ dbUrl, onHome }) {
         {stickerMsg}
       </div>
 
+      {/* 행사 당일 — 프로그램 슬라이드 배너 (지도 상단 고정, 헤더 칩 바로 아래) */}
+      <div style={{ position: "fixed", left: 10, right: 10, top: "calc(60px + env(safe-area-inset-top, 0px))",
+        zIndex: 1080, pointerEvents: "none" }}>
+        <div style={{ pointerEvents: "auto", maxWidth: 480, margin: "0 auto" }}>
+          <UpcomingPromoCard onOpen={() => {
+            try { window.__mdsStats && window.__mdsStats.track("click.promo.map"); } catch (_) {}
+            if (typeof onOpenVenue === "function") onOpenVenue();
+            else if (typeof onHome === "function") onHome();
+          }} />
+        </div>
+      </div>
+
       {/* 범례 (좌하단) */}
       <div style={{ position: "absolute", bottom: 96, left: 10, zIndex: 1000,
         background: "#fff", border: "2px solid " + FT.ink, borderRadius: 10, boxShadow: "3px 3px 0 " + FT.ink,
@@ -4241,39 +4253,64 @@ function BusCard({ id, bus, agoText, nowMin, tripsToday, departedInfo }) {
   );
 }
 
-/* 다가올 프로그램 슬라이드 배너 — 행사 당일(6.13/6.14)에만 노출.
-   '곧 시작해요'(upcoming) → '지금 진행 중'(ongoing) → '오늘 진행 종료'(ended) 순으로 fallback.
+/* 다가올 프로그램 슬라이드 배너 — 행사 전·당일에만 노출 (종료 후엔 숨김).
+   - 행사 전: '행사 미리보기' (day1·day2 통합 시간순 균등 5개)
+   - 행사 당일: '곧 시작해요'(upcoming) → '지금 진행 중'(ongoing) → '오늘 진행 종료'(ended) 순
    carousel: 최대 5장 후보를 가로 슬라이드로 보여주고 5초마다 자동 진행 + dots 인디케이터 + 터치 스와이프. */
 function UpcomingPromoCard({ onOpen }) {
   const d = getNow();
   const todayDay = d.getMonth() === 5 && d.getDate() === 13 ? "day1"
     : d.getMonth() === 5 && d.getDate() === 14 ? "day2" : null;
-  if (!todayDay) return null; // 당일 행사만 — 행사일이 아니면 숨김
+  const today0 = new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+  const day1Ts = new Date(2026, 5, 13).getTime();
+  const day2Ts = new Date(2026, 5, 14).getTime();
+  const preFestival = today0 < day1Ts;
+  const postFestival = today0 > day2Ts;
+  if (postFestival) return null; // 행사 종료 후엔 숨김
   const nm = d.getHours() * 60 + d.getMinutes();
 
-  const todayItems = (FESTIVAL_PROGRAM[todayDay]?.items || []).filter((it) => {
-    if (!it.time) return false;
-    return /^(\d\d:\d\d)~(\d\d:\d\d)$/.test(it.time);
-  }).map((it) => ({ ...it, _day: todayDay }));
-
-  if (todayItems.length === 0) return null;
-
-  // 시간 상태 분류: upcoming(아직 시작 전) → ongoing(진행 중) → past(이미 종료)
-  const upcoming = [], ongoing = [], past = [];
-  todayItems.forEach((it) => {
-    const [_, s, e] = it.time.match(/^(\d\d:\d\d)~(\d\d:\d\d)$/);
-    const sMin = toMin(s), eMin = toMin(e);
-    if (sMin > nm) upcoming.push(it);
-    else if (eMin > nm) ongoing.push(it);
-    else past.push(it);
-  });
-  // 정렬 — 시작 시각 오름차순
-  const byStart = (a, b) => (a.time || "").localeCompare(b.time || "");
-  upcoming.sort(byStart); ongoing.sort(byStart); past.sort(byStart);
-  // 슬라이드 후보 — upcoming 우선, 부족하면 ongoing → past 채움
-  const SLIDE_N = 5;
-  const slides = [...upcoming, ...ongoing, ...past].slice(0, SLIDE_N);
-  const mode = upcoming.length > 0 ? "upcoming" : ongoing.length > 0 ? "ongoing" : "ended";
+  let slides = [];
+  let mode = "preview";
+  if (preFestival) {
+    // 행사 전: 양일 통합 시간순 정렬 후 균등 간격(stride) 으로 5개 추출
+    const all = [
+      ...(FESTIVAL_PROGRAM.day1?.items || []).filter((it) => it.time && /^(\d\d:\d\d)~(\d\d:\d\d)$/.test(it.time)).map((it) => ({ ...it, _day: "day1" })),
+      ...(FESTIVAL_PROGRAM.day2?.items || []).filter((it) => it.time && /^(\d\d:\d\d)~(\d\d:\d\d)$/.test(it.time)).map((it) => ({ ...it, _day: "day2" })),
+    ].sort((a, b) => {
+      const dayCmp = (a._day || "").localeCompare(b._day || "");
+      if (dayCmp !== 0) return dayCmp;
+      return (a.time || "").localeCompare(b.time || "");
+    });
+    if (all.length === 0) return null;
+    const SLIDE_N = Math.min(5, all.length);
+    if (all.length <= SLIDE_N) slides = all;
+    else {
+      const stride = all.length / SLIDE_N;
+      slides = Array.from({ length: SLIDE_N }, (_, i) => all[Math.floor(i * stride)]);
+    }
+    mode = "preview";
+  } else if (todayDay) {
+    // 행사 당일: 오늘 프로그램 시간 상태별 분류
+    const todayItems = (FESTIVAL_PROGRAM[todayDay]?.items || []).filter((it) => {
+      if (!it.time) return false;
+      return /^(\d\d:\d\d)~(\d\d:\d\d)$/.test(it.time);
+    }).map((it) => ({ ...it, _day: todayDay }));
+    if (todayItems.length === 0) return null;
+    const upcoming = [], ongoing = [], past = [];
+    todayItems.forEach((it) => {
+      const [_, s, e] = it.time.match(/^(\d\d:\d\d)~(\d\d:\d\d)$/);
+      const sMin = toMin(s), eMin = toMin(e);
+      if (sMin > nm) upcoming.push(it);
+      else if (eMin > nm) ongoing.push(it);
+      else past.push(it);
+    });
+    const byStart = (a, b) => (a.time || "").localeCompare(b.time || "");
+    upcoming.sort(byStart); ongoing.sort(byStart); past.sort(byStart);
+    slides = [...upcoming, ...ongoing, ...past].slice(0, 5);
+    mode = upcoming.length > 0 ? "upcoming" : ongoing.length > 0 ? "ongoing" : "ended";
+  } else {
+    return null;
+  }
 
   const [idx, setIdx] = useState(0);
   const [paused, setPaused] = useState(false);
@@ -4308,7 +4345,10 @@ function UpcomingPromoCard({ onOpen }) {
             background: slides[safeIdx].zone % 2 ? FT.orangeDark : FT.tealDark }}
             className="animate-pulse" />
           <span style={{ fontSize: 11, color: FT.ink, fontWeight: 700, fontFamily: "'Jua', sans-serif", letterSpacing: 0.5 }}>
-            {mode === "upcoming" ? "곧 시작해요" : mode === "ongoing" ? "지금 진행 중" : "오늘 진행 종료"}
+            {mode === "upcoming" ? "곧 시작해요"
+              : mode === "ongoing" ? "지금 진행 중"
+              : mode === "ended" ? "오늘 진행 종료"
+              : "행사 미리보기"}
           </span>
           <span style={{ fontSize: 10, color: FT.inkSoft, fontWeight: 400 }}>
             · {safeIdx + 1}/{slides.length}
@@ -4325,6 +4365,7 @@ function UpcomingPromoCard({ onOpen }) {
           {slides.map((pick, i) => {
             const cDark = pick.zone % 2 ? FT.orangeDark : FT.tealDark;
             const cSoft = pick.zone % 2 ? FT.orangeSoft : FT.tealSoft;
+            const dayLabel = pick._day === "day2" ? "6.14 (일)" : pick._day === "day1" ? "6.13 (토)" : "";
             return (
               <button key={i} onClick={onOpen}
                 aria-roledescription="slide" aria-label={`${i + 1}/${slides.length} · ${pick.title}`}
@@ -4347,6 +4388,12 @@ function UpcomingPromoCard({ onOpen }) {
                     <span style={{ padding: "1px 7px", borderRadius: 999, background: "transparent", color: cDark,
                       border: "1px solid " + cDark + "66", fontSize: 10, fontWeight: 700 }}>
                       {pick.zone}존
+                    </span>
+                  )}
+                  {mode === "preview" && dayLabel && (
+                    <span style={{ padding: "1px 7px", borderRadius: 999, background: "#fff", color: FT.inkSoft,
+                      border: "1px solid " + FT.mute + "55", fontSize: 10, fontWeight: 700 }}>
+                      {dayLabel}
                     </span>
                   )}
                 </div>
@@ -4710,7 +4757,8 @@ function PassengerView({ dbUrl, onAdmin, initialTab = "list" }) {
     return (
       <div className="mds-app-height" style={{ display: "flex", flexDirection: "column", overflow: "hidden", background: "#000" }}>
         <div style={{ flex: 1, minHeight: 0, position: "relative" }}>
-          <LiveMapView dbUrl={dbUrl} onHome={() => setTab("list")} />
+          <LiveMapView dbUrl={dbUrl} onHome={() => setTab("list")}
+            onOpenVenue={() => { setVenueZone(0); setTab("venue"); }} />
         </div>
         {renderFooter("map")}
         {showTimetable && <TimetableModal tripsToday={tripsToday} onClose={closeTable} focusTrip={tableFocus} />}
@@ -7988,102 +8036,96 @@ function App() {
         </div>
         )}
 
-        {/* 연결 탭 — 실시간 위치 공유 (DB·busId·로그인·QR). 그룹화된 입력 폼 + 통일 액션 버튼 */}
+        {/* 연결 탭 — 실시간 위치 공유 (DB·busId·로그인·QR). 플랫형 — 카드 그룹 없이 섹션 헤더만 */}
         {advTab === "연결" && (
         <div className="px-5 py-4"
           style={{ background: "#0e1018", borderColor: "#3a3f54", borderBottom: "1px solid #3a3f54" }}>
-          {/* 그룹 1 — DB 연결 식별 */}
-          <div style={{ padding: "12px 14px", borderRadius: 10, background: "#13151c",
-            border: "1px solid #2c3142", marginBottom: 12 }}>
-            <div className="flex items-center gap-1.5 mb-3">
-              <Settings size={12} style={{ color: "#94a3b8" }} />
-              <span className="text-[11px] tracking-wider" style={{ color: "#cbd5e1",
-                fontFamily: "'Jua', sans-serif", letterSpacing: 1 }}>DB 연결 · 차량 식별</span>
+          {/* 섹션 1 — DB 연결 · 차량 식별 */}
+          <div className="flex items-center gap-1.5 mb-2 pb-2" style={{ borderBottom: "1px solid #2c3142" }}>
+            <Settings size={12} style={{ color: "#94a3b8" }} />
+            <span className="text-[10px] tracking-widest uppercase" style={{ color: "#94a3b8",
+              fontFamily: "'Jua', sans-serif", letterSpacing: 2 }}>DB 연결 · 차량 식별</span>
+          </div>
+          <div className="space-y-3 mb-4">
+            <div>
+              <label className="block text-[11px] mb-1.5" style={{ color: "#94a3b8", fontFamily: "'Jua', sans-serif" }}>
+                Firebase Realtime DB 주소
+              </label>
+              <input type="text" value={shareUrl} onChange={(e) => setShareUrl(e.target.value)}
+                placeholder="https://...firebasedatabase.app" className="mds-input" />
+              <div className="text-[10px] text-slate-600 mt-1">승객·기사가 공유하는 실시간 DB · 이 주소가 비면 송신 불가</div>
             </div>
-            <div className="space-y-3">
-              <div>
-                <label className="block text-[11px] mb-1.5" style={{ color: "#94a3b8", fontFamily: "'Jua', sans-serif" }}>
-                  Firebase Realtime DB 주소
-                </label>
-                <input type="text" value={shareUrl} onChange={(e) => setShareUrl(e.target.value)}
-                  placeholder="https://...firebasedatabase.app" className="mds-input" />
-                <div className="text-[10px] text-slate-600 mt-1">승객·기사가 공유하는 실시간 DB · 이 주소가 비면 송신 불가</div>
-              </div>
-              <div>
-                <label className="block text-[11px] mb-1.5" style={{ color: "#94a3b8", fontFamily: "'Jua', sans-serif" }}>
-                  버스 번호
-                </label>
-                <input type="text" value={busId} onChange={(e) => setBusId(e.target.value)}
-                  placeholder="1" className="mds-input"
-                  style={{ maxWidth: 90, textAlign: "center", fontSize: 16, fontWeight: 700 }} />
-                <div className="text-[10px] text-slate-600 mt-1">차량마다 다른 번호 · 승객 지도 마커에 표시</div>
-              </div>
-              <button onClick={toggleSharing} disabled={!shareUrl}
-                style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
-                  minHeight: 44, borderRadius: 8, padding: "0 14px", marginTop: 4,
-                  background: sharing ? "#22d65f" : "rgba(34,214,95,0.12)",
-                  color: sharing ? "#0a0b0f" : "#22d65f",
-                  border: `1px solid ${sharing ? "#22d65f" : "rgba(34,214,95,0.4)"}`,
-                  fontFamily: "'Jua', sans-serif", fontSize: 13, fontWeight: 700,
-                  opacity: !shareUrl ? 0.4 : 1, cursor: !shareUrl ? "default" : "pointer" }}>
-                <Navigation size={14} />
-                {sharing ? "위치 공유 중 (끄기)" : "내 위치 공유 시작"}
-              </button>
-              <button onClick={() => setManualWaiting((v) => !v)} disabled={!sharing}
-                style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
-                  minHeight: 44, borderRadius: 8, padding: "0 14px",
-                  background: manualWaiting ? "#60a5fa" : "rgba(96,165,250,0.12)",
-                  color: manualWaiting ? "#0a0b0f" : "#60a5fa",
-                  border: `1px solid ${manualWaiting ? "#60a5fa" : "rgba(96,165,250,0.4)"}`,
-                  fontFamily: "'Jua', sans-serif", fontSize: 13, fontWeight: 700,
-                  opacity: !sharing ? 0.4 : 1, cursor: !sharing ? "default" : "pointer" }}>
-                <Pause size={14} />
-                {manualWaiting ? "출발 대기 표시 중 (해제)" : "출발 대기 표시"}
-              </button>
+            <div>
+              <label className="block text-[11px] mb-1.5" style={{ color: "#94a3b8", fontFamily: "'Jua', sans-serif" }}>
+                버스 번호
+              </label>
+              <input type="text" value={busId} onChange={(e) => setBusId(e.target.value)}
+                placeholder="1" className="mds-input"
+                style={{ maxWidth: 90, textAlign: "center", fontSize: 16, fontWeight: 700 }} />
+              <div className="text-[10px] text-slate-600 mt-1">차량마다 다른 번호 · 승객 지도 마커에 표시</div>
             </div>
+            <button onClick={toggleSharing} disabled={!shareUrl}
+              style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
+                minHeight: 44, borderRadius: 8, padding: "0 14px", marginTop: 4,
+                background: sharing ? "#22d65f" : "rgba(34,214,95,0.12)",
+                color: sharing ? "#0a0b0f" : "#22d65f",
+                border: `1px solid ${sharing ? "#22d65f" : "rgba(34,214,95,0.4)"}`,
+                fontFamily: "'Jua', sans-serif", fontSize: 13, fontWeight: 700,
+                opacity: !shareUrl ? 0.4 : 1, cursor: !shareUrl ? "default" : "pointer" }}>
+              <Navigation size={14} />
+              {sharing ? "위치 공유 중 (끄기)" : "내 위치 공유 시작"}
+            </button>
+            <button onClick={() => setManualWaiting((v) => !v)} disabled={!sharing}
+              style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
+                minHeight: 44, borderRadius: 8, padding: "0 14px",
+                background: manualWaiting ? "#60a5fa" : "rgba(96,165,250,0.12)",
+                color: manualWaiting ? "#0a0b0f" : "#60a5fa",
+                border: `1px solid ${manualWaiting ? "#60a5fa" : "rgba(96,165,250,0.4)"}`,
+                fontFamily: "'Jua', sans-serif", fontSize: 13, fontWeight: 700,
+                opacity: !sharing ? 0.4 : 1, cursor: !sharing ? "default" : "pointer" }}>
+              <Pause size={14} />
+              {manualWaiting ? "출발 대기 표시 중 (해제)" : "출발 대기 표시"}
+            </button>
           </div>
 
-          {/* 그룹 2 — 기사 로그인 (선택) */}
-          <div style={{ padding: "12px 14px", borderRadius: 10, background: "#13151c",
-            border: "1px solid #2c3142", marginBottom: 12 }}>
-            <div className="flex items-center gap-1.5 mb-3">
-              <KeyIcon size={12} style={{ color: "#94a3b8" }} />
-              <span className="text-[11px] tracking-wider" style={{ color: "#cbd5e1",
-                fontFamily: "'Jua', sans-serif", letterSpacing: 1 }}>기사 로그인 (선택)</span>
+          {/* 섹션 2 — 기사 로그인 (선택) */}
+          <div className="flex items-center gap-1.5 mb-2 pb-2" style={{ borderBottom: "1px solid #2c3142" }}>
+            <KeyIcon size={12} style={{ color: "#94a3b8" }} />
+            <span className="text-[10px] tracking-widest uppercase" style={{ color: "#94a3b8",
+              fontFamily: "'Jua', sans-serif", letterSpacing: 2 }}>기사 로그인 (선택)</span>
+          </div>
+          <div className="space-y-3 mb-4">
+            <div>
+              <label className="block text-[11px] mb-1.5" style={{ color: "#94a3b8", fontFamily: "'Jua', sans-serif" }}>
+                이메일
+              </label>
+              <input type="email" value={driverEmail} onChange={(e) => setDriverEmail(e.target.value)}
+                placeholder="driver@example.com" autoComplete="off" className="mds-input" />
             </div>
-            <div className="space-y-3">
-              <div>
-                <label className="block text-[11px] mb-1.5" style={{ color: "#94a3b8", fontFamily: "'Jua', sans-serif" }}>
-                  이메일
-                </label>
-                <input type="email" value={driverEmail} onChange={(e) => setDriverEmail(e.target.value)}
-                  placeholder="driver@example.com" autoComplete="off" className="mds-input" />
-              </div>
-              <div>
-                <label className="block text-[11px] mb-1.5" style={{ color: "#94a3b8", fontFamily: "'Jua', sans-serif" }}>
-                  비밀번호
-                </label>
-                <input type="password" value={driverPass} onChange={(e) => setDriverPass(e.target.value)}
-                  placeholder="••••••••" autoComplete="off" className="mds-input" />
-              </div>
-              <div>
-                <label className="block text-[11px] mb-1.5" style={{ color: "#94a3b8", fontFamily: "'Jua', sans-serif" }}>
-                  웹 API 키
-                </label>
-                <input type="password" value={apiKey} onChange={(e) => setApiKey(e.target.value)}
-                  placeholder="콘솔 프로젝트 설정에서 복사" autoComplete="off" className="mds-input" />
-              </div>
-              <button onClick={testLogin}
-                style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
-                  minHeight: 44, borderRadius: 8, padding: "0 14px", marginTop: 4,
-                  background: "rgba(96,165,250,0.15)", color: "#60a5fa",
-                  border: "1px solid rgba(96,165,250,0.4)",
-                  fontFamily: "'Jua', sans-serif", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>
-                <KeyIcon size={14} /> 쓰기 로그인 테스트 · UID 확인
-              </button>
-              {authStatus && <div className="text-[10px] break-all" style={{ color: authStatus.startsWith("✅") ? "#22d65f" : authStatus.startsWith("❌") ? "#f87171" : "#94a3b8" }}>{authStatus}</div>}
-              <div className="text-[10px] text-slate-600 leading-relaxed">로그인을 채우면 승객은 읽기만 가능(쓰기 차단). 비워두면 테스트 모드로 동작.</div>
+            <div>
+              <label className="block text-[11px] mb-1.5" style={{ color: "#94a3b8", fontFamily: "'Jua', sans-serif" }}>
+                비밀번호
+              </label>
+              <input type="password" value={driverPass} onChange={(e) => setDriverPass(e.target.value)}
+                placeholder="••••••••" autoComplete="off" className="mds-input" />
             </div>
+            <div>
+              <label className="block text-[11px] mb-1.5" style={{ color: "#94a3b8", fontFamily: "'Jua', sans-serif" }}>
+                웹 API 키
+              </label>
+              <input type="password" value={apiKey} onChange={(e) => setApiKey(e.target.value)}
+                placeholder="콘솔 프로젝트 설정에서 복사" autoComplete="off" className="mds-input" />
+            </div>
+            <button onClick={testLogin}
+              style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
+                minHeight: 44, borderRadius: 8, padding: "0 14px", marginTop: 4,
+                background: "rgba(96,165,250,0.15)", color: "#60a5fa",
+                border: "1px solid rgba(96,165,250,0.4)",
+                fontFamily: "'Jua', sans-serif", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>
+              <KeyIcon size={14} /> 쓰기 로그인 테스트 · UID 확인
+            </button>
+            {authStatus && <div className="text-[10px] break-all" style={{ color: authStatus.startsWith("✅") ? "#22d65f" : authStatus.startsWith("❌") ? "#f87171" : "#94a3b8" }}>{authStatus}</div>}
+            <div className="text-[10px] text-slate-600 leading-relaxed">로그인을 채우면 승객은 읽기만 가능(쓰기 차단). 비워두면 테스트 모드로 동작.</div>
           </div>
 
           <div className="text-[10px] text-slate-600 leading-relaxed mb-2">기사 화면 재진입: 주소 끝에 <span style={{ color: "#fbbf24", fontFamily: "'IBM Plex Mono', monospace" }}>?admin=1</span> 붙여 북마크하거나, 승객 화면 제목을 7번 탭하세요.</div>
