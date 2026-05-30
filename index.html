@@ -54,19 +54,28 @@
   /* 지도 대기 중 버스 마커 펄스 */
   @keyframes waitMarker { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.07); } }
   .fest-wait-marker > div { animation: waitMarker 1.4s ease-in-out infinite; }
-  /* 행사 구역 마커 — 둥근 사각형, 번호 + 짧은 라벨 */
+  /* 행사 구역 마커 — 둥근 사각형, 번호 + 짧은 라벨.
+     부모를 flex center 로 — 자식(inline-flex pill) 이 180x24 박스 중앙에 위치해
+     iconAnchor [90,12] 가 실제 컨텐츠 시각 중심과 일치(좌측 정렬 시 발생하던 오차 해소). */
+  .fest-zone-marker { display: flex !important; align-items: center; justify-content: center; }
   .fest-zone-marker > div { display: inline-flex; align-items: center; gap: 4px;
     background: #fff; color: #101113; border: 2px solid #101113; border-radius: 10px;
     padding: 2px 6px 2px 4px; font-family: 'Jua', sans-serif; font-weight: 700; font-size: 11px;
     white-space: nowrap; box-shadow: 2px 2px 0 #101113; }
   .fest-zone-marker .num { display: inline-flex; align-items: center; justify-content: center;
     width: 18px; height: 18px; border-radius: 5px; color: #fff; font-size: 11px; }
+  /* 줌 아웃 시(13 미만) 라벨 텍스트 숨겨 번호 chip 만 — 클러터 방지 */
+  .leaflet-container.mds-z-low .fest-zone-marker > div > span:not(.num) { display: none; }
+  .leaflet-container.mds-z-low .fest-zone-marker > div { padding: 2px 4px; }
   /* 세부 장소 마커 — 작은 점+이름 */
+  .fest-sub-marker { display: flex !important; align-items: center; justify-content: center; }
   .fest-sub-marker > div { display: inline-flex; align-items: center; gap: 4px;
     background: #fff; color: #101113; border: 1.5px solid #101113; border-radius: 999px;
     padding: 1px 6px 1px 4px; font-family: 'Jua', sans-serif; font-weight: 700; font-size: 10px;
     white-space: nowrap; box-shadow: 1px 1px 0 #101113; }
   .fest-sub-marker .dot { width: 7px; height: 7px; border-radius: 50%; }
+  /* 줌 아웃 시 세부 장소 마커 전체 숨김(z < 15) — 구역 단위로만 보임 */
+  .leaflet-container.mds-z-mid .fest-sub-marker { display: none !important; }
   /* 도착 알람 — 카운트 영역에 부드러운 노란 글로우 */
   @keyframes arrivedAlert {
     0% { box-shadow: 0 0 0 0 rgba(251, 191, 36, 0.55); }
@@ -145,7 +154,7 @@
 
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef, useMemo } = React;
-const BUILD = "b381"; /* 화면 우하단 표시 — 최신 배포 확인용 */
+const BUILD = "b382"; /* 화면 우하단 표시 — 최신 배포 확인용 */
 
 /* 실시간 위치 공유용 Firebase DB 주소. 여기에 한 번 넣어두면 승객 링크가 ?view=map 만 남아 깔끔해집니다. */
 const SHARE_DB = "https://innum-bus-default-rtdb.firebaseio.com";
@@ -3900,6 +3909,16 @@ function LiveMapView({ dbUrl, onHome, onOpenVenue }) {
       }
     });
     mapRef.current = map;
+    // 줌 레벨 따라 마커 표시 단순화 — z>=15 디테일 / z>=13 구역명 / z<13 번호만
+    const applyZoomClass = () => {
+      const z = map.getZoom();
+      const el = elRef.current;
+      if (!el) return;
+      el.classList.toggle("mds-z-mid", z < 15);
+      el.classList.toggle("mds-z-low", z < 13);
+    };
+    map.on("zoomend", applyZoomClass);
+    applyZoomClass();
     // 사용자가 지도 드래그하면 자동 추적 해제 (내 위치 버튼 다시 누르면 재개)
     map.on("dragstart", () => { followMeRef.current = false; });
     setTimeout(() => map.invalidateSize(), 100);
