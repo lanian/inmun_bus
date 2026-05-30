@@ -110,7 +110,7 @@
 
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef, useMemo } = React;
-const BUILD = "b302"; /* 화면 우하단 표시 — 최신 배포 확인용 */
+const BUILD = "b303"; /* 화면 우하단 표시 — 최신 배포 확인용 */
 
 /* 실시간 위치 공유용 Firebase DB 주소. 여기에 한 번 넣어두면 승객 링크가 ?view=map 만 남아 깔끔해집니다. */
 const SHARE_DB = "https://innum-bus-default-rtdb.firebaseio.com";
@@ -2622,6 +2622,12 @@ function LiveMapView({ dbUrl, onHome }) {
     { k: "🍱", t: "음식" },
   ];
   const STICKER_TTL_MS = 2 * 60 * 60 * 1000; // 2시간
+  // 도배 방지 — 간격(2.5초) + 거리(15m) + 분당 개수(8개) 제한
+  const STICKER_MIN_INTERVAL_MS = 2500;
+  const STICKER_MIN_DIST_M = 15;
+  const STICKER_QUOTA_LIMIT = 8;
+  const STICKER_QUOTA_WINDOW_MS = 60000;
+  const stickerHistoryRef = useRef([]); // [{ts, lat, lng}, ...]
   const [stickers, setStickers] = useState({});
   const [stickerKind, setStickerKind] = useState(null); // null = idle, 'X' = place mode
   const [paletteOpen, setPaletteOpen] = useState(false);
@@ -2658,7 +2664,33 @@ function LiveMapView({ dbUrl, onHome }) {
       const kind = stickerKindRef.current; if (!kind) return;
       const url = dbUrl ? dbUrl.replace(/\/+$/, "") : "";
       if (!url) { setStickerMsg("서버 연결 정보가 없어 저장 못해요"); setTimeout(() => setStickerMsg(""), 2200); return; }
-      const body = { lat: +e.latlng.lat.toFixed(6), lng: +e.latlng.lng.toFixed(6), kind, ts: Date.now() };
+      // 도배 방지 가드 — 간격 / 거리 / 분당 개수 체크
+      const now = Date.now();
+      const hist = stickerHistoryRef.current;
+      while (hist.length > 0 && now - hist[0].ts > STICKER_QUOTA_WINDOW_MS) hist.shift();
+      if (hist.length > 0) {
+        const last = hist[hist.length - 1];
+        const sinceLast = now - last.ts;
+        if (sinceLast < STICKER_MIN_INTERVAL_MS) {
+          const remain = Math.ceil((STICKER_MIN_INTERVAL_MS - sinceLast) / 1000);
+          setStickerMsg(`잠시만요 — 약 ${remain}초 뒤 다시 시도`);
+          setTimeout(() => setStickerMsg(""), 1600);
+          return;
+        }
+        const d = distanceMeters({ lat: e.latlng.lat, lng: e.latlng.lng }, last);
+        if (d < STICKER_MIN_DIST_M) {
+          setStickerMsg(`너무 가까워요 — 약 ${STICKER_MIN_DIST_M}m 이상 떨어뜨려 주세요`);
+          setTimeout(() => setStickerMsg(""), 2000);
+          return;
+        }
+      }
+      if (hist.length >= STICKER_QUOTA_LIMIT) {
+        const oldestAge = Math.max(0, Math.ceil((STICKER_QUOTA_WINDOW_MS - (now - hist[0].ts)) / 1000));
+        setStickerMsg(`1분에 ${STICKER_QUOTA_LIMIT}개까지만 — ${oldestAge}초 뒤 다시 시도`);
+        setTimeout(() => setStickerMsg(""), 2400);
+        return;
+      }
+      const body = { lat: +e.latlng.lat.toFixed(6), lng: +e.latlng.lng.toFixed(6), kind, ts: now };
       try {
         const r = await fetch(`${url}/stickers.json`, { method: "POST", body: JSON.stringify(body) });
         if (!r.ok) throw new Error("HTTP " + r.status);
@@ -2669,7 +2701,10 @@ function LiveMapView({ dbUrl, onHome }) {
           addMyStickerId(newId);
           setStickers((prev) => ({ ...(prev || {}), [newId]: body }));
         }
-        setStickerMsg("스티커 등록 — 계속 탭해서 추가, '완료' 로 종료");
+        // 도배 가드용 히스토리 갱신 — 성공한 경우에만 카운트
+        stickerHistoryRef.current.push({ ts: now, lat: body.lat, lng: body.lng });
+        const remainQuota = Math.max(0, STICKER_QUOTA_LIMIT - stickerHistoryRef.current.length);
+        setStickerMsg(`스티커 등록 — 1분 내 ${remainQuota}개 더 가능 · '완료' 로 종료`);
         setTimeout(() => setStickerMsg(""), 1800);
       } catch (err) {
         setStickerMsg("저장 실패: " + (err && err.message ? err.message : "네트워크 오류"));
