@@ -143,7 +143,7 @@
 
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef, useMemo } = React;
-const BUILD = "b367"; /* 화면 우하단 표시 — 최신 배포 확인용 */
+const BUILD = "b368"; /* 화면 우하단 표시 — 최신 배포 확인용 */
 
 /* 실시간 위치 공유용 Firebase DB 주소. 여기에 한 번 넣어두면 승객 링크가 ?view=map 만 남아 깔끔해집니다. */
 const SHARE_DB = "https://innum-bus-default-rtdb.firebaseio.com";
@@ -1156,10 +1156,12 @@ function StatsModal({ counts, dateKey, onClose, onReset, busCapacity, setBusCapa
   );
 }
 
-function VenueModal({ onClose, initialZone = 0, onOpenLiveMap, pageMode = false }) {
+function VenueModal({ onClose, initialZone = 0, initialProgram = null, onOpenLiveMap, pageMode = false }) {
   const [expandedImg, setExpandedImg] = useState(null);
-  const [progDay, setProgDay] = useState("day1");
+  const [progDay, setProgDay] = useState(() => initialProgram?._day || "day1");
   const [progZone, setProgZone] = useState(initialZone); // 0=전체, 1~5=해당 구역
+  // 자세히 진입 시 해당 프로그램 카드로 스크롤 + 펼침. key 형식: `${day}|${time}|${title}` (아래 렌더와 일치)
+  const initialProgramKey = initialProgram ? `${initialProgram._day || progDay}|${initialProgram.time}|${initialProgram.title}` : null;
   const [hidePast, setHidePast] = useState(false);
   // 주요 구역 카드 — 모달에서는 기본 펼침(상세 보기 목적). 본문은 항상 칩 row(b220 옵션 A)
   const [zonesExpanded, setZonesExpanded] = useState(true);
@@ -1183,8 +1185,17 @@ function VenueModal({ onClose, initialZone = 0, onOpenLiveMap, pageMode = false 
     });
     return out.sort((a, b) => a.num - b.num);
   })();
-  // 프로그램 상세(desc/host/sub) 펼침 — 카드 탭 시 토글
-  const [expandedSet, setExpandedSet] = useState(new Set());
+  // 프로그램 상세(desc/host/sub) 펼침 — 카드 탭 시 토글. 자세히 진입 시 해당 프로그램 자동 펼침.
+  const [expandedSet, setExpandedSet] = useState(() => initialProgramKey ? new Set([initialProgramKey]) : new Set());
+  // 자세히 진입한 프로그램 카드로 스크롤
+  const focusedCardRef = useRef(null);
+  useEffect(() => {
+    if (!initialProgramKey || !focusedCardRef.current) return;
+    const t = setTimeout(() => {
+      try { focusedCardRef.current?.scrollIntoView({ behavior: "smooth", block: "center" }); } catch (_) {}
+    }, 120);
+    return () => clearTimeout(t);
+  }, [initialProgramKey]);
   const toggleExpand = (k) => setExpandedSet((prev) => {
     const s = new Set(prev); if (s.has(k)) s.delete(k); else s.add(k);
     try { window.__mdsStats && window.__mdsStats.track("toggle_program_expand"); } catch (_) {}
@@ -1420,11 +1431,15 @@ function VenueModal({ onClose, initialZone = 0, onOpenLiveMap, pageMode = false 
               const key = `${progDay}|${it.time}|${it.title}`;
               const isExpanded = expandedSet.has(key);
               const Tag = hasMore ? "button" : "div";
+              const isFocused = key === initialProgramKey;
               return (
                 <Tag key={i} type={hasMore ? "button" : undefined}
+                  ref={isFocused ? focusedCardRef : undefined}
                   onClick={hasMore ? () => toggleExpand(key) : undefined}
                   style={{ display: "flex", alignItems: "stretch", gap: 8, background: "#fff", width: "100%",
-                    border: "1.5px solid " + FT.ink, borderRadius: 10, padding: "8px 10px",
+                    border: `${isFocused ? "2.5px" : "1.5px"} solid ${isFocused ? FT.orange : FT.ink}`,
+                    borderRadius: 10, padding: "8px 10px",
+                    boxShadow: isFocused ? `0 0 0 3px ${FT.orange}33` : "none",
                     cursor: hasMore ? "pointer" : "default", textAlign: "left", font: "inherit" }}>
                   <div style={{ flexShrink: 0, width: 78, fontFamily: "'IBM Plex Mono', monospace",
                     fontSize: 11, color: FT.ink, fontWeight: 700, lineHeight: 1.25, paddingTop: 2 }}>
@@ -5157,7 +5172,7 @@ function UnifiedMapBanner({ stickers, onOpenVenue, onTapSticker }) {
       const cSoft = pick.zone % 2 ? FT.orangeSoft : FT.tealSoft;
       const dayLabel = pick._day === "day2" ? "6.14 (일)" : pick._day === "day1" ? "6.13 (토)" : "";
       return (
-        <button key={`f${i}`} onClick={() => onOpenVenue && onOpenVenue()}
+        <button key={`f${i}`} onClick={() => onOpenVenue && onOpenVenue(pick)}
           aria-roledescription="slide" aria-label={`${i + 1}/${slides.length} · 행사: ${pick.title}`}
           tabIndex={i === safeIdx ? 0 : -1}
           style={{ flex: `0 0 ${100 / slides.length}%`, display: "flex", flexDirection: "column", gap: 3,
@@ -5359,7 +5374,7 @@ function UpcomingPromoCard({ onOpen, compact = false }) {
             const cSoft = pick.zone % 2 ? FT.orangeSoft : FT.tealSoft;
             const dayLabel = pick._day === "day2" ? "6.14 (일)" : pick._day === "day1" ? "6.13 (토)" : "";
             return (
-              <button key={i} onClick={onOpen}
+              <button key={i} onClick={() => onOpen && onOpen(pick)}
                 aria-roledescription="slide" aria-label={`${i + 1}/${slides.length} · ${pick.title}`}
                 tabIndex={i === safeIdx ? 0 : -1}
                 style={{ flex: `0 0 ${100 / slides.length}%`, display: "flex", flexDirection: "column", gap: compact ? 3 : 5,
@@ -5469,6 +5484,8 @@ function PassengerView({ dbUrl, onAdmin, initialTab = "list" }) {
   };
   const closeTable = () => { setShowTimetable(false); setTableFocus(null); };
   const [venueZone, setVenueZone] = useState(0);
+  // 자세히 버튼으로 진입한 프로그램 — VenueModal 이 해당 프로그램 자동 펼침·스크롤
+  const [venueProgram, setVenueProgram] = useState(null);
   // 익명 사용 통계 — 행사 후 운영자가 분석. 개인정보 비수집, 카운트만.
   const statsRef = useRef(null);
   const tabRef = useRef(initialTab);
@@ -5741,7 +5758,7 @@ function PassengerView({ dbUrl, onAdmin, initialTab = "list" }) {
     const handle = (key) => {
       if (key === "timetable") { setShowTimetable(true); return; }
       if (key === currentKey) { setTab("list"); return; } // 활성 탭 재클릭 → 홈
-      if (key === "venue") setVenueZone(0);
+      if (key === "venue") { setVenueZone(0); setVenueProgram(null); }
       setTab(key);
     };
     return (
@@ -5771,7 +5788,7 @@ function PassengerView({ dbUrl, onAdmin, initialTab = "list" }) {
       <div className="mds-app-height" style={{ display: "flex", flexDirection: "column", overflow: "hidden", background: "#000" }}>
         <div style={{ flex: 1, minHeight: 0, position: "relative" }}>
           <LiveMapView dbUrl={dbUrl} onHome={() => setTab("list")}
-            onOpenVenue={() => { setVenueZone(0); setTab("venue"); }} />
+            onOpenVenue={(pick) => { setVenueProgram(pick || null); setVenueZone(pick?.zone || 0); setTab("venue"); }} />
         </div>
         {renderFooter("map")}
         {showTimetable && <TimetableModal tripsToday={tripsToday} onClose={closeTable} focusTrip={tableFocus} />}
@@ -5805,6 +5822,7 @@ function PassengerView({ dbUrl, onAdmin, initialTab = "list" }) {
             {/* body — VenueModal pageMode 콘텐츠 스크롤 */}
             <div style={{ background: FT.paper, padding: 12, flex: 1, minHeight: 0, overflowY: "auto" }}>
               <VenueModal pageMode onClose={() => setTab("list")} initialZone={venueZone}
+                initialProgram={venueProgram}
                 onOpenLiveMap={() => { trackStat("click_venue_to_map"); setTab("map"); }} />
             </div>
             {renderFooter("venue")}
@@ -6175,7 +6193,7 @@ function PassengerView({ dbUrl, onAdmin, initialTab = "list" }) {
 
                     {/* 다가올 프로그램 랜덤 홍보 — 행사 종료 후엔 숨김 */}
                     {!ended && (
-                      <UpcomingPromoCard onOpen={() => { trackStat("click_promo"); setVenueZone(0); setTab("venue"); }} />
+                      <UpcomingPromoCard onOpen={(pick) => { trackStat("click_promo"); setVenueProgram(pick || null); setVenueZone(pick?.zone || 0); setTab("venue"); }} />
                     )}
                   </>
                 );
