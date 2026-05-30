@@ -154,7 +154,7 @@
 
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef, useMemo } = React;
-const BUILD = "b382"; /* 화면 우하단 표시 — 최신 배포 확인용 */
+const BUILD = "b383"; /* 화면 우하단 표시 — 최신 배포 확인용 */
 
 /* 실시간 위치 공유용 Firebase DB 주소. 여기에 한 번 넣어두면 승객 링크가 ?view=map 만 남아 깔끔해집니다. */
 const SHARE_DB = "https://innum-bus-default-rtdb.firebaseio.com";
@@ -6820,8 +6820,9 @@ function App() {
   });
   useEffect(() => LS.setJSON("ments", ments), [ments]);
 
-  // GPS / auto
-  const [autoMode, setAutoMode] = useState(false);
+  // GPS / auto — 기본 ON. 사용자가 끄면 LS 에 기억(다음 진입 시 그 선택 유지).
+  const [autoMode, setAutoMode] = useState(() => LS.get("automode", "1") === "1");
+  useEffect(() => LS.set("automode", autoMode ? "1" : "0"), [autoMode]);
   // 시간표 자동 — 시각에 따라 currentIdx 진행 + 안내. autoMode와 상호 배타.
   const [timetableMode, setTimetableMode] = useState(() => LS.get("ttmode", "0") === "1");
   useEffect(() => LS.set("ttmode", timetableMode ? "1" : "0"), [timetableMode]);
