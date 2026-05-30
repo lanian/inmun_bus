@@ -110,7 +110,7 @@
 
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef, useMemo } = React;
-const BUILD = "b301"; /* 화면 우하단 표시 — 최신 배포 확인용 */
+const BUILD = "b302"; /* 화면 우하단 표시 — 최신 배포 확인용 */
 
 /* 실시간 위치 공유용 Firebase DB 주소. 여기에 한 번 넣어두면 승객 링크가 ?view=map 만 남아 깔끔해집니다. */
 const SHARE_DB = "https://innum-bus-default-rtdb.firebaseio.com";
@@ -1422,6 +1422,25 @@ function buildSegmentPolyline(dir, prevStop, curStop) {
   points.push({ lat: curStop.lat, lng: curStop.lng });
   return points;
 }
+/* 도로 폴리라인(osrmPoly: [[lat,lng], ...]) 에서 두 정류장 사이의 arc 추출.
+   각 정류장에 가장 가까운 poly 점 인덱스를 찾고, 그 사이 slice 반환. 방향 보정 포함. */
+function arcBetweenOnPoly(poly, a, b) {
+  if (!Array.isArray(poly) || poly.length < 2 || !a || !b) return null;
+  let aIdx = -1, aDist = Infinity, bIdx = -1, bDist = Infinity;
+  for (let i = 0; i < poly.length; i++) {
+    const p = { lat: poly[i][0], lng: poly[i][1] };
+    const da = distanceMeters(p, a); if (da < aDist) { aDist = da; aIdx = i; }
+    const db = distanceMeters(p, b); if (db < bDist) { bDist = db; bIdx = i; }
+  }
+  if (aIdx < 0 || bIdx < 0 || aIdx === bIdx) return null;
+  // 너무 멀면(노선이 그 정류장 근처를 통과하지 않으면) 의미 없음
+  if (aDist > 200 || bDist > 200) return null;
+  const [lo, hi] = aIdx < bIdx ? [aIdx, bIdx] : [bIdx, aIdx];
+  const slice = poly.slice(lo, hi + 1);
+  if (aIdx > bIdx) slice.reverse();
+  return slice;
+}
+
 /* 폴리라인의 누적 거리 비율 t(0~1)에 해당하는 좌표를 직선 구간 따라 보간 */
 function interpolateAlongPolyline(points, t) {
   if (!points || points.length === 0) return null;
@@ -1486,8 +1505,9 @@ function operationBasedPos(dir, tripIdx, curStopName, nowMin, waiting) {
   return at(i, "at");
 }
 
-/* 시간표 기반 버스 추정 위치 — 운행 중 회차의 두 정류장 사이를 시간 비율로 보간 */
-function scheduledBusPos(dir, tripIdx, nowMin) {
+/* 시간표 기반 버스 추정 위치 — 운행 중 회차의 두 정류장 사이를 시간 비율로 보간.
+   osrmPoly 가 주어지면 OSRM 도로 곡선 arc 를 따라 보간 → 라이브 버스(snapToRoute) 와 동일하게 곡선 이동. */
+function scheduledBusPos(dir, tripIdx, nowMin, osrmPoly) {
   const route = ROUTES[dir];
   const sched = route.trips[tripIdx];
   if (!sched) return null;
@@ -1500,12 +1520,24 @@ function scheduledBusPos(dir, tripIdx, nowMin) {
       const sa = route.stops[i], sb = route.stops[i + 1];
       if (sa.lat == null || sb.lat == null) return null;
       const t = b > a ? (nowMin - a) / (b - a) : 0;
-      // A9: 폴리라인(approachVia 포함) 기반 보간 — 운영자측 operationBasedPos 와 위치 일치
-      let p;
-      try {
-        const poly = buildSegmentPolyline(dir, sa, sb);
-        p = interpolateAlongPolyline(poly, t);
-      } catch (_) { p = null; }
+      let p = null;
+      // 1) OSRM 도로 곡선 arc 기반 보간 (가장 정확 — 도로 따라 이동)
+      if (osrmPoly) {
+        try {
+          const arc = arcBetweenOnPoly(osrmPoly, sa, sb);
+          if (arc && arc.length >= 2) {
+            p = interpolateAlongPolyline(arc.map((q) => ({ lat: q[0], lng: q[1] })), t);
+          }
+        } catch (_) {}
+      }
+      // 2) approachVia 폴리라인 보간 (수동 경유점)
+      if (!p) {
+        try {
+          const poly = buildSegmentPolyline(dir, sa, sb);
+          p = interpolateAlongPolyline(poly, t);
+        } catch (_) {}
+      }
+      // 3) 정류장 직선 보간 폴백
       if (!p || typeof p.lat !== "number") {
         p = { lat: sa.lat + (sb.lat - sa.lat) * t, lng: sa.lng + (sb.lng - sa.lng) * t };
       }
@@ -3167,10 +3199,11 @@ function LiveMapView({ dbUrl, onHome }) {
           const obFirstStop = ROUTES.outbound.stops[0];
           const ibFirstStop = ROUTES.inbound.stops[0];
           ["outbound", "inbound"].forEach((dir) => {
+            const osrmPoly = osrmPolyRef.current[dir];
             for (let ti = 0; ti < tripsToday; ti++) {
               const tripNum = ti + 1;
               if (liveTripSet.has(`${dir}|${tripNum}`)) continue;
-              const pos = scheduledBusPos(dir, ti, nowMin);
+              const pos = scheduledBusPos(dir, ti, nowMin, osrmPoly);
               if (!pos) continue;
               const key = `${dir}|${tripNum}`;
               schedKeys.add(key); nSched++;
