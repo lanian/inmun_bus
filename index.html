@@ -143,7 +143,7 @@
 
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef, useMemo } = React;
-const BUILD = "b322"; /* 화면 우하단 표시 — 최신 배포 확인용 */
+const BUILD = "b323"; /* 화면 우하단 표시 — 최신 배포 확인용 */
 
 /* 실시간 위치 공유용 Firebase DB 주소. 여기에 한 번 넣어두면 승객 링크가 ?view=map 만 남아 깔끔해집니다. */
 const SHARE_DB = "https://innum-bus-default-rtdb.firebaseio.com";
@@ -443,6 +443,7 @@ const createStatsTracker = (dbUrl) => {
   let flushing = false;
   let backoffMs = 0; // 다음 flush 까지 추가 대기. 실패 시 증가, 성공 시 0.
   let lastTryAt = 0;
+  let firstFlushTimer = null; // 첫 track 후 3초 내 빠른 첫 flush — 운영자가 즉시 확인 가능하도록
   const base = dbUrl.replace(/\/+$/, "");
   // 허용 이벤트 키 패턴 (DB validate 와 동일)
   const KEY_RE = /^(session|view|click|toggle|open|notice|transition|stop|sticker|error)\.[a-zA-Z0-9_.]+$/;
@@ -466,10 +467,14 @@ const createStatsTracker = (dbUrl) => {
         dirty = false;
         backoffMs = 0;
       } else {
-        // 4xx (validation) 는 재시도해도 같은 결과 — backoff 최대로
+        // 본문에서 Firebase error 추출해 콘솔로 — 운영자가 dev tools 로 원인 즉시 파악 가능
+        let detail = ""; try { detail = await r.text(); } catch (_) {}
+        try { console.warn("[mds:stats] flush failed", r.status, detail.slice(0, 200)); } catch (_) {}
+        // 4xx (validation·권한) 는 재시도해도 같은 결과 — backoff 최대로
         backoffMs = (r.status >= 400 && r.status < 500) ? 10 * 60 * 1000 : Math.min((backoffMs || 60000) * 2, 10 * 60 * 1000);
       }
-    } catch (_) {
+    } catch (e) {
+      try { console.warn("[mds:stats] flush network error", e && e.message); } catch (_) {}
       backoffMs = Math.min((backoffMs || 60000) * 2, 10 * 60 * 1000);
     }
     flushing = false;
@@ -482,6 +487,8 @@ const createStatsTracker = (dbUrl) => {
     events[k] = (events[k] || 0) + (count || 1);
     dirty = true;
     try { sessionStorage.setItem("mds:stats", JSON.stringify(events)); } catch (_) {}
+    // 첫 track 후 3초 뒤 첫 flush — 운영자가 곧바로 통계 viewer 에서 확인 가능
+    if (!firstFlushTimer) { firstFlushTimer = setTimeout(() => { firstFlushTimer = null; flush(); }, 3000); }
   };
   const intervalId = setInterval(flush, 60000);
   const onVis = () => { if (document.hidden) flush(); };
@@ -491,6 +498,7 @@ const createStatsTracker = (dbUrl) => {
   return {
     track, flush,
     destroy: () => {
+      if (firstFlushTimer) { clearTimeout(firstFlushTimer); firstFlushTimer = null; }
       flush();
       clearInterval(intervalId);
       document.removeEventListener("visibilitychange", onVis);
@@ -4008,7 +4016,7 @@ function LiveMapView({ dbUrl, onHome, onOpenVenue }) {
       <div style={{ position: "fixed", left: 10, right: 10, top: "calc(60px + env(safe-area-inset-top, 0px))",
         zIndex: 1080, pointerEvents: "none" }}>
         <div style={{ pointerEvents: "auto", maxWidth: 480, margin: "0 auto" }}>
-          <UpcomingPromoCard onOpen={() => {
+          <UpcomingPromoCard compact onOpen={() => {
             try { window.__mdsStats && window.__mdsStats.track("click.promo.map"); } catch (_) {}
             if (typeof onOpenVenue === "function") onOpenVenue();
             else if (typeof onHome === "function") onHome();
@@ -4265,7 +4273,7 @@ function BusCard({ id, bus, agoText, nowMin, tripsToday, departedInfo }) {
    - 행사 전: '행사 미리보기' (day1·day2 통합 시간순 균등 5개)
    - 행사 당일: '곧 시작해요'(upcoming) → '지금 진행 중'(ongoing) → '오늘 진행 종료'(ended) 순
    carousel: 최대 5장 후보를 가로 슬라이드로 보여주고 5초마다 자동 진행 + dots 인디케이터 + 터치 스와이프. */
-function UpcomingPromoCard({ onOpen }) {
+function UpcomingPromoCard({ onOpen, compact = false }) {
   const d = getNow();
   const todayDay = d.getMonth() === 5 && d.getDate() === 13 ? "day1"
     : d.getMonth() === 5 && d.getDate() === 14 ? "day2" : null;
@@ -4344,25 +4352,27 @@ function UpcomingPromoCard({ onOpen }) {
   const safeIdx = Math.min(idx, slides.length - 1);
 
   return (
-    <div style={{ marginTop: 12 }}
+    <div style={{ marginTop: compact ? 0 : 12 }}
       role="region" aria-roledescription="carousel" aria-label="다가올 프로그램 미리보기">
-      {/* 헤더 라인 — 상태 + 슬라이드 N/M */}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
-        <div style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-          <span style={{ display: "inline-block", width: 6, height: 6, borderRadius: "50%",
-            background: slides[safeIdx].zone % 2 ? FT.orangeDark : FT.tealDark }}
-            className="animate-pulse" />
-          <span style={{ fontSize: 11, color: FT.ink, fontWeight: 700, fontFamily: "'Jua', sans-serif", letterSpacing: 0.5 }}>
-            {mode === "upcoming" ? "곧 시작해요"
-              : mode === "ongoing" ? "지금 진행 중"
-              : mode === "ended" ? "오늘 진행 종료"
-              : "행사 미리보기"}
-          </span>
-          <span style={{ fontSize: 10, color: FT.inkSoft, fontWeight: 400 }}>
-            · {safeIdx + 1}/{slides.length}
-          </span>
+      {/* 헤더 라인 — compact 모드에선 숨김(공간 절약) */}
+      {!compact && (
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
+          <div style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+            <span style={{ display: "inline-block", width: 6, height: 6, borderRadius: "50%",
+              background: slides[safeIdx].zone % 2 ? FT.orangeDark : FT.tealDark }}
+              className="animate-pulse" />
+            <span style={{ fontSize: 11, color: FT.ink, fontWeight: 700, fontFamily: "'Jua', sans-serif", letterSpacing: 0.5 }}>
+              {mode === "upcoming" ? "곧 시작해요"
+                : mode === "ongoing" ? "지금 진행 중"
+                : mode === "ended" ? "오늘 진행 종료"
+                : "행사 미리보기"}
+            </span>
+            <span style={{ fontSize: 10, color: FT.inkSoft, fontWeight: 400 }}>
+              · {safeIdx + 1}/{slides.length}
+            </span>
+          </div>
         </div>
-      </div>
+      )}
       {/* 슬라이드 컨테이너 — overflow hidden + inner row translateX */}
       <div style={{ position: "relative", overflow: "hidden", borderRadius: 10 }}
         onTouchStart={onTouchStart} onTouchEnd={onTouchEnd}
@@ -4378,37 +4388,40 @@ function UpcomingPromoCard({ onOpen }) {
               <button key={i} onClick={onOpen}
                 aria-roledescription="slide" aria-label={`${i + 1}/${slides.length} · ${pick.title}`}
                 tabIndex={i === safeIdx ? 0 : -1}
-                style={{ flex: `0 0 ${100 / slides.length}%`, display: "flex", flexDirection: "column", gap: 5,
-                  background: FT.paper, color: FT.ink,
+                style={{ flex: `0 0 ${100 / slides.length}%`, display: "flex", flexDirection: "column", gap: compact ? 3 : 5,
+                  background: compact ? "rgba(255,255,255,0.95)" : FT.paper, color: FT.ink,
                   border: "1.5px solid " + FT.mute + "55", borderRadius: 10,
-                  padding: "8px 10px", boxShadow: "none",
+                  padding: compact ? "6px 9px" : "8px 10px", boxShadow: "none",
                   borderLeft: `4px solid ${cDark}`,
                   fontFamily: "'Jua', sans-serif", cursor: "pointer", textAlign: "left" }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 5, flexWrap: "wrap" }}>
-                  {pick.cat && (
-                    <span style={{ padding: "1px 7px", borderRadius: 999, background: cSoft, color: cDark,
-                      fontSize: 10, fontWeight: 700, maxWidth: "70%",
-                      overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                      {pick.cat}
-                    </span>
-                  )}
-                  {pick.zone != null && (
-                    <span style={{ padding: "1px 7px", borderRadius: 999, background: "transparent", color: cDark,
-                      border: "1px solid " + cDark + "66", fontSize: 10, fontWeight: 700 }}>
-                      {pick.zone}존
-                    </span>
-                  )}
-                  {mode === "preview" && dayLabel && (
-                    <span style={{ padding: "1px 7px", borderRadius: 999, background: "#fff", color: FT.inkSoft,
-                      border: "1px solid " + FT.mute + "55", fontSize: 10, fontWeight: 700 }}>
-                      {dayLabel}
-                    </span>
-                  )}
-                </div>
-                <div style={{ fontSize: 13, color: FT.ink, fontWeight: 700, lineHeight: 1.25 }}>
+                {!compact && (
+                  <div style={{ display: "flex", alignItems: "center", gap: 5, flexWrap: "wrap" }}>
+                    {pick.cat && (
+                      <span style={{ padding: "1px 7px", borderRadius: 999, background: cSoft, color: cDark,
+                        fontSize: 10, fontWeight: 700, maxWidth: "70%",
+                        overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                        {pick.cat}
+                      </span>
+                    )}
+                    {pick.zone != null && (
+                      <span style={{ padding: "1px 7px", borderRadius: 999, background: "transparent", color: cDark,
+                        border: "1px solid " + cDark + "66", fontSize: 10, fontWeight: 700 }}>
+                        {pick.zone}존
+                      </span>
+                    )}
+                    {mode === "preview" && dayLabel && (
+                      <span style={{ padding: "1px 7px", borderRadius: 999, background: "#fff", color: FT.inkSoft,
+                        border: "1px solid " + FT.mute + "55", fontSize: 10, fontWeight: 700 }}>
+                        {dayLabel}
+                      </span>
+                    )}
+                  </div>
+                )}
+                <div style={{ fontSize: compact ? 12 : 13, color: FT.ink, fontWeight: 700, lineHeight: 1.25,
+                  ...(compact ? { display: "-webkit-box", WebkitLineClamp: 1, WebkitBoxOrient: "vertical", overflow: "hidden" } : {}) }}>
                   {pick.title}
                 </div>
-                {pick.desc && (
+                {!compact && pick.desc && (
                   <div style={{ fontSize: 11, color: FT.inkSoft, lineHeight: 1.5,
                     display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical",
                     overflow: "hidden", fontWeight: 400 }}>
@@ -4416,10 +4429,14 @@ function UpcomingPromoCard({ onOpen }) {
                   </div>
                 )}
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 2 }}>
-                  <span style={{ fontSize: 11, color: cDark, fontFamily: "'IBM Plex Mono', monospace", fontWeight: 700 }}>
+                  <span style={{ fontSize: compact ? 10 : 11, color: cDark, fontFamily: "'IBM Plex Mono', monospace", fontWeight: 700,
+                    display: "inline-flex", alignItems: "center", gap: 4 }}>
                     {pick.time}
+                    {compact && pick.zone != null && (
+                      <span style={{ fontSize: 9, color: cDark, opacity: 0.8 }}>· {pick.zone}존</span>
+                    )}
                   </span>
-                  <span style={{ fontSize: 11, color: cDark, fontWeight: 700 }}>
+                  <span style={{ fontSize: compact ? 10 : 11, color: cDark, fontWeight: 700 }}>
                     자세히 →
                   </span>
                 </div>
@@ -4428,13 +4445,14 @@ function UpcomingPromoCard({ onOpen }) {
           })}
         </div>
       </div>
-      {/* dots 인디케이터 */}
+      {/* dots 인디케이터 — compact 모드에선 더 작게 */}
       {slides.length > 1 && (
-        <div style={{ display: "flex", justifyContent: "center", gap: 6, marginTop: 7 }}>
+        <div style={{ display: "flex", justifyContent: "center", gap: compact ? 4 : 6, marginTop: compact ? 4 : 7 }}>
           {slides.map((_, i) => (
             <button key={i} onClick={() => { setIdx(i); setPaused(true); setTimeout(() => setPaused(false), 4000); }}
               aria-label={`슬라이드 ${i + 1}`}
-              style={{ width: i === safeIdx ? 16 : 6, height: 6, borderRadius: 999,
+              style={{ width: i === safeIdx ? (compact ? 12 : 16) : (compact ? 4 : 6),
+                height: compact ? 4 : 6, borderRadius: 999,
                 background: i === safeIdx ? FT.ink : FT.mute + "88",
                 border: "none", padding: 0, cursor: "pointer",
                 transition: "width 0.2s, background 0.2s" }} />
