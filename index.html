@@ -143,7 +143,7 @@
 
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef, useMemo } = React;
-const BUILD = "b366"; /* 화면 우하단 표시 — 최신 배포 확인용 */
+const BUILD = "b367"; /* 화면 우하단 표시 — 최신 배포 확인용 */
 
 /* 실시간 위치 공유용 Firebase DB 주소. 여기에 한 번 넣어두면 승객 링크가 ?view=map 만 남아 깔끔해집니다. */
 const SHARE_DB = "https://innum-bus-default-rtdb.firebaseio.com";
@@ -7537,7 +7537,16 @@ function App() {
     if (!isAtTerminus || !nextLeg || !legSwitchArmedRef.current) return;
     const tc = coords[coordKey(direction, stops[stops.length - 1].name)];
     if (!tc) return;
-    // 종점 이탈 임계 — 진입/통과 반경 중 큰 값 + 50m 여유. 사용자 설정 반영.
+    // 시간 기반 폴백 — 다음 leg 출발 시각 지나면 거리 무관하게 전환.
+    // FAKE GPS 시연 모드(버스가 종점 정차 시뮬) 또는 실 운영에서 종점 정차 후
+    // 다음 회차 출발 시각 지난 경우 데드락 방지.
+    const nlTrips = ROUTES[nextLeg.direction]?.trips?.[nextLeg.tripIdx];
+    if (nlTrips && nlTrips[0]) {
+      const now = getNow();
+      const nowMin = now.getHours() * 60 + now.getMinutes();
+      if (nowMin >= toMin(nlTrips[0])) { goToNextLeg(); return; }
+    }
+    // 거리 기반 — 종점 이탈 확인
     const switchR = Math.max(triggerRadius, passRadius) + 50;
     if (distanceMeters(userPos, tc) > switchR) {
       legDepartCountRef.current += 1;
