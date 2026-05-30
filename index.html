@@ -21,13 +21,26 @@
 <style>
   html, body { margin: 0; padding: 0; background: #F6F1E4; -webkit-tap-highlight-color: transparent; overflow-x: hidden; }
   body { font-family: 'Gowun Dodum', system-ui, sans-serif; }
-  /* 무등생각 인트로(로딩) */
+  /* 무등생각 인트로(로딩) — 승객(기본) 테마: 한지·청록·주황 그라데이션 */
   .boot { min-height: 100dvh; display: flex; flex-direction: column; align-items: center; justify-content: center;
     padding: 24px; text-align: center;
     background: #F6F1E4;
     background-image: radial-gradient(circle at 15% -10%, rgba(22,168,158,0.20), transparent 45%),
                       radial-gradient(circle at 85% 110%, rgba(238,107,46,0.16), transparent 45%);
     font-family: 'Jua', sans-serif; }
+  /* 운영자 인트로 — 다크 콕핏 톤. 호박색 그리드 패턴 + 어두운 라디얼. 운영 진입을 시각적으로 구분 */
+  .boot.boot-op { background: #0a0b0f;
+    background-image:
+      radial-gradient(ellipse 70% 50% at 50% 0%, rgba(251,191,36,0.18), transparent 70%),
+      radial-gradient(ellipse 60% 40% at 50% 100%, rgba(34,214,95,0.10), transparent 70%),
+      repeating-linear-gradient(0deg, rgba(255,255,255,0.03) 0px, rgba(255,255,255,0.03) 1px, transparent 1px, transparent 4px); }
+  .boot.boot-op .slogan { color: #94a3b8; }
+  .boot.boot-op .who { color: #fbbf24; }
+  .boot.boot-op .accent { color: #fbbf24; text-shadow: 0 0 16px rgba(251,191,36,0.5); }
+  .boot.boot-op img { filter: drop-shadow(0 0 12px rgba(251,191,36,0.35)); }
+  .boot.boot-op .dot { background: #fbbf24; }
+  .boot.boot-op .dot:nth-child(2) { background: #22d65f; }
+  .boot.boot-op .dot:nth-child(3) { background: #fbbf24; }
   /* 인트로 로고 — 3D rotateX 로 실제 스위치 레버가 넘어가는 듯한 자연스러운 flip
      (rotateX 90° 통과 시 edge-on 으로 시각적 두께 → 0, 진짜 토글 모션) */
   .boot img { width: 92px; height: auto;
@@ -161,7 +174,7 @@
 
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef, useMemo } = React;
-const BUILD = "b390"; /* 화면 우하단 표시 — 최신 배포 확인용 */
+const BUILD = "b391"; /* 화면 우하단 표시 — 최신 배포 확인용 */
 
 /* 실시간 위치 공유용 Firebase DB 주소. 여기에 한 번 넣어두면 승객 링크가 ?view=map 만 남아 깔끔해집니다. */
 const SHARE_DB = "https://innum-bus-default-rtdb.firebaseio.com";
@@ -10318,13 +10331,13 @@ function App() {
   );
 }
 
-function Intro() {
+function Intro({ admin = false }) {
   return (
-    <div className="boot">
+    <div className={`boot${admin ? " boot-op" : ""}`}>
       <img src="logo.png" alt="무등생각" />
-      <div className="slogan">생각을 끄고, 생각을 켜다</div>
+      <div className="slogan">{admin ? "운영자 모드 준비 중" : "생각을 끄고, 생각을 켜다"}</div>
       <div className="who">제4회 동구 무등산 인문축제</div>
-      <div className="accent">&lt;무등생각&gt; 셔틀버스 안내</div>
+      <div className="accent">{admin ? "기사·운영자 시스템" : <>&lt;무등생각&gt; 셔틀버스 안내</>}</div>
       <div className="dots"><span className="dot"></span><span className="dot"></span><span className="dot"></span></div>
     </div>
   );
@@ -10334,7 +10347,7 @@ function Root() {
   const [admin, setAdmin] = useState(params.get("admin") === "1");
   const [ready, setReady] = useState(false);
   useEffect(() => { const t = setTimeout(() => setReady(true), 2000); return () => clearTimeout(t); }, []);
-  if (!ready) return <Intro />;
+  if (!ready) return <Intro admin={admin} />;
   // P2-3: ?view=ops — 운영자 본부 대시보드 (Intro 끝난 뒤 즉시 진입)
   if (params.get("view") === "ops") return (<><FakeTimeIndicator /><OpsDashboard dbUrl={params.get("db") || SHARE_DB} /></>);
   if (admin) return (<><FakeTimeIndicator /><App /></>);
