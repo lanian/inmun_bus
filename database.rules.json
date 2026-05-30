@@ -79,7 +79,7 @@
             ".validate": "newData.hasChildren(['ts','ev']) && newData.child('ts').isNumber() && newData.child('ev').hasChildren() && (!newData.hasChild('cat') || (newData.child('cat').isString() && newData.child('cat').val().length <= 32)) && (!newData.hasChild('startedAt') || newData.child('startedAt').isNumber()) && (!newData.hasChild('durMs') || newData.child('durMs').isNumber())",
             "ev": {
               "$key": {
-                ".validate": "$key.matches(/^(session|view|click|toggle|open|notice|transition|stop|sticker|error)[.][a-zA-Z0-9_.]+$/) && newData.isNumber()"
+                ".validate": "$key.matches(/^(session|view|click|toggle|open|notice|transition|stop|sticker|error)_[a-zA-Z0-9_]+$/) && newData.isNumber()"
               }
             },
             "$other": {
