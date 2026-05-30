@@ -71,10 +71,11 @@
 
     "stats": {
       ".read": "auth != null && (root.child('drivers').child(auth.uid).exists() || root.child('admins').child(auth.uid).exists())",
+      ".write": "auth != null && (root.child('drivers').child(auth.uid).exists() || root.child('admins').child(auth.uid).exists())",
       "$date": {
         "sessions": {
           "$sid": {
-            ".write": "$sid.length <= 32 && $sid.length >= 6",
+            ".write": "($sid.length <= 32 && $sid.length >= 6) || (auth != null && (root.child('drivers').child(auth.uid).exists() || root.child('admins').child(auth.uid).exists()))",
             ".validate": "newData.hasChildren(['ts','ev']) && newData.child('ts').isNumber() && newData.child('ev').hasChildren() && (!newData.hasChild('cat') || (newData.child('cat').isString() && newData.child('cat').val().length <= 32)) && (!newData.hasChild('startedAt') || newData.child('startedAt').isNumber()) && (!newData.hasChild('durMs') || newData.child('durMs').isNumber())",
             "ev": {
               "$key": {

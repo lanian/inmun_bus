@@ -143,7 +143,7 @@
 
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef, useMemo } = React;
-const BUILD = "b321"; /* 화면 우하단 표시 — 최신 배포 확인용 */
+const BUILD = "b322"; /* 화면 우하단 표시 — 최신 배포 확인용 */
 
 /* 실시간 위치 공유용 Firebase DB 주소. 여기에 한 번 넣어두면 승객 링크가 ?view=map 만 남아 깔끔해집니다. */
 const SHARE_DB = "https://innum-bus-default-rtdb.firebaseio.com";
@@ -2012,12 +2012,20 @@ function UsageStatsViewer({ onClose, dbUrl, getAuth, refreshAuth }) {
       return fetch(`${base}/stats/${encodeURIComponent(dateA)}.json${auth}`, { method: "DELETE" });
     };
     try {
-      let r = await tryDel(getAuth && getAuth());
+      const t0 = getAuth && getAuth();
+      if (!t0 && !refreshAuth) { setStatus("⚠ 쓰기 인증 토큰 없음 — 연결 탭에서 기사 로그인 후 다시 시도"); return; }
+      let r = await tryDel(t0);
       if ((r.status === 401 || r.status === 403) && refreshAuth) {
+        setStatus("인증 갱신 중…");
         const t = await refreshAuth();
         if (t) r = await tryDel(t);
       }
       if (r.ok) { setStatus("✅ 삭제 완료"); load(); }
+      else if (r.status === 401 || r.status === 403) {
+        let detail = "";
+        try { const j = await r.json(); detail = j && j.error ? " · " + j.error : ""; } catch (_) {}
+        setStatus(`⚠ 권한 없음 (HTTP ${r.status})${detail} — Firebase 콘솔에 database.rules.json 게시했는지 확인 + admin/driver UID 등록 확인`);
+      }
       else setStatus(`⚠ 실패 (HTTP ${r.status})`);
     } catch (e) { setStatus(`⚠ ${e && e.message ? e.message : "네트워크 오류"}`); }
   };
