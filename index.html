@@ -143,7 +143,7 @@
 
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef, useMemo } = React;
-const BUILD = "b344b"; /* 화면 우하단 표시 — 최신 배포 확인용 */
+const BUILD = "b345"; /* 화면 우하단 표시 — 최신 배포 확인용 */
 
 /* 실시간 위치 공유용 Firebase DB 주소. 여기에 한 번 넣어두면 승객 링크가 ?view=map 만 남아 깔끔해집니다. */
 const SHARE_DB = "https://innum-bus-default-rtdb.firebaseio.com";
@@ -1560,6 +1560,45 @@ function projectOnRoute(pos, stops) {
     if (cum[i] + 50 >= routePos) { ci = i; break; }
   }
   return { ci, perpDist: bestDist, routePos };
+}
+
+/* 노선 폴리라인에서 사용자 위치 → 목표 정류장까지의 진행 거리(노선 따라가는 거리).
+   직선 거리 대신 도로/노선 곡선을 따라간 실제 주행 거리 근사. approachVia 경유점 반영.
+   userPos 가 노선에서 벗어나 있어도 가장 가까운 세그먼트로 투영해 거리 산출. */
+function routeDistanceToStop(userPos, dir, stops, targetIdx) {
+  if (!userPos || userPos.lat == null) return null;
+  if (targetIdx < 0 || targetIdx >= stops.length) return null;
+  const target = stops[targetIdx];
+  if (target.lat == null) return null;
+  const poly = buildRoutePolyline(dir, stops);
+  if (poly.length < 2) return null;
+  // 폴리라인 각 점까지의 누적 호 길이
+  const cum = [0];
+  for (let i = 1; i < poly.length; i++) cum.push(cum[i - 1] + distanceMeters(poly[i - 1], poly[i]));
+  // userPos 를 가장 가까운 세그먼트에 투영 — 거기까지의 호 길이
+  let userArc = -1, userPerp = Infinity;
+  for (let i = 0; i < poly.length - 1; i++) {
+    const a = poly[i], b = poly[i + 1];
+    const dx = b.lat - a.lat, dy = b.lng - a.lng;
+    const len2 = dx * dx + dy * dy;
+    if (len2 < 1e-12) continue;
+    const t = Math.max(0, Math.min(1, ((userPos.lat - a.lat) * dx + (userPos.lng - a.lng) * dy) / len2));
+    const proj = { lat: a.lat + t * dx, lng: a.lng + t * dy };
+    const d = distanceMeters(userPos, proj);
+    if (d < userPerp) {
+      userPerp = d;
+      userArc = cum[i] + t * (cum[i + 1] - cum[i]);
+    }
+  }
+  if (userArc < 0) return null;
+  // 목표 정류장의 폴리라인 위치(가장 가까운 폴리라인 점) 호 길이
+  let targetArc = -1, targetBest = Infinity;
+  for (let i = 0; i < poly.length; i++) {
+    const d = distanceMeters(poly[i], target);
+    if (d < targetBest) { targetBest = d; targetArc = cum[i]; }
+  }
+  if (targetArc < 0) return null;
+  return Math.max(0, targetArc - userArc); // 음수(이미 지난 경우) 는 0 으로
 }
 
 /* 전체 노선 폴리라인 — 정류장 + approachVia 경유점을 순서대로 합쳐 한 줄로 구성 */
@@ -7432,7 +7471,9 @@ function App() {
   const nextStop = stops[currentIdx + 1];
   const curCoord = curStop ? coords[coordKey(direction, curStop.name)] : undefined;
   const nextCoord = nextStop ? coords[coordKey(direction, nextStop.name)] : undefined;
-  const distToNext = autoMode && userPos && nextCoord ? distanceMeters(userPos, nextCoord) : null;
+  // 직선 거리 대신 노선 호 길이로 — approachVia 경유점 포함, 도로 곡선 따라가는 실제 주행 거리 근사
+  const distToCur = autoMode && userPos && curCoord ? routeDistanceToStop(userPos, direction, stops, currentIdx) : null;
+  const distToNext = autoMode && userPos && nextCoord ? routeDistanceToStop(userPos, direction, stops, currentIdx + 1) : null;
   const fmtDist = (m) => (m == null ? null : m < 1000 ? `${Math.round(m)}m` : `${(m / 1000).toFixed(2)}km`);
 
   /* 위치 공유 토글 — 켜는 순간 로그인 사전 검증해 즉시 실패 피드백 */
@@ -8363,12 +8404,21 @@ function App() {
         <div className="px-5 py-6"
           style={{ background: "#0a0b0f", borderColor: "#3a3f54",
             backgroundImage: "repeating-linear-gradient(0deg, rgba(255,255,255,0.02) 0px, rgba(255,255,255,0.02) 1px, transparent 1px, transparent 3px)" }}>
-          <div className="text-center mb-2">
+          <div className="text-center mb-2 flex items-center justify-center gap-2 flex-wrap">
             <span className="text-[11px] tracking-[0.3em] px-3 py-1 rounded-full"
               style={{ color: "#fbbf24", background: "rgba(251, 191, 36, 0.1)",
                 fontFamily: "'IBM Plex Mono', monospace" }}>
               이번 정류장 · {trip[currentIdx]}
             </span>
+            {distToCur != null && (
+              <span className="text-[10px] px-2 py-0.5 rounded"
+                style={{ background: distToCur < triggerRadius ? "rgba(239,68,68,0.2)" : "rgba(251,191,36,0.12)",
+                  color: distToCur < triggerRadius ? "#ef4444" : "#fbbf24",
+                  fontFamily: "'IBM Plex Mono', monospace" }}
+                title="노선 따라 이번 정류장까지 남은 거리">
+                ↓ {fmtDist(distToCur)}
+              </span>
+            )}
           </div>
           <div className="text-center py-3">
             <div className="text-5xl font-black leading-tight break-keep"
