@@ -145,7 +145,7 @@
 
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef, useMemo } = React;
-const BUILD = "b380"; /* 화면 우하단 표시 — 최신 배포 확인용 */
+const BUILD = "b381"; /* 화면 우하단 표시 — 최신 배포 확인용 */
 
 /* 실시간 위치 공유용 Firebase DB 주소. 여기에 한 번 넣어두면 승객 링크가 ?view=map 만 남아 깔끔해집니다. */
 const SHARE_DB = "https://innum-bus-default-rtdb.firebaseio.com";
@@ -4076,7 +4076,9 @@ function LiveMapView({ dbUrl, onHome, onOpenVenue }) {
       const ageText = ageMin <= 0 ? "방금" : ageMin < 60 ? `${ageMin}분 전` : `${Math.floor(ageMin / 60)}시간 전`;
       const isMine = mine.has(id);
       const canSelfDelete = isMine && (Date.now() - s.ts) < STICKER_OWNER_DELETE_WINDOW_MS;
-      const myMark = isMine ? `<div style="font-size:9px;color:#0F786E;font-weight:700;margin-top:2px">● 내가 남긴 스티커</div>` : "";
+      const myMark = isMine
+        ? `<div style="font-size:9px;color:#0F786E;font-weight:700;margin-top:2px">● 내가 남긴 스티커${canSelfDelete ? " · 길게 눌러 드래그로 이동" : ""}</div>`
+        : "";
       const delBtn = canSelfDelete
         ? `<button onclick="window.__mdsDelSticker && window.__mdsDelSticker('${id.replace(/'/g, "\\'")}')" style="margin-top:8px;background:#FBE0CF;border:1.5px solid #C2521D;color:#C2521D;border-radius:8px;padding:4px 10px;font-family:'Jua',sans-serif;font-size:11px;font-weight:700;cursor:pointer;box-shadow:1px 1px 0 #C2521D;">내 스티커 삭제</button>`
         : (isMine ? `<div style="font-size:9px;color:#94a3b8;margin-top:4px">등록 후 30분 경과 — 운영자에게 요청</div>` : "");
@@ -4088,19 +4090,59 @@ function LiveMapView({ dbUrl, onHome, onOpenVenue }) {
         + delBtn
         + `</div>`;
       if (stickerLayersRef.current[id]) {
-        // 위치/팝업 갱신 + 아이콘도 갱신 (본인 여부 변경 반영)
-        stickerLayersRef.current[id].setLatLng([s.lat, s.lng]);
-        stickerLayersRef.current[id].setPopupContent(popup);
-        try { stickerLayersRef.current[id].setIcon(buildIcon(s.kind, isMine)); } catch (_) {}
+        // 위치/팝업 갱신 + 아이콘도 갱신 (본인 여부 변경 반영) + 드래그 가능 여부 동기화
+        const lyr = stickerLayersRef.current[id];
+        lyr.setLatLng([s.lat, s.lng]);
+        lyr.setPopupContent(popup);
+        try { lyr.setIcon(buildIcon(s.kind, isMine)); } catch (_) {}
+        try { if (lyr.dragging) { canSelfDelete ? lyr.dragging.enable() : lyr.dragging.disable(); } } catch (_) {}
         return;
       }
-      const m = L.marker([s.lat, s.lng], { icon: buildIcon(s.kind, isMine), pane: "stickerPane", interactive: true, bubblingMouseEvents: false }).addTo(map).bindPopup(popup);
+      const m = L.marker([s.lat, s.lng], { icon: buildIcon(s.kind, isMine), pane: "stickerPane", interactive: true, bubblingMouseEvents: false, draggable: canSelfDelete }).addTo(map).bindPopup(popup);
       m.on("popupopen", () => {
         try { window.__mdsStats && window.__mdsStats.track("sticker_popup_open"); } catch (_) {}
       });
+      if (canSelfDelete) {
+        // 본인 스티커 드래그 종료 시 — 기존 sticker DELETE + 새 위치로 같은 ts/kind/label 로 POST.
+        // DB 규칙은 익명 PUT 위치 갱신 막아서, 삭제+재생성 방식이 가장 단순. ts 보존해 만료·소유 윈도우 유지.
+        m.on("dragend", async (e) => {
+          const ll = e.target.getLatLng();
+          const url = dbUrl ? dbUrl.replace(/\/+$/, "") : "";
+          if (!url) { setStickerMsg("서버 연결 정보 없음"); setTimeout(() => setStickerMsg(""), 2000); m.setLatLng([s.lat, s.lng]); return; }
+          try {
+            // 1) 기존 삭제 (소유 윈도우 내 익명 DELETE 허용)
+            const dr = await fetch(`${url}/stickers/${encodeURIComponent(id)}.json`, { method: "DELETE" });
+            if (!dr.ok) throw new Error("delete failed");
+            // 2) 같은 kind/label/ts 로 새 위치 POST
+            const body = { lat: ll.lat, lng: ll.lng, kind: s.kind, ts: s.ts };
+            if (s.label) body.label = s.label;
+            const cr = await fetch(`${url}/stickers.json`, { method: "POST", body: JSON.stringify(body) });
+            if (!cr.ok) throw new Error("create failed");
+            const data = await cr.json();
+            if (data && data.name) {
+              removeMyStickerId(id);
+              addMyStickerId(data.name);
+              // 로컬 상태 갱신 — 다음 poll 까지 깜빡임 최소화
+              setStickers((prev) => {
+                const n = { ...(prev || {}) };
+                delete n[id];
+                n[data.name] = { ...body };
+                return n;
+              });
+            }
+            setStickerMsg("위치 변경됨");
+            setTimeout(() => setStickerMsg(""), 1500);
+            try { window.__mdsStats && window.__mdsStats.track("sticker_drag_move"); } catch (_) {}
+          } catch (err) {
+            setStickerMsg("위치 변경 실패 — 다시 시도");
+            setTimeout(() => setStickerMsg(""), 2200);
+            try { m.setLatLng([s.lat, s.lng]); } catch (_) {}
+          }
+        });
+      }
       stickerLayersRef.current[id] = m;
     });
-  }, [stickers]);
+  }, [stickers, dbUrl]);
 
   // Firebase에서 viapoints + coords 가져오기 (운영자가 수정한 값)
   useEffect(() => {
