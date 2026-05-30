@@ -143,7 +143,7 @@
 
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef, useMemo } = React;
-const BUILD = "b354"; /* 화면 우하단 표시 — 최신 배포 확인용 */
+const BUILD = "b355"; /* 화면 우하단 표시 — 최신 배포 확인용 */
 
 /* 실시간 위치 공유용 Firebase DB 주소. 여기에 한 번 넣어두면 승객 링크가 ?view=map 만 남아 깔끔해집니다. */
 const SHARE_DB = "https://innum-bus-default-rtdb.firebaseio.com";
@@ -7464,14 +7464,16 @@ function App() {
       });
     }
     // 안내한 현재 정류장을 통과(반경 밖 + 다음 정류장이 더 가까움)하면 표시를 다음 정류장으로 전환
+    // 통과 모드에서 passRadius < triggerRadius 인 경우에도 즉시 advance 되도록 min 사용
     if (currentIdx < stops.length - 1 && announcedRef.current.has(currentIdx)) {
       const curC = coords[coordKey(direction, stops[currentIdx].name)];
       const nextC = coords[coordKey(direction, stops[currentIdx + 1].name)];
       if (curC && nextC) {
         const dCur = distanceMeters(userPos, curC);
         const dNext = distanceMeters(userPos, nextC);
-        const curStopRadius = stops[currentIdx]?.radius || triggerRadius;
-        if (dCur > curStopRadius && dNext < dCur) setCurrentIdx(currentIdx + 1);
+        const baseR = stops[currentIdx]?.radius || triggerRadius;
+        const advanceR = Math.min(baseR, passRadius);
+        if (dCur > advanceR && dNext < dCur) setCurrentIdx(currentIdx + 1);
       }
     }
   }, [userPos, autoMode, stops, triggerRadius, passRadius, coords, direction, currentIdx, autoAnnTiming, stopTimings]);
@@ -8708,6 +8710,35 @@ function App() {
                 fontFamily: "'IBM Plex Mono', monospace" }}>
               이번 정류장 · {trip[currentIdx]}
             </span>
+            {curStop && autoMode && (() => {
+              const t = getStopTiming(direction, curStop.name);
+              const announced = announcedRef.current.has(currentIdx);
+              const pending = pendingPassRef.current.has(currentIdx);
+              const inRadius = distToCur != null && distToCur <= (curStop.radius || triggerRadius);
+              let lbl, c;
+              if (t === "pass") {
+                if (announced) { lbl = "통과 ✓"; c = "#22c55e"; }
+                else if (pending) { lbl = "통과 대기"; c = "#fbbf24"; }
+                else if (inRadius) { lbl = "진입"; c = "#60a5fa"; }
+                else { lbl = "접근 중"; c = "#64748b"; }
+              } else if (t === "arrive") {
+                if (announced) { lbl = "도착 ✓"; c = "#22c55e"; }
+                else if (inRadius) { lbl = "도착 대기"; c = "#60a5fa"; }
+                else { lbl = "접근 중"; c = "#64748b"; }
+              } else {
+                if (announced) { lbl = "진입 ✓"; c = "#22c55e"; }
+                else if (inRadius) { lbl = "진입 중"; c = "#60a5fa"; }
+                else { lbl = "접근 중"; c = "#64748b"; }
+              }
+              return (
+                <span className="text-[10px] px-2 py-0.5 rounded"
+                  style={{ background: c + "26", color: c, border: `1px solid ${c}66`,
+                    fontFamily: "'Jua', sans-serif", fontWeight: 700 }}
+                  title={`타이밍: ${t === "pass" ? "통과" : t === "arrive" ? "도착" : "진입"} · 안내 ${announced ? "완료" : pending ? "통과 큐" : "대기"}`}>
+                  {lbl}
+                </span>
+              );
+            })()}
             {distToCur != null && (
               <span className="text-[10px] px-2 py-0.5 rounded"
                 style={{ background: distToCur < triggerRadius ? "rgba(239,68,68,0.2)" : "rgba(251,191,36,0.12)",
