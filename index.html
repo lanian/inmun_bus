@@ -143,7 +143,7 @@
 
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef, useMemo } = React;
-const BUILD = "b371"; /* 화면 우하단 표시 — 최신 배포 확인용 */
+const BUILD = "b372"; /* 화면 우하단 표시 — 최신 배포 확인용 */
 
 /* 실시간 위치 공유용 Firebase DB 주소. 여기에 한 번 넣어두면 승객 링크가 ?view=map 만 남아 깔끔해집니다. */
 const SHARE_DB = "https://innum-bus-default-rtdb.firebaseio.com";
@@ -1502,18 +1502,20 @@ function VenueModal({ onClose, initialZone = 0, initialProgram = null, onOpenLiv
                 <Tag key={i} type={hasMore ? "button" : undefined}
                   ref={isFocused ? focusedCardRef : undefined}
                   onClick={hasMore ? () => toggleExpand(key) : undefined}
-                  style={{ display: "flex", alignItems: "stretch", gap: 8, background: "#fff", width: "100%",
+                  style={{ position: "relative", display: "flex", alignItems: "stretch", gap: 8, background: "#fff", width: "100%",
                     border: `${isFocused ? "2.5px" : "1.5px"} solid ${isFocused ? FT.orange : FT.ink}`,
                     borderRadius: 10, padding: "8px 10px",
+                    paddingBottom: isExpanded ? 10 : 8,
                     boxShadow: isFocused ? `0 0 0 3px ${FT.orange}33` : "none",
+                    borderLeft: `4px solid ${categoryVisual(it.cat).color}`,
                     cursor: hasMore ? "pointer" : "default", textAlign: "left", font: "inherit" }}>
-                  <div style={{ flexShrink: 0, width: 78, fontFamily: "'IBM Plex Mono', monospace",
+                  <div style={{ flexShrink: 0, width: 64, fontFamily: "'IBM Plex Mono', monospace",
                     fontSize: 11, color: FT.ink, fontWeight: 700, lineHeight: 1.25, paddingTop: 2 }}>
                     {it.time}
                   </div>
                   <div style={{ minWidth: 0, flex: 1 }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap", marginBottom: 2 }}>
-                      <CategoryIcon cat={it.cat} size={16} color={categoryVisual(it.cat).color} strokeWidth={2.5} />
+                    <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap", marginBottom: 3 }}>
+                      <CategoryIcon cat={it.cat} size={14} color={categoryVisual(it.cat).color} strokeWidth={2.5} />
                       <span style={{ background: zoneColor, color: "#fff", border: "1.5px solid " + FT.ink,
                         borderRadius: 999, padding: "0px 7px", fontSize: 10, fontFamily: "'Jua', sans-serif", fontWeight: 700 }}>
                         {it.zone}
@@ -1523,7 +1525,7 @@ function VenueModal({ onClose, initialZone = 0, initialProgram = null, onOpenLiv
                         const loc = locParts.join(" · ");
                         return (
                           <React.Fragment>
-                            <span style={{ fontSize: 11, color: FT.inkSoft, fontFamily: "'Jua', sans-serif" }}>{catName}</span>
+                            <span style={{ fontSize: 11, color: categoryVisual(it.cat).color, fontFamily: "'Jua', sans-serif", fontWeight: 700 }}>{catName}</span>
                             {loc && (
                               <span style={{ fontSize: 10, color: FT.inkSoft, fontFamily: "'Jua', sans-serif", fontWeight: 700,
                                 background: FT.paper, border: "1px solid " + FT.mute + "80", borderRadius: 5, padding: "1px 6px" }}>
@@ -1533,11 +1535,6 @@ function VenueModal({ onClose, initialZone = 0, initialProgram = null, onOpenLiv
                           </React.Fragment>
                         );
                       })()}
-                      {hasMore && (
-                        <span style={{ marginLeft: "auto", fontSize: 10, color: FT.inkSoft, fontFamily: "'Jua', sans-serif", fontWeight: 700 }}>
-                          {isExpanded ? "▲ 접기" : "▼ 자세히"}
-                        </span>
-                      )}
                     </div>
                     <div style={{ fontSize: 13, color: FT.ink, fontFamily: "'Jua', sans-serif", fontWeight: 700, lineHeight: 1.3 }}>{it.title}</div>
                     {it.desc && !isExpanded && (
@@ -1547,61 +1544,42 @@ function VenueModal({ onClose, initialZone = 0, initialProgram = null, onOpenLiv
                       </div>
                     )}
                     {isExpanded && (
-                      <div style={{ marginTop: 6, paddingTop: 6, borderTop: "1px dashed " + FT.mute + "55" }}>
-                        {(() => {
-                          // 카테고리별 시각 헤더 — line-art SVG 일러스트 + 그라데이션 + 점 패턴 배경 + 모서리 브래킷
+                      <div style={{ marginTop: 8, paddingTop: 8, borderTop: "1px dashed " + FT.mute + "55" }}>
+                        {it.image && (
+                          <img src={it.image} alt={it.title}
+                            style={{ width: "100%", maxHeight: 220, objectFit: "cover", borderRadius: 8,
+                              border: "1.5px solid " + FT.ink, marginBottom: 8, display: "block" }}
+                            onError={(e) => { e.currentTarget.style.display = "none"; }} />
+                        )}
+                        {!it.image && (() => {
+                          // 이미지 없으면 카테고리 일러스트 배너로 시각 강조 (간소화 — 라벨·시간 등 중복 제거)
                           const v = categoryVisual(it.cat);
                           const patternId = `dots-${v.key}-${i}`;
                           return (
-                            <div style={{ position: "relative", height: 96, marginBottom: 6, borderRadius: 10,
-                              border: "2px solid " + FT.ink,
-                              background: `linear-gradient(135deg, ${v.color}26 0%, ${v.color}10 55%, ${FT.paper} 100%)`,
-                              overflow: "hidden", display: "flex", alignItems: "center", padding: "0 16px", gap: 14,
-                              boxShadow: `2px 2px 0 ${FT.ink}` }}>
-                              {/* 배경 점 패턴 (SVG) */}
-                              <svg width="100%" height="100%" style={{ position: "absolute", inset: 0, opacity: 0.18, pointerEvents: "none" }}>
+                            <div style={{ position: "relative", height: 56, marginBottom: 8, borderRadius: 8,
+                              border: "1.5px solid " + FT.ink,
+                              background: `linear-gradient(135deg, ${v.color}22 0%, ${v.color}0a 100%)`,
+                              overflow: "hidden", display: "flex", alignItems: "center", padding: "0 12px", gap: 12 }}>
+                              <svg width="100%" height="100%" style={{ position: "absolute", inset: 0, opacity: 0.15, pointerEvents: "none" }}>
                                 <defs>
-                                  <pattern id={patternId} x="0" y="0" width="14" height="14" patternUnits="userSpaceOnUse">
-                                    <circle cx="2" cy="2" r="1.1" fill={v.color} />
+                                  <pattern id={patternId} x="0" y="0" width="12" height="12" patternUnits="userSpaceOnUse">
+                                    <circle cx="2" cy="2" r="1" fill={v.color} />
                                   </pattern>
                                 </defs>
                                 <rect width="100%" height="100%" fill={`url(#${patternId})`} />
                               </svg>
-                              {/* 좌상 / 우하 브래킷 — 인쇄물 톤 */}
-                              <span aria-hidden style={{ position: "absolute", left: 6, top: 4, fontSize: 12,
-                                color: FT.ink, opacity: 0.55, fontFamily: "'IBM Plex Mono', monospace", lineHeight: 1 }}>┌</span>
-                              <span aria-hidden style={{ position: "absolute", right: 6, bottom: 4, fontSize: 12,
-                                color: FT.ink, opacity: 0.55, fontFamily: "'IBM Plex Mono', monospace", lineHeight: 1 }}>┘</span>
-                              {/* 일러스트 — 둥근 흰 배경 위에 line art */}
-                              <div style={{ position: "relative", width: 64, height: 64, flexShrink: 0,
-                                background: "#fff", border: "2px solid " + FT.ink, borderRadius: 14,
-                                display: "flex", alignItems: "center", justifyContent: "center",
-                                boxShadow: `1.5px 1.5px 0 ${FT.ink}` }}>
-                                <CategoryIcon cat={it.cat} size={38} color={v.color} strokeWidth={2.2} />
+                              <div style={{ position: "relative", width: 44, height: 44, flexShrink: 0,
+                                background: "#fff", border: "1.5px solid " + FT.ink, borderRadius: 10,
+                                display: "flex", alignItems: "center", justifyContent: "center" }}>
+                                <CategoryIcon cat={it.cat} size={28} color={v.color} strokeWidth={2.2} />
                               </div>
-                              <div style={{ flex: 1, minWidth: 0, position: "relative" }}>
-                                <div style={{ fontSize: 9, color: v.color, letterSpacing: 2.5,
-                                  fontFamily: "'IBM Plex Mono', monospace", fontWeight: 700, marginBottom: 2 }}>
-                                  ▸ {v.label}
-                                </div>
-                                <div style={{ fontSize: 14, color: FT.ink, fontFamily: "'Jua', sans-serif", fontWeight: 700, lineHeight: 1.2,
-                                  overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                                  {it.title}
-                                </div>
-                                <div style={{ fontSize: 9, color: FT.inkSoft, marginTop: 2,
-                                  fontFamily: "'IBM Plex Mono', monospace" }}>
-                                  {it.time}
-                                </div>
+                              <div style={{ position: "relative", fontSize: 10, color: v.color, letterSpacing: 2,
+                                fontFamily: "'IBM Plex Mono', monospace", fontWeight: 700 }}>
+                                ▸ {v.label}
                               </div>
                             </div>
                           );
                         })()}
-                        {it.image && (
-                          <img src={it.image} alt={it.title}
-                            style={{ width: "100%", maxHeight: 220, objectFit: "cover", borderRadius: 8,
-                              border: "1.5px solid " + FT.ink, marginBottom: 6, display: "block" }}
-                            onError={(e) => { e.currentTarget.style.display = "none"; }} />
-                        )}
                         {it.desc && (
                           <div style={{ fontSize: 11, color: FT.ink, fontFamily: "'Jua', sans-serif", lineHeight: 1.5, whiteSpace: "pre-wrap" }}>{it.desc}</div>
                         )}
@@ -1623,6 +1601,15 @@ function VenueModal({ onClose, initialZone = 0, initialProgram = null, onOpenLiv
                       </div>
                     )}
                   </div>
+                  {hasMore && (
+                    <span aria-hidden style={{ position: "absolute", right: 8, bottom: 6, fontSize: 10,
+                      color: isExpanded ? categoryVisual(it.cat).color : FT.inkSoft,
+                      fontFamily: "'Jua', sans-serif", fontWeight: 700, lineHeight: 1,
+                      background: "#fff", padding: "2px 6px", borderRadius: 5,
+                      border: `1px solid ${isExpanded ? categoryVisual(it.cat).color : FT.mute + "80"}` }}>
+                      {isExpanded ? "▲ 접기" : "▼ 자세히"}
+                    </span>
+                  )}
                 </Tag>
               );
             });
