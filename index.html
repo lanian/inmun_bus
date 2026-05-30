@@ -143,7 +143,7 @@
 
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef, useMemo } = React;
-const BUILD = "b343"; /* 화면 우하단 표시 — 최신 배포 확인용 */
+const BUILD = "b344"; /* 화면 우하단 표시 — 최신 배포 확인용 */
 
 /* 실시간 위치 공유용 Firebase DB 주소. 여기에 한 번 넣어두면 승객 링크가 ?view=map 만 남아 깔끔해집니다. */
 const SHARE_DB = "https://innum-bus-default-rtdb.firebaseio.com";
@@ -236,6 +236,14 @@ const getNow = () => {
   return new Date(FAKE.baseMs + elapsed * FAKE.speed);
 };
 const getNowMin = () => { const d = getNow(); return d.getHours() * 60 + d.getMinutes(); };
+
+/* FAKE_GPS — 시연 모드에서 GPS 좌표도 시간표 따라 자동 이동시킬지 여부.
+   FAKE 시각이 활성일 때만 의미 있음. 운영자가 집에서 운행 모드를 시연·연습할 때
+   실제 위치 대신 가짜 버스 위치로 자동 안내·도착 트리거 등을 재현 가능. */
+const FAKE_GPS = (() => {
+  if (!FAKE) return false;
+  try { return localStorage.getItem("shuttle:fakeGps") === "1"; } catch (_) { return false; }
+})();
 
 /* Spoken-name helper — TTS reads "5·18" oddly(오십팔/오백십팔/오점일팔 등 엔진별 상이),
    '오일팔 '(뒤 공백) 으로 정규화해 자연 발화. 가운뎃점만 있는 변형도 함께 처리.
@@ -2293,6 +2301,7 @@ function DemoModeEditor({ onClose }) {
   const cur = FAKE ? new Date(FAKE.baseMs) : new Date(2026, 5, 13, 10, 0);
   const [dt, setDt] = useState(fmtDateTimeLocal(cur));
   const [speed, setSpeed] = useState(FAKE ? FAKE.speed : 1);
+  const [fakeGps, setFakeGps] = useState(FAKE_GPS);
   const presets = [
     { label: "6.13 행사 개막 09시", iso: "2026-06-13T09:00", speed: 1 },
     { label: "6.13 오후 진행 중 13시", iso: "2026-06-13T13:00", speed: 1 },
@@ -2312,6 +2321,8 @@ function DemoModeEditor({ onClose }) {
     try {
       localStorage.setItem("shuttle:fakeNow", dt);
       localStorage.setItem("shuttle:fakeSpeed", String(speed));
+      if (fakeGps) localStorage.setItem("shuttle:fakeGps", "1");
+      else localStorage.removeItem("shuttle:fakeGps");
     } catch (_) {}
     try {
       const u = new URL(window.location.href);
@@ -2327,6 +2338,7 @@ function DemoModeEditor({ onClose }) {
     try {
       localStorage.removeItem("shuttle:fakeNow");
       localStorage.removeItem("shuttle:fakeSpeed");
+      localStorage.removeItem("shuttle:fakeGps");
     } catch (_) {}
     try {
       const u = new URL(window.location.href);
@@ -2362,6 +2374,7 @@ function DemoModeEditor({ onClose }) {
             <div className="text-[10px] text-slate-400" style={{ fontFamily: "'IBM Plex Mono', monospace" }}>
               base: {new Date(FAKE.baseMs).toLocaleString("ko-KR")}
               {FAKE.speed !== 1 && ` · ×${FAKE.speed}`}
+              {FAKE_GPS && " · 📍시뮬"}
             </div>
           </div>
         )}
@@ -2390,6 +2403,23 @@ function DemoModeEditor({ onClose }) {
               </button>
             ))}
           </div>
+        </div>
+        <div>
+          <label className="flex items-center gap-2 p-2 rounded-lg cursor-pointer"
+            style={{ background: fakeGps ? "rgba(34,197,94,0.10)" : "rgba(100,116,139,0.08)",
+              border: `1px solid ${fakeGps ? "rgba(34,197,94,0.4)" : "#3a3f54"}` }}>
+            <input type="checkbox" checked={fakeGps} onChange={(e) => setFakeGps(e.target.checked)}
+              style={{ width: 16, height: 16, accentColor: "#22c55e" }} />
+            <div className="flex-1">
+              <div className="text-[11px] font-bold" style={{ color: fakeGps ? "#22c55e" : "#cbd5e1", fontFamily: "'Jua', sans-serif" }}>
+                📍 GPS 시뮬레이션 — 시간표 따라 자동 이동
+              </div>
+              <div className="text-[10px] mt-0.5" style={{ color: "#94a3b8" }}>
+                운행 모드에서 실 GPS 대신 가짜 버스 위치로 자동 안내·도착·이탈 트리거 재현.
+                집에서 운행 모드를 시연·연습할 때 사용.
+              </div>
+            </div>
+          </label>
         </div>
         <div>
           <div className="text-[11px] mb-1.5" style={{ color: "#94a3b8", fontFamily: "'Jua', sans-serif" }}>
@@ -6979,9 +7009,16 @@ function App() {
     reader.readAsText(file);
   };
 
-  /* --- GPS watch — GPS 자동(노선 자동화) 또는 위치 공유(📍 ON)일 때 좌표 수신 --- */
+  /* --- GPS watch — GPS 자동(노선 자동화) 또는 위치 공유(📍 ON)일 때 좌표 수신
+         FAKE_GPS 시연 모드면 실 GPS 대신 시간표 기반 가상 좌표(별도 effect)로 setUserPos. --- */
   useEffect(() => {
     const wantGps = autoMode || (sharing && locShare);
+    if (FAKE_GPS) {
+      // 시뮬레이션 모드 — 실 GPS 절대 사용 안 함. userPos 는 fakeGps effect 가 관리.
+      if (watchIdRef.current !== null && navigator.geolocation) { navigator.geolocation.clearWatch(watchIdRef.current); watchIdRef.current = null; }
+      setGpsError(null);
+      return;
+    }
     if (!wantGps) {
       if (watchIdRef.current !== null && navigator.geolocation) { navigator.geolocation.clearWatch(watchIdRef.current); watchIdRef.current = null; }
       setUserPos(null); return;
@@ -7014,6 +7051,7 @@ function App() {
   /* GPS stale 감지 — 30초 이상 갱신 없으면 경고 (autoMode 또는 좌표 공유 켜져 있을 때만) */
   useEffect(() => {
     const wantGps = autoMode || (sharing && locShare);
+    if (FAKE_GPS) { setGpsStale(false); return; } // 시뮬레이션은 항상 fresh
     if (!wantGps) { setGpsStale(false); return; }
     const id = setInterval(() => {
       if (gpsLastUpdateRef.current === 0) return; // 아직 첫 신호 안 들어옴
@@ -7021,6 +7059,38 @@ function App() {
     }, 5000);
     return () => clearInterval(id);
   }, [autoMode, sharing, locShare]);
+
+  /* FAKE GPS 시뮬레이션 — FAKE 시각이 진행됨에 따라 시간표 기준 가상 좌표를 setUserPos.
+     운영자가 운행 모드를 집에서 시연·연습할 때 자동 안내·도착 트리거를 재현 가능.
+     회차 시간 사이(대기 구간)에는 시작/종점 정류장에 정차한 상태로 표시. */
+  useEffect(() => {
+    if (!FAKE_GPS) return;
+    const tick = () => {
+      const nowMin = getNowMin();
+      const p = scheduledBusPos(direction, tripIdx, nowMin);
+      if (p) {
+        setUserPos({ lat: p.lat, lng: p.lng, accuracy: 12, speed: 8 }); // ~30km/h
+        gpsLastUpdateRef.current = Date.now();
+        return;
+      }
+      // 회차 시간 밖 — 시작/종점 정류장에 정차
+      const route = ROUTES[direction];
+      const sched = route.trips[tripIdx];
+      let stopIdx = 0;
+      if (sched) {
+        const startMin = toMin(sched[0]);
+        stopIdx = nowMin < startMin ? 0 : route.stops.length - 1;
+      }
+      const s = route.stops[stopIdx];
+      if (s && typeof s.lat === "number") {
+        setUserPos({ lat: s.lat, lng: s.lng, accuracy: 12, speed: 0 });
+        gpsLastUpdateRef.current = Date.now();
+      }
+    };
+    tick();
+    const id = setInterval(tick, 2000);
+    return () => clearInterval(id);
+  }, [direction, tripIdx]);
 
   const retryPermission = () => {
     setGpsError(null);
@@ -7429,8 +7499,8 @@ function App() {
       if (document.visibilityState !== "visible" || stopped) return;
       const ageMin = (Date.now() - tokenIssuedAtRef.current) / 60000;
       if (!authTokenRef.current || ageMin > 25) signIn();
-      // GPS 60초 이상 stale이면 한 번 강제 refresh
-      if (gpsLastUpdateRef.current && Date.now() - gpsLastUpdateRef.current > 60000 && navigator.geolocation) {
+      // GPS 60초 이상 stale이면 한 번 강제 refresh (시뮬레이션은 자체 tick 이 fresh 유지)
+      if (!FAKE_GPS && gpsLastUpdateRef.current && Date.now() - gpsLastUpdateRef.current > 60000 && navigator.geolocation) {
         navigator.geolocation.getCurrentPosition(
           (pos) => {
             gpsLastUpdateRef.current = Date.now();
@@ -9200,6 +9270,7 @@ function FakeTimeIndicator() {
     try {
       localStorage.removeItem("shuttle:fakeNow");
       localStorage.removeItem("shuttle:fakeSpeed");
+      localStorage.removeItem("shuttle:fakeGps");
     } catch (_) {}
     try {
       const u = new URL(window.location.href);
@@ -9224,6 +9295,13 @@ function FakeTimeIndicator() {
       <span style={{ fontFamily: "'IBM Plex Mono', monospace" }}>{ymd}({dow}) {hms}</span>
       {FAKE.speed !== 1 && (
         <span style={{ fontSize: 10, opacity: 0.85, fontFamily: "'IBM Plex Mono', monospace" }}>×{FAKE.speed}</span>
+      )}
+      {FAKE_GPS && (
+        <span aria-label="GPS 시뮬레이션 활성"
+          style={{ fontSize: 10, fontFamily: "'Jua', sans-serif", padding: "1px 5px", borderRadius: 999,
+            background: "#101113", color: "#22c55e", border: "1px solid #22c55e", lineHeight: 1.3 }}>
+          📍시뮬
+        </span>
       )}
       <button onClick={clearFake} aria-label="테스트 모드 해제"
         style={{ background: "rgba(16,17,19,0.18)", border: "1px solid #101113", color: "#101113",
