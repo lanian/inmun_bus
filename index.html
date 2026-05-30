@@ -143,7 +143,7 @@
 
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef, useMemo } = React;
-const BUILD = "b339"; /* 화면 우하단 표시 — 최신 배포 확인용 */
+const BUILD = "b340"; /* 화면 우하단 표시 — 최신 배포 확인용 */
 
 /* 실시간 위치 공유용 Firebase DB 주소. 여기에 한 번 넣어두면 승객 링크가 ?view=map 만 남아 깔끔해집니다. */
 const SHARE_DB = "https://innum-bus-default-rtdb.firebaseio.com";
@@ -9020,10 +9020,63 @@ function Root() {
   useEffect(() => { const t = setTimeout(() => setReady(true), 2000); return () => clearTimeout(t); }, []);
   if (!ready) return <Intro />;
   // P2-3: ?view=ops — 운영자 본부 대시보드 (Intro 끝난 뒤 즉시 진입)
-  if (params.get("view") === "ops") return <OpsDashboard dbUrl={params.get("db") || SHARE_DB} />;
-  if (admin) return <App />;
+  if (params.get("view") === "ops") return (<><FakeTimeIndicator /><OpsDashboard dbUrl={params.get("db") || SHARE_DB} /></>);
+  if (admin) return (<><FakeTimeIndicator /><App /></>);
   const initialTab = params.get("view") === "map" ? "map" : "list";
-  return <PassengerView dbUrl={params.get("db") || SHARE_DB} onAdmin={() => setAdmin(true)} initialTab={initialTab} />;
+  return (<><FakeTimeIndicator /><PassengerView dbUrl={params.get("db") || SHARE_DB} onAdmin={() => setAdmin(true)} initialTab={initialTab} /></>);
+}
+
+/* 테스트 모드 인디케이터 — FAKE 활성 시 상단 중앙에 호박색 chip 으로 가짜 시각 + 해제 버튼 노출.
+   1초마다 갱신, 가속 배율도 함께 표시. 모든 화면(승객/운영자/대시보드) 공통. */
+function FakeTimeIndicator() {
+  if (!FAKE) return null;
+  const [, setTick] = useState(0);
+  useEffect(() => {
+    const id = setInterval(() => setTick((t) => t + 1), 1000);
+    return () => clearInterval(id);
+  }, []);
+  const d = getNow();
+  const ymd = `${d.getMonth() + 1}/${d.getDate()}`;
+  const hms = `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}:${String(d.getSeconds()).padStart(2, "0")}`;
+  const dow = ["일","월","화","수","목","금","토"][d.getDay()];
+  const clearFake = () => {
+    if (!window.confirm("테스트 모드 해제 — 실시각으로 돌아갈까요?")) return;
+    try {
+      localStorage.removeItem("shuttle:fakeNow");
+      localStorage.removeItem("shuttle:fakeSpeed");
+    } catch (_) {}
+    try {
+      const u = new URL(window.location.href);
+      u.searchParams.delete("fake");
+      u.searchParams.delete("fakeSpeed");
+      window.location.href = u.toString();
+    } catch (_) {
+      window.location.reload();
+    }
+  };
+  return (
+    <div role="status" aria-label="테스트 모드 가짜 시각"
+      style={{ position: "fixed", top: "calc(4px + env(safe-area-inset-top, 0px))", left: "50%",
+        transform: "translateX(-50%)", zIndex: 5000, pointerEvents: "auto",
+        display: "inline-flex", alignItems: "center", gap: 6,
+        background: "#fbbf24", color: "#101113",
+        border: "1.5px solid #101113", borderRadius: 999,
+        padding: "3px 10px 3px 8px", fontSize: 11,
+        fontFamily: "'Jua', sans-serif", fontWeight: 700,
+        boxShadow: "1.5px 1.5px 0 #101113" }}>
+      <span aria-hidden style={{ fontSize: 12 }}>🧪</span>
+      <span style={{ fontFamily: "'IBM Plex Mono', monospace" }}>{ymd}({dow}) {hms}</span>
+      {FAKE.speed !== 1 && (
+        <span style={{ fontSize: 10, opacity: 0.85, fontFamily: "'IBM Plex Mono', monospace" }}>×{FAKE.speed}</span>
+      )}
+      <button onClick={clearFake} aria-label="테스트 모드 해제"
+        style={{ background: "rgba(16,17,19,0.18)", border: "1px solid #101113", color: "#101113",
+          padding: "0 8px", marginLeft: 2, borderRadius: 999, fontSize: 10, fontFamily: "'Jua', sans-serif",
+          fontWeight: 700, cursor: "pointer", lineHeight: 1.6 }}>
+        해제
+      </button>
+    </div>
+  );
 }
 ReactDOM.createRoot(document.getElementById('root')).render(<Root />);
 </script>
