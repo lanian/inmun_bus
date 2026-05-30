@@ -143,7 +143,7 @@
 
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef, useMemo } = React;
-const BUILD = "b359"; /* 화면 우하단 표시 — 최신 배포 확인용 */
+const BUILD = "b360"; /* 화면 우하단 표시 — 최신 배포 확인용 */
 
 /* 실시간 위치 공유용 Firebase DB 주소. 여기에 한 번 넣어두면 승객 링크가 ?view=map 만 남아 깔끔해집니다. */
 const SHARE_DB = "https://innum-bus-default-rtdb.firebaseio.com";
@@ -7458,13 +7458,17 @@ function App() {
       }
       return;
     }
-    // 전진 확인 헬퍼 — 항상 직선 거리로 비교(route 0 + next route 혼합 비교가 늘 false 되는 문제 방지)
+    // 전진 확인 — 다음 정류장이 (현재 정류장 + 50m) 이내면 forward 인정.
+    // 엄격한 'next < cur'(midpoint) 은 짧은 segment 에서 passRadius 만족해도 통과 못 함 → 관대한 기준.
+    // 명확한 역방향(다음이 200m 이상 멀리 있는 경우)만 차단해 GPS 노이즈/U-턴 방어.
     const isForward = (curIdx) => {
       if (curIdx + 1 >= stops.length) return true;
       const cc = coords[coordKey(direction, stops[curIdx].name)];
       const nc = coords[coordKey(direction, stops[curIdx + 1].name)];
       if (!cc || !nc) return true;
-      return distanceMeters(userPos, nc) < distanceMeters(userPos, cc);
+      const dc = distanceMeters(userPos, cc);
+      const dn = distanceMeters(userPos, nc);
+      return dn < dc + 200; // 다음이 명확히 더 멀지 않으면 OK
     };
     // 통과(pass) 큐 — passRadius(이탈 반경) 벗어났는지 확인 후 발화.
     // 직선 거리 사용 — route 거리는 통과 후 0 또는 폴리라인 투영 불안정으로 신뢰 불가.
