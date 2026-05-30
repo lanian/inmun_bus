@@ -143,7 +143,7 @@
 
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef, useMemo } = React;
-const BUILD = "b347"; /* 화면 우하단 표시 — 최신 배포 확인용 */
+const BUILD = "b347b"; /* 화면 우하단 표시 — 최신 배포 확인용 */
 
 /* 실시간 위치 공유용 Firebase DB 주소. 여기에 한 번 넣어두면 승객 링크가 ?view=map 만 남아 깔끔해집니다. */
 const SHARE_DB = "https://innum-bus-default-rtdb.firebaseio.com";
@@ -7114,11 +7114,12 @@ function App() {
      운영자가 운행 모드를 집에서 시연·연습할 때 자동 안내·도착 트리거를 재현 가능.
      회차 시간 사이(대기 구간)에는 시작/종점 정류장에 정차한 상태로 표시.
      b344b: 초 단위 소수 분(nowMinFrac) 으로 scheduledBusPos 호출 → 가속 배율 ×1 에서도 부드럽게 이동
-     b346b: OSRM 도로 폴리라인을 로드해 scheduledBusPos 에 전달 → 가짜 버스가 실제 도로 곡선 위를 따라감 */
-  const fakeOsrmPolyRef = useRef({}); // { outbound: [...], inbound: [...] }
+     b346b: OSRM 도로 폴리라인을 로드해 scheduledBusPos 에 전달 → 가짜 버스가 실제 도로 곡선 위를 따라감
+     b347b: ref → state 전환 + direction 변경 시 재시도 — 회차 전환(inbound) 후 OSRM 미적재로 직선 이탈하던 문제 수정 */
+  const [fakeOsrmPolys, setFakeOsrmPolys] = useState({}); // { outbound: [...], inbound: [...] }
   useEffect(() => {
     if (!FAKE_GPS) return;
-    // OSRM 폴리라인 — LiveMapView 캐시 키(osrm:${dir}:${path}) 사용. 캐시 미스 시 fetch + 저장.
+    // OSRM 폴리라인 — LiveMapView 캐시 키(osrm:${dir}:${path}) 우선, 캐시 미스 시 fetch + 저장.
     const buildPath = (dir) => {
       const stops = ROUTES[dir].stops;
       const pts = [];
@@ -7131,31 +7132,37 @@ function App() {
       });
       return pts.map(([la, ln]) => `${ln},${la}`).join(";");
     };
-    ["outbound", "inbound"].forEach((dir) => {
+    let alive = true;
+    const loadDir = async (dir) => {
+      if (fakeOsrmPolys[dir]) return; // 이미 로드
       const path = buildPath(dir);
       const cacheKey = `osrm:${dir}:${path}`;
       const cached = LS.getJSON(cacheKey, null);
       if (Array.isArray(cached) && cached.length) {
-        fakeOsrmPolyRef.current[dir] = cached;
+        if (alive) setFakeOsrmPolys((p) => ({ ...p, [dir]: cached }));
         return;
       }
-      fetch(`https://router.project-osrm.org/route/v1/driving/${path}?overview=full&geometries=geojson&continue_straight=false`)
-        .then((r) => r.ok ? r.json() : null)
-        .then((d) => {
-          if (!d || d.code !== "Ok" || !d.routes || !d.routes[0]) return;
-          const road = d.routes[0].geometry.coordinates.map(([ln, la]) => [la, ln]);
-          LS.setJSON(cacheKey, road);
-          fakeOsrmPolyRef.current[dir] = road;
-        })
-        .catch(() => {});
-    });
-  }, []);
+      try {
+        const r = await fetch(`https://router.project-osrm.org/route/v1/driving/${path}?overview=full&geometries=geojson&continue_straight=false`);
+        if (!r.ok) return;
+        const d = await r.json();
+        if (!d || d.code !== "Ok" || !d.routes || !d.routes[0]) return;
+        const road = d.routes[0].geometry.coordinates.map(([ln, la]) => [la, ln]);
+        LS.setJSON(cacheKey, road);
+        if (alive) setFakeOsrmPolys((p) => ({ ...p, [dir]: road }));
+      } catch (_) {}
+    };
+    // 현재 direction 우선 로드, 그 다음 반대 방향(미리 받아두기 — 회차 전환 즉시 사용)
+    loadDir(direction);
+    loadDir(direction === "outbound" ? "inbound" : "outbound");
+    return () => { alive = false; };
+  }, [direction, fakeOsrmPolys.outbound, fakeOsrmPolys.inbound]);
   useEffect(() => {
     if (!FAKE_GPS) return;
     const tick = () => {
       const d = getNow();
       const nowMinFrac = d.getHours() * 60 + d.getMinutes() + d.getSeconds() / 60 + d.getMilliseconds() / 60000;
-      const osrmPoly = fakeOsrmPolyRef.current[direction];
+      const osrmPoly = fakeOsrmPolys[direction];
       const p = scheduledBusPos(direction, tripIdx, nowMinFrac, osrmPoly);
       if (p) {
         setUserPos({ lat: p.lat, lng: p.lng, accuracy: 12, speed: 8 }); // ~30km/h
@@ -7181,7 +7188,7 @@ function App() {
     const intervalMs = FAKE && FAKE.speed >= 10 ? 500 : 1000;
     const id = setInterval(tick, intervalMs);
     return () => clearInterval(id);
-  }, [direction, tripIdx]);
+  }, [direction, tripIdx, fakeOsrmPolys]);
 
   const retryPermission = () => {
     setGpsError(null);
