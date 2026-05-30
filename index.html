@@ -100,6 +100,36 @@
   /* 모바일 viewport 높이 — Android Chrome 주소창 토글로 인한 layout 튀임 방지.
      1) 기본 100vh (모든 브라우저), 2) svh 지원하는 모던 브라우저는 100svh(가장 작은 viewport)로 항상 내용이 화면에 들어옴. */
   .mds-app-height { height: 100vh; height: 100svh; }
+  /* 디자인 토큰 — 신규 코드는 var(--mds-*) 우선 사용 권장. 기존 코드는 점진적으로 마이그레이션.
+     spacing: 4 / 8 / 12 / 16 / 24 / 32 (5단계 — gap, padding, margin 일관)
+     radius: 6 / 10 / 14 / 999 (작은 칩 / 카드 / 큰 카드 / pill)
+     touch target 최소 44px (Apple HIG / Material) */
+  :root {
+    --mds-s-1: 4px;
+    --mds-s-2: 8px;
+    --mds-s-3: 12px;
+    --mds-s-4: 16px;
+    --mds-s-5: 24px;
+    --mds-s-6: 32px;
+    --mds-r-chip: 6px;
+    --mds-r-card: 10px;
+    --mds-r-hero: 14px;
+    --mds-r-pill: 999px;
+    --mds-touch-min: 44px;
+    --mds-c-ink: #101113;
+    --mds-c-ink-soft: #4A4E55;
+    --mds-c-mute: #64748b;
+    --mds-c-paper: #F6F1E4;
+    --mds-c-teal: #16A89E;
+    --mds-c-teal-dark: #0F7C73;
+    --mds-c-orange: #EE6B2E;
+    --mds-c-orange-dark: #C2521D;
+  }
+  /* prefers-reduced-motion — 모션 민감 사용자 대응. 인트로 flip 즉시 종료 + 모든 transition 단축. */
+  @media (prefers-reduced-motion: reduce) {
+    .boot img { animation-duration: 0.001s !important; }
+    *, *::before, *::after { animation-duration: 0.01s !important; transition-duration: 0.01s !important; }
+  }
 </style>
 </head>
 <body>
@@ -113,7 +143,7 @@
 
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef, useMemo } = React;
-const BUILD = "b308"; /* 화면 우하단 표시 — 최신 배포 확인용 */
+const BUILD = "b309"; /* 화면 우하단 표시 — 최신 배포 확인용 */
 
 /* 실시간 위치 공유용 Firebase DB 주소. 여기에 한 번 넣어두면 승객 링크가 ?view=map 만 남아 깔끔해집니다. */
 const SHARE_DB = "https://innum-bus-default-rtdb.firebaseio.com";
