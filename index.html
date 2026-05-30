@@ -143,7 +143,7 @@
 
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef, useMemo } = React;
-const BUILD = "b342"; /* 화면 우하단 표시 — 최신 배포 확인용 */
+const BUILD = "b343"; /* 화면 우하단 표시 — 최신 배포 확인용 */
 
 /* 실시간 위치 공유용 Firebase DB 주소. 여기에 한 번 넣어두면 승객 링크가 ?view=map 만 남아 깔끔해집니다. */
 const SHARE_DB = "https://innum-bus-default-rtdb.firebaseio.com";
@@ -3939,7 +3939,8 @@ function LiveMapView({ dbUrl, onHome, onOpenVenue }) {
         const now = Date.now(); let n = 0;
         const liveTripSet = new Set();
         const validIds = new Set();
-        const nowDate = new Date();
+        // FAKE 모드 일관성 — 운영자가 시연 모드 켜면 라이브 지도의 스케줄 추정 마커도 가짜 시각 따라감
+        const nowDate = getNow();
         const nowMinTick = nowDate.getHours() * 60 + nowDate.getMinutes() + nowDate.getSeconds() / 60;
         // P1-7: 다중 셔틀 같은 좌표 겹침 방지 — 1차에 (id, basePos, b) 모아 클러스터, 2차에서 원형 offset 후 마커 배치
         const items = [];
@@ -7581,8 +7582,8 @@ function App() {
   ) : null;
   if (mode === "simple") {
     const arrivalDistText = distToNext != null ? fmtDist(distToNext) : null;
-    // 시간표상 다음 정류장 예정 시각까지 남은 시간(초). +면 여유, -면 지연
-    const _now = new Date();
+    // 시간표상 다음 정류장 예정 시각까지 남은 시간(초). +면 여유, -면 지연. FAKE 모드도 따라감.
+    const _now = getNow();
     const nowSecNow = _now.getHours() * 3600 + _now.getMinutes() * 60 + _now.getSeconds();
     const nextSchedDiffSec = nextStop ? toMin(trip[currentIdx + 1]) * 60 - nowSecNow : null;
     // 이번 정류장 예정 시각 대비 (음수=지연, 양수=빠름)
@@ -7684,9 +7685,9 @@ function App() {
               : autoMode && userPos ? { c: "#22d65f", bg: "rgba(34,214,95,0.15)", t: "GPS 자동 · 위치 정상", pulse: false }
               : autoMode ? { c: "#fbbf24", bg: "rgba(251,191,36,0.12)", t: "GPS 자동 · 신호 대기", pulse: true }
               : timetableMode ? (() => {
-                  // A6: 지연 표시 — 예정 vs 실제 분
+                  // A6: 지연 표시 — 예정 vs 실제 분 (FAKE 모드도 따라감)
                   const planned = trip[currentIdx];
-                  const _now = new Date();
+                  const _now = getNow();
                   const _nowMin = _now.getHours() * 60 + _now.getMinutes();
                   const pMin = planned ? toMin(planned) : null;
                   const delay = pMin != null ? (_nowMin - pMin) : null;
