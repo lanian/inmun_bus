@@ -143,7 +143,7 @@
 
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef, useMemo } = React;
-const BUILD = "b340"; /* 화면 우하단 표시 — 최신 배포 확인용 */
+const BUILD = "b341"; /* 화면 우하단 표시 — 최신 배포 확인용 */
 
 /* 실시간 위치 공유용 Firebase DB 주소. 여기에 한 번 넣어두면 승객 링크가 ?view=map 만 남아 깔끔해집니다. */
 const SHARE_DB = "https://innum-bus-default-rtdb.firebaseio.com";
@@ -3524,33 +3524,34 @@ function LiveMapView({ dbUrl, onHome, onOpenVenue }) {
     };
     const seenShared = new Set();
     const allCoords = [];
-    // 정류장 팝업용 — 오늘 회차 수, 현재 시각. 행사일 여부 인식 — 행사 전/후엔 '다음 도착' 표식·과거 표시 비활성, 헤더에 안내 추가.
-    const today = getNow();
-    const fDayP = today.getMonth() === 5 ? today.getDate() : -1;
-    const isFestivalDayP = fDayP === 13 || fDayP === 14;
-    const day1TsP = new Date(2026, 5, 13).getTime();
-    const day2TsP = new Date(2026, 5, 14).getTime();
-    const today0P = new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime();
-    const preFestivalP = today0P < day1TsP;
-    const postFestivalP = today0P > day2TsP;
-    const tripsToday2 = today.getMonth() === 5 && today.getDate() === 14 ? 5 : ROUTES.outbound.trips.length;
-    const nowMinNow2 = today.getHours() * 60 + today.getMinutes();
-    const headerNotice = postFestivalP
-      ? `<div style="font-size:10px;color:#64748b;margin:3px 0 0 0">행사 종료 · 지난 회 시간표</div>`
-      : preFestivalP
-      ? `<div style="font-size:10px;color:#fb923c;margin:3px 0 0 0">행사 전 · 6.13~6.14 시간표 미리보기</div>`
-      : "";
+    // 정류장 팝업 빌더 — 매 popupopen 마다 현재 시각 기준으로 새로 생성. 시간 의존 정보(다음 도착·과거 회차) 실시간 갱신.
     const buildStopPopup = (stopName, sub, dirs) => {
+      // 현재 시각 매번 재계산 (popup 열 때마다 fresh)
+      const t = getNow();
+      const fDay = t.getMonth() === 5 ? t.getDate() : -1;
+      const isFest = fDay === 13 || fDay === 14;
+      const day1Ts = new Date(2026, 5, 13).getTime();
+      const day2Ts = new Date(2026, 5, 14).getTime();
+      const today0 = new Date(t.getFullYear(), t.getMonth(), t.getDate()).getTime();
+      const pre = today0 < day1Ts;
+      const post = today0 > day2Ts;
+      const tripsToday2 = t.getMonth() === 5 && t.getDate() === 14 ? 5 : ROUTES.outbound.trips.length;
+      const nowMin = t.getHours() * 60 + t.getMinutes();
+      const headerNotice = post
+        ? `<div style="font-size:10px;color:#64748b;margin:3px 0 0 0">행사 종료 · 지난 회 시간표</div>`
+        : pre
+        ? `<div style="font-size:10px;color:#fb923c;margin:3px 0 0 0">행사 전 · 6.13~6.14 시간표 미리보기</div>`
+        : "";
       const sections = dirs.map((d) => {
         const route = ROUTES[d];
         const idx = route.stops.findIndex((x) => x.name === stopName);
         if (idx < 0) return "";
         const times = route.trips.slice(0, tripsToday2).map((t, i) => ({ trip: i + 1, time: t[idx] })).filter((x) => x.time);
         // 행사일이 아니면 '다음 도착'·과거 표시 없이 모든 회차를 단순 안내
-        const nextTime = isFestivalDayP ? times.find((x) => toMin(x.time) >= nowMinNow2 - 1) : null;
+        const nextTime = isFest ? times.find((x) => toMin(x.time) >= nowMin - 1) : null;
         const rows = times.map(({ trip, time }) => {
           const m = toMin(time);
-          const past = isFestivalDayP && m < nowMinNow2 - 1;
+          const past = isFest && m < nowMin - 1;
           const isNext = nextTime && nextTime.trip === trip;
           const style = past
             ? "color:#94a3b8;text-decoration:line-through"
@@ -3581,7 +3582,7 @@ function LiveMapView({ dbUrl, onHome, onOpenVenue }) {
         "축제장": "festival",
       };
       // 정류장 마커. 라벨(tooltip)도 interactive 로 만들어 텍스트만 눌러도 popup 이 열리도록.
-      const wireLabelClick = (m, stopName) => {
+      const wireLabelClick = (m, stopName, dirs) => {
         const tt = m.getTooltip(); if (!tt) return;
         tt.on("click", (ev) => {
           try { L.DomEvent.stopPropagation(ev); } catch (_) {}
@@ -3592,6 +3593,11 @@ function LiveMapView({ dbUrl, onHome, onOpenVenue }) {
           if (el) el.style.cursor = "pointer";
         });
         m.on("popupopen", () => {
+          // popup 열릴 때마다 현재 시각 기준으로 컨텐츠 재생성 (다음 도착 / 과거 표시 갱신)
+          try {
+            const sub = (ROUTES[dirs[0]].stops.find((x) => x.name === stopName) || {}).sub || "";
+            m.setPopupContent(buildStopPopup(stopName, sub, dirs));
+          } catch (_) {}
           try { const k = STOP_STAT_KEY[stopName]; if (k && window.__mdsStats) window.__mdsStats.track(`stop_popup_${k}`); } catch (_) {}
         });
       };
@@ -3603,7 +3609,7 @@ function LiveMapView({ dbUrl, onHome, onOpenVenue }) {
           const m = L.circleMarker(c, { radius: 7, color: FT.ink, fillColor: "#fff", fillOpacity: 1, weight: 2 })
             .addTo(map).bindTooltip(s.name, { permanent: true, direction: "top", offset: [0, -4], className: "fest-stop", interactive: true })
             .bindPopup(buildStopPopup(s.name, s.sub, ["outbound", "inbound"]));
-          wireLabelClick(m, s.name);
+          wireLabelClick(m, s.name, SHARED_STOPS.has(s.name) ? ["outbound", "inbound"] : [dir]);
           stopLayersRef.current.push(m);
         } else {
           // 축제장행(outbound) 라벨은 마커 아래, 민주광장행(inbound) 라벨은 마커 위 — 위치+색으로 방향 구분
@@ -3613,7 +3619,7 @@ function LiveMapView({ dbUrl, onHome, onOpenVenue }) {
               offset: [0, dir === "outbound" ? 4 : -4],
               className: `fest-stop ${dir === "outbound" ? "dir-out" : "dir-in"}`, interactive: true })
             .bindPopup(buildStopPopup(s.name, s.sub, [dir]));
-          wireLabelClick(m, s.name);
+          wireLabelClick(m, s.name, SHARED_STOPS.has(s.name) ? ["outbound", "inbound"] : [dir]);
           stopLayersRef.current.push(m);
         }
       });
