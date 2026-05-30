@@ -143,7 +143,7 @@
 
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef, useMemo } = React;
-const BUILD = "b312"; /* 화면 우하단 표시 — 최신 배포 확인용 */
+const BUILD = "b313"; /* 화면 우하단 표시 — 최신 배포 확인용 */
 
 /* 실시간 위치 공유용 Firebase DB 주소. 여기에 한 번 넣어두면 승객 링크가 ?view=map 만 남아 깔끔해집니다. */
 const SHARE_DB = "https://innum-bus-default-rtdb.firebaseio.com";
@@ -266,25 +266,11 @@ const spokenClock = (hm) => {
 const SHARED_STOPS = new Set(["축제장", "5·18민주광장", "하늘마당"]);
 const coordKey = (dir, name) => SHARED_STOPS.has(name) ? name : `${dir}|${name}`;
 
-/* 정류장명 영문 — EN 토글 시 사용 (romanization 우선, 직역은 부정확 가능) */
-const STOP_EN = {
-  "5·18민주광장": "May 18 Square",
-  "하늘마당": "Haneul Plaza",
-  "학동증심사역": "Hakdong Jeungsimsa Stn.",
-  "홍림교": "Hongnim Bridge",
-  "운림중학교": "Unrim Middle School",
-  "학운초등학교": "Hakun Elementary",
-  "축제장": "Festival Site",
-};
-const tStop = (name, lang) => (lang === "en" && STOP_EN[name]) ? STOP_EN[name] : name;
-
 /* Route data — 제4회 동구 무등산 인문축제 셔틀 */
 const ROUTES = {
   outbound: {
     label: "축제장 방향",
-    labelEn: "To Festival Site",
     full: "5·18민주광장 → 축제장",
-    fullEn: "May 18 Square → Festival Site",
     stops: [
       { name: "5·18민주광장", sub: "마한지맞은편", lat: 35.14605385691435, lng: 126.91908569725996 },
       { name: "하늘마당", sub: "ACC브릿지입구", lat: 35.14735856549831, lng: 126.921795165662,
@@ -306,9 +292,7 @@ const ROUTES = {
   },
   inbound: {
     label: "민주광장 방향",
-    labelEn: "To May 18 Square",
     full: "축제장 → 5·18민주광장",
-    fullEn: "Festival Site → May 18 Square",
     stops: [
       { name: "축제장", lat: 35.13334078976814, lng: 126.95942239875768 },
       { name: "학운초등학교", lat: 35.13310169245655, lng: 126.94788811002641 },
@@ -3816,7 +3800,7 @@ function inferWaiting(bus, nowMin, tripsToday) {
 }
 
 /* 승객 화면 버스 카드 — 진행바를 현재 정류장으로 자동 스크롤, 다음 정류장·도착예정 표시 */
-function BusCard({ id, bus, agoText, nowMin, tripsToday, departedInfo, lang = "ko" }) {
+function BusCard({ id, bus, agoText, nowMin, tripsToday, departedInfo }) {
   const stripRef = useRef(null), activeRef = useRef(null);
   const dir = bus.dir === "inbound" ? "inbound" : "outbound";
   const route = ROUTES[dir];
@@ -3858,9 +3842,9 @@ function BusCard({ id, bus, agoText, nowMin, tripsToday, departedInfo, lang = "k
           <span className="truncate" style={{ background: dir === "outbound" ? FT.orange : FT.teal, color: "#fff",
             border: "1.5px solid " + FT.ink, padding: "2px 8px", borderRadius: 999,
             fontSize: 11, fontFamily: "'Jua', sans-serif", display: "inline-flex", alignItems: "center", gap: 4 }}
-            aria-label={`${(lang === "en" && route.labelEn) || route.label} ${bus.trip || "-"}${lang === "en" ? " trip" : "회차"}`}>
+            aria-label={`${route.label} ${bus.trip || "-"}회차`}>
             <span aria-hidden style={{ fontSize: 9 }}>{dir === "outbound" ? "▶" : "◀"}</span>
-            {((lang === "en" && route.labelEn) || route.label)} · {bus.trip || "-"}{lang === "en" ? " trip" : "회차"}
+            {route.label} · {bus.trip || "-"}회차
           </span>
         </div>
         <span className="flex-shrink-0 ml-2 flex items-center gap-1" style={{ color: FT.mute, fontSize: 10 }}>
@@ -3873,7 +3857,7 @@ function BusCard({ id, bus, agoText, nowMin, tripsToday, departedInfo, lang = "k
           <div style={{ fontSize: 11, letterSpacing: 2, marginBottom: 4, color: FT.orangeDark, fontFamily: "'Jua', sans-serif" }}>
             🅿️ 출발 대기 중
           </div>
-          <div style={{ fontSize: 18, fontWeight: 700, color: FT.ink, fontFamily: "'Jua', sans-serif" }}>{tStop(waitInfo.place, lang)}</div>
+          <div style={{ fontSize: 18, fontWeight: 700, color: FT.ink, fontFamily: "'Jua', sans-serif" }}>{waitInfo.place}</div>
           <div style={{ fontSize: 14, marginTop: 8, color: FT.inkSoft, fontFamily: "'Jua', sans-serif" }}>
             다음 출발 <b style={{ color: FT.orangeDark }}>{waitInfo.time || "미정"}</b>
             {waitInfo.tripIdx ? <span style={{ fontSize: 11, color: FT.mute, marginLeft: 4 }}>({waitInfo.tripIdx}회차 · {ROUTES[waitInfo.dir].label})</span> : null}
@@ -3940,7 +3924,7 @@ function BusCard({ id, bus, agoText, nowMin, tripsToday, departedInfo, lang = "k
               {phaseLabel}
             </span>
             <span className="truncate" style={{ fontSize: 13, color: FT.ink, fontFamily: "'Jua', sans-serif", fontWeight: 700, flex: 1 }}>
-              {tStop(displayStop, lang)}
+              {displayStop}
             </span>
             <span style={{ flexShrink: 0, display: "flex", flexDirection: "column", alignItems: "flex-end", lineHeight: 1.15 }}>
               {etaLabel && (
@@ -3980,7 +3964,7 @@ function BusCard({ id, bus, agoText, nowMin, tripsToday, departedInfo, lang = "k
               {remaining.map((r) => (
                 <div key={r.name} className="flex items-center gap-2" style={{ fontSize: 11, fontFamily: "'Jua', sans-serif" }}>
                   <span style={{ flex: 1, color: FT.ink, fontWeight: r.isFinal ? 700 : 400 }}>
-                    {tStop(r.name, lang)}{r.isFinal ? (lang === "en" ? " (terminus)" : " (종점)") : ""}
+                    {r.name}{r.isFinal ? " (종점)" : ""}
                   </span>
                   <span style={{ color: delay > 0 ? "#dc2626" : FT.inkSoft, fontWeight: 700, minWidth: 56, textAlign: "right" }}>
                     {r.mins === 0 ? "곧" : `${r.mins}분 후`}
@@ -4134,12 +4118,6 @@ function PassengerView({ dbUrl, onAdmin, initialTab = "list" }) {
     return () => { try { statsRef.current && statsRef.current.destroy(); } catch (_) {} };
   }, [dbUrl]);
   const trackStat = (key, n) => { try { statsRef.current && statsRef.current.track(key, n); } catch (_) {} };
-  // 언어 토글 — ko/en. LS 영속. 정류장명·노선 라벨에 적용 (UI 라벨은 기본 한국어 유지).
-  const [lang, setLangRaw] = useState(() => LS.get("lang", "ko") === "en" ? "en" : "ko");
-  const setLang = (v) => { const x = v === "en" ? "en" : "ko"; setLangRaw(x); LS.set("lang", x); };
-  const toggleLang = () => { setLang(lang === "en" ? "ko" : "en"); trackStat("toggle.lang"); };
-  const dirLabel = (dir) => (lang === "en" && ROUTES[dir].labelEn) ? ROUTES[dir].labelEn : ROUTES[dir].label;
-  const dirFull = (dir) => (lang === "en" && ROUTES[dir].fullEn) ? ROUTES[dir].fullEn : ROUTES[dir].full;
   const [notice, setNotice] = useState(null); // P1-2: 운영자 공지/재난 안내
   const [noticeDismissedAt, setNoticeDismissedAt] = useState(() => parseInt(LS.get("noticeDismissedAt", "0"), 10) || 0);
   const tapRef = useRef(0), tapTimeRef = useRef(0);
@@ -4494,17 +4472,6 @@ function PassengerView({ dbUrl, onAdmin, initialTab = "list" }) {
               style={{ position: "absolute", top: 12, right: 12, width: 12, height: 12, borderRadius: "50%",
                 background: conn === "error" ? "#B91C1C" : live.length > 0 ? FT.teal : FT.mute,
                 border: "1.5px solid " + FT.ink, boxShadow: "1px 1px 0 " + FT.ink }} />
-            {/* 언어 토글 — 우측 하단(상태점 아래). 정류장명·노선만 EN, UI 라벨은 한국어 유지 */}
-            <button onClick={toggleLang}
-              aria-label={lang === "ko" ? "Switch to English" : "한국어로 전환"}
-              title={lang === "ko" ? "EN — Switch stop names to English" : "KO — 정류장명을 한국어로"}
-              style={{ position: "absolute", top: 30, right: 8, padding: "3px 8px",
-                background: lang === "en" ? FT.teal : "#fff", color: lang === "en" ? "#fff" : FT.inkSoft,
-                border: "1.5px solid " + FT.ink, borderRadius: 999,
-                fontFamily: "'Jua', sans-serif", fontSize: 10, fontWeight: 700,
-                boxShadow: "1px 1px 0 " + FT.ink, cursor: "pointer" }}>
-              {lang === "ko" ? "EN" : "KO"}
-            </button>
           </div>
 
 
@@ -4548,7 +4515,7 @@ function PassengerView({ dbUrl, onAdmin, initialTab = "list" }) {
                   return (
                     <button key={dir} type="button" disabled={!clickable}
                       onClick={clickable ? () => openTableAt(dir, nd.idx) : undefined}
-                      aria-label={clickable ? `${dirLabel(dir)} ${nd.idx + 1}${lang === "en" ? " trip schedule" : "회차 시간표 보기"}` : `${dirLabel(dir)} ${lang === "en" ? "service ended" : "운행 종료"}`}
+                      aria-label={clickable ? `${ROUTES[dir].label} ${nd.idx + 1}회차 시간표 보기` : `${ROUTES[dir].label} 운행 종료`}
                       style={{ display: "block", width: "100%", textAlign: "left", font: "inherit",
                         background: "#fff", border: "2px solid " + FT.ink, borderRadius: 12,
                         padding: "10px 12px 10px 14px", boxShadow: "2px 2px 0 " + FT.ink,
@@ -4556,24 +4523,24 @@ function PassengerView({ dbUrl, onAdmin, initialTab = "list" }) {
                       <div className="flex items-center gap-2" style={{ marginBottom: 4 }}>
                         <span style={{ fontSize: 11, color: c, fontFamily: "'Jua', sans-serif", fontWeight: 700,
                           display: "inline-flex", alignItems: "center", gap: 3 }}
-                          aria-label={dirLabel(dir)}>
+                          aria-label={ROUTES[dir].label}>
                           <span aria-hidden style={{ fontSize: 9 }}>{dir === "outbound" ? "▶" : "◀"}</span>
-                          {dirLabel(dir)}
+                          {ROUTES[dir].label}
                         </span>
-                        {nd && <span style={{ marginLeft: "auto", fontSize: 10, color: FT.mute, fontFamily: "'Jua', sans-serif" }}>{nd.idx + 1}{lang === "en" ? " trip" : "회차"} →</span>}
+                        {nd && <span style={{ marginLeft: "auto", fontSize: 10, color: FT.mute, fontFamily: "'Jua', sans-serif" }}>{nd.idx + 1}회차 →</span>}
                       </div>
                       <div className="flex items-baseline" style={{ gap: 10 }}>
                         <span style={{ fontSize: 24, color: FT.ink, fontFamily: "'Jua', sans-serif", fontWeight: 700, lineHeight: 1, fontFamily: "'IBM Plex Mono', monospace" }}>
                           {nd ? nd.time : "—"}
                         </span>
                         <span style={{ fontSize: 13, color: c, fontFamily: "'Jua', sans-serif", fontWeight: 700 }}>
-                          {!nd ? (lang === "en" ? "Service ended" : "운행 종료")
-                            : preFestival ? (lang === "en" ? "Jun 13 (Sat) first trip" : "6.13(토) 첫 회차")
-                            : (mins > 0 ? (lang === "en" ? `in ~${mins} min` : `약 ${mins}분 후`) : (lang === "en" ? "soon" : "잠시 후"))}
+                          {!nd ? "운행 종료"
+                            : preFestival ? "6.13(토) 첫 회차"
+                            : (mins > 0 ? `약 ${mins}분 후` : "잠시 후")}
                         </span>
                       </div>
                       <div style={{ fontSize: 10, color: FT.mute, marginTop: 4, fontFamily: "'Jua', sans-serif" }}>
-                        {dirFull(dir)}
+                        {ROUTES[dir].full}
                       </div>
                     </button>
                   );
@@ -4613,7 +4580,7 @@ function PassengerView({ dbUrl, onAdmin, initialTab = "list" }) {
                     </div>
                   );
                 })()}
-                {live.map(([id, b]) => <BusCard key={id} id={id} bus={b} agoText={agoText} nowMin={nowMin} tripsToday={tripsToday} departedInfo={getDepartedInfo(id, b)} lang={lang} />)}
+                {live.map(([id, b]) => <BusCard key={id} id={id} bus={b} agoText={agoText} nowMin={nowMin} tripsToday={tripsToday} departedInfo={getDepartedInfo(id, b)} />)}
               </React.Fragment>
             )}
 
