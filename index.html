@@ -143,7 +143,7 @@
 
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef, useMemo } = React;
-const BUILD = "b331"; /* 화면 우하단 표시 — 최신 배포 확인용 */
+const BUILD = "b332"; /* 화면 우하단 표시 — 최신 배포 확인용 */
 
 /* 실시간 위치 공유용 Firebase DB 주소. 여기에 한 번 넣어두면 승객 링크가 ?view=map 만 남아 깔끔해집니다. */
 const SHARE_DB = "https://innum-bus-default-rtdb.firebaseio.com";
@@ -1869,7 +1869,6 @@ function UsageStatsViewer({ onClose, dbUrl, getAuth, refreshAuth }) {
   /* 이벤트 키 → 사용자 친화 한글 라벨. 알려진 키만 매핑하고 없으면 raw 키 그대로 노출.
      키 구분자는 _ (Firebase RTDB 가 . 불가). 탭 ID 실제 값은 list/venue/map. */
   const EVENT_LABELS = {
-    "session_start": "세션 시작",
     "session_endView_list": "종료 직전: 메인",
     "session_endView_venue": "종료 직전: 행사장",
     "session_endView_map": "종료 직전: 무등생각 지도",
@@ -2187,7 +2186,8 @@ function UsageStatsViewer({ onClose, dbUrl, getAuth, refreshAuth }) {
           )}
         </div>
         <div className="text-[10px] text-slate-500 leading-relaxed">
-          익명 카운트만 (좌표·풀 UA·언어 비수집). 세션 = 탭 단위. 권장 보관 30일 — 행사 후 삭제.
+          익명 카운트만 (좌표·풀 UA·언어 비수집). 세션 = 브라우저 탭 한 번 열림 단위.
+          세션 1건 = 최소 '진입 화면 view' + '종료 직전 화면' 2 이벤트 (탭 이동·기능 사용마다 추가). 권장 보관 30일.
         </div>
         {status && <div className="text-[11px]" style={{ color: status.startsWith("⚠") ? "#fca5a5" : status.startsWith("✅") ? "#22d65f" : "#fbbf24" }}>{status}</div>}
         {dateB ? (
@@ -4823,7 +4823,9 @@ function PassengerView({ dbUrl, onAdmin, initialTab = "list" }) {
     statsRef.current = createStatsTracker(dbUrl);
     // 전역 노출 — LiveMapView 등 자식 컴포넌트에서 직접 호출
     try { window.__mdsStats = { track: (k, n) => { try { statsRef.current && statsRef.current.track(k, n); } catch (_) {} } }; } catch (_) {}
-    statsRef.current.track("session_start");
+    // session_start 는 별도 트래킹 안 함 — 세션 record 존재 자체가 세션 1건이며,
+    // view_{initialTab} 가 곧 진입 신호이므로 중복(2건 등록되는 인상) 제거.
+    // 종료 시점만 session_endView_{lastTab} 기록 (드롭오프 분석).
     return () => {
       try { statsRef.current && statsRef.current.track(`session_endView_${tabRef.current}`); } catch (_) {}
       try { statsRef.current && statsRef.current.destroy(); } catch (_) {}
