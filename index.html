@@ -175,7 +175,7 @@
 
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef, useMemo } = React;
-const BUILD = "b394"; /* 화면 우하단 표시 — 최신 배포 확인용 */
+const BUILD = "b395"; /* 화면 우하단 표시 — 최신 배포 확인용 */
 
 /* 실시간 위치 공유용 Firebase DB 주소. 여기에 한 번 넣어두면 승객 링크가 ?view=map 만 남아 깔끔해집니다. */
 const SHARE_DB = "https://innum-bus-default-rtdb.firebaseio.com";
@@ -6309,91 +6309,61 @@ function PassengerView({ dbUrl, onAdmin, initialTab = "list" }) {
                 </div>
               );
             })()}
-            {live.length === 0 ? (
-              <div className="py-2 space-y-2">
-                <div style={{ textAlign: "center", color: FT.inkSoft, fontFamily: "'Jua', sans-serif", fontSize: 13, lineHeight: 1.5, marginBottom: 6 }}>
-                  {conn === "error" ? "연결을 확인하는 중입니다…"
-                    : postFestival ? "행사가 종료되었습니다 · 다음 회 운영 안내 예정"
-                    : preFestival ? `행사 전 · 6.13(토)~6.14(일) 운영 예정 (D-${Math.max(1, Math.round((day1Ts - today0) / 86400000))})`
-                    : schedActive ? "📡 라이브 신호 없음 · 아래 시간표 기준 운행 중"
-                    : "지금은 운행 중인 셔틀이 없어요."}
-                </div>
-                <div style={{ fontSize: 11, color: FT.inkSoft, paddingLeft: 4, fontFamily: "'Jua', sans-serif" }}>
-                  {preFestival ? "행사 시간표 미리보기 · 6.13(토) 첫 회차" : postFestival ? "지난 회 시간표" : "다음 출발 예정"}
-                </div>
-                {["outbound", "inbound"].map((dir) => {
-                  const nd = nextDep(dir);
-                  const c = dir === "outbound" ? FT.orange : FT.teal;
-                  const mins = nd ? toMin(nd.time) - nowMin : null;
-                  const clickable = !!nd;
-                  return (
-                    <button key={dir} type="button" disabled={!clickable}
-                      onClick={clickable ? () => openTableAt(dir, nd.idx) : undefined}
-                      aria-label={clickable ? `${ROUTES[dir].label} ${nd.idx + 1}회차 시간표 보기` : `${ROUTES[dir].label} 운행 종료`}
-                      style={{ display: "block", width: "100%", textAlign: "left", font: "inherit",
-                        background: "#fff", border: "2px solid " + FT.ink, borderRadius: 12,
-                        padding: "10px 12px 10px 14px", boxShadow: "2px 2px 0 " + FT.ink,
-                        borderLeft: `8px solid ${c}`, cursor: clickable ? "pointer" : "default" }}>
-                      <div className="flex items-center gap-2" style={{ marginBottom: 4 }}>
-                        <span style={{ fontSize: 11, color: c, fontFamily: "'Jua', sans-serif", fontWeight: 700,
-                          display: "inline-flex", alignItems: "center", gap: 3 }}
-                          aria-label={ROUTES[dir].label}>
-                          <span aria-hidden style={{ fontSize: 9 }}>{dir === "outbound" ? "▶" : "◀"}</span>
-                          {ROUTES[dir].label}
-                        </span>
-                        {nd && <span style={{ marginLeft: "auto", fontSize: 10, color: FT.mute, fontFamily: "'Jua', sans-serif" }}>{nd.idx + 1}회차 →</span>}
-                      </div>
-                      <div className="flex items-baseline" style={{ gap: 10 }}>
-                        <span style={{ fontSize: 24, color: FT.ink, fontFamily: "'Jua', sans-serif", fontWeight: 700, lineHeight: 1, fontFamily: "'IBM Plex Mono', monospace" }}>
-                          {nd ? nd.time : "—"}
-                        </span>
-                        <span style={{ fontSize: 13, color: c, fontFamily: "'Jua', sans-serif", fontWeight: 700 }}>
-                          {!nd ? "운행 종료"
-                            : preFestival ? "6.13(토) 첫 회차"
-                            : (mins > 0 ? `약 ${mins}분 후` : "잠시 후")}
-                        </span>
-                      </div>
-                      <div style={{ fontSize: 10, color: FT.mute, marginTop: 4, fontFamily: "'Jua', sans-serif" }}>
-                        {ROUTES[dir].full}
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
-            ) : (
-              <React.Fragment>
-                {/* 컴팩트 다음 출발 안내 — 항상 한 줄로 노출 */}
-                {(() => {
-                  const ndOut = nextDep("outbound");
-                  const ndIn = nextDep("inbound");
-                  if (!ndOut && !ndIn) {
-                    return (
-                      <div style={{ padding: "6px 10px", background: FT.paper, border: "1.5px solid " + FT.mute + "66", borderRadius: 8,
-                        fontSize: 11, color: FT.inkSoft, fontFamily: "'Jua', sans-serif", fontWeight: 700, textAlign: "center" }}>
-                        마지막 회차 운행 중
-                      </div>
-                    );
-                  }
-                  const part = (nd, dir, c, arrow) => nd ? (
-                    <button type="button" onClick={() => openTableAt(dir, nd.idx)}
-                      aria-label={`${ROUTES[dir].label} ${nd.idx + 1}회차 시간표`}
-                      style={{ display: "inline-flex", alignItems: "center", gap: 4, fontFamily: "'Jua', sans-serif",
-                        background: "transparent", border: "none", padding: "2px 4px", borderRadius: 6, cursor: "pointer" }}>
-                      <span style={{ color: c, fontWeight: 700, fontSize: 11 }}>{arrow}</span>
-                      <span style={{ color: FT.ink, fontFamily: "'IBM Plex Mono', monospace", fontWeight: 700, fontSize: 12 }}>{nd.time}</span>
-                      <span style={{ color: c, fontSize: 11 }}>({Math.max(0, toMin(nd.time) - nowMin)}분)</span>
-                    </button>
-                  ) : (
-                    <span style={{ color: FT.mute, fontSize: 11, fontFamily: "'Jua', sans-serif" }}>{arrow} 종료</span>
-                  );
-                  return (
-                    <div className="flex items-center gap-3" style={{ padding: "6px 10px", background: FT.paper, border: "1.5px solid " + FT.mute + "66", borderRadius: 8, flexWrap: "wrap" }}>
-                      <span style={{ fontSize: 10, color: FT.inkSoft, fontFamily: "'Jua', sans-serif", fontWeight: 700, flexShrink: 0 }}>다음 출발</span>
-                      {part(ndOut, "outbound", FT.orange, "↗")}
-                      {part(ndIn, "inbound", FT.teal, "↙")}
+            {/* 통합 다음 출발 카드 — 라이브 유무 무관 항상 노출. 2방향 동일 패턴. */}
+            <div className="grid grid-cols-2 gap-2">
+              {["outbound", "inbound"].map((dir) => {
+                const nd = nextDep(dir);
+                const c = dir === "outbound" ? FT.orange : FT.teal;
+                const mins = nd ? toMin(nd.time) - nowMin : null;
+                const clickable = !!nd;
+                return (
+                  <button key={dir} type="button" disabled={!clickable}
+                    onClick={clickable ? () => openTableAt(dir, nd.idx) : undefined}
+                    aria-label={clickable ? `${ROUTES[dir].label} ${nd.idx + 1}회차 시간표` : `${ROUTES[dir].label} 운행 종료`}
+                    style={{ display: "flex", flexDirection: "column", textAlign: "left", font: "inherit",
+                      background: clickable ? "#fff" : "#f8f6ef",
+                      border: "2px solid " + FT.ink, borderRadius: 12,
+                      padding: "9px 10px 8px 10px",
+                      boxShadow: clickable ? "2px 2px 0 " + FT.ink : "1.5px 1.5px 0 " + FT.mute,
+                      borderTop: `5px solid ${clickable ? c : FT.mute}`,
+                      cursor: clickable ? "pointer" : "default", opacity: clickable ? 1 : 0.7 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 4, marginBottom: 4 }}>
+                      <span aria-hidden style={{ fontSize: 10, color: c }}>{dir === "outbound" ? "▶" : "◀"}</span>
+                      <span style={{ fontSize: 10, color: c, fontFamily: "'Jua', sans-serif", fontWeight: 700, letterSpacing: 0.3 }}>
+                        {ROUTES[dir].label}
+                      </span>
+                      {nd && <span style={{ marginLeft: "auto", fontSize: 9, color: FT.mute, fontFamily: "'Jua', sans-serif" }}>{nd.idx + 1}회차</span>}
                     </div>
-                  );
-                })()}
+                    <div style={{ fontSize: 22, color: FT.ink, fontFamily: "'IBM Plex Mono', monospace", fontWeight: 700, lineHeight: 1, marginBottom: 2 }}>
+                      {nd ? nd.time : "—"}
+                    </div>
+                    <div style={{ fontSize: 11, color: clickable ? c : FT.mute, fontFamily: "'Jua', sans-serif", fontWeight: 700 }}>
+                      {!nd ? "운행 종료"
+                        : preFestival ? "행사 첫 회차"
+                        : (mins > 0 ? `약 ${mins}분 후` : "잠시 후")}
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+            {/* 상태 안내 — empty/preFestival/postFestival/schedActive 컨텍스트 */}
+            {live.length === 0 && (
+              <div style={{ textAlign: "center", color: FT.inkSoft, fontFamily: "'Jua', sans-serif",
+                fontSize: 12, lineHeight: 1.4, padding: "4px 4px 0" }}>
+                {conn === "error" ? "연결을 확인하는 중입니다…"
+                  : postFestival ? "행사가 종료되었습니다 · 다음 회 운영 안내 예정"
+                  : preFestival ? `행사 전 · 6.13(토)~6.14(일) 운영 예정 (D-${Math.max(1, Math.round((day1Ts - today0) / 86400000))})`
+                  : schedActive ? "📡 라이브 신호 없음 · 시간표 기준 운행 중"
+                  : "지금은 운행 중인 셔틀이 없어요"}
+              </div>
+            )}
+            {/* 라이브 카드 — 실제 신호 있는 차량 */}
+            {live.length > 0 && (
+              <React.Fragment>
+                <div style={{ fontSize: 10, color: FT.tealDark, fontFamily: "'Jua', sans-serif", fontWeight: 700,
+                  letterSpacing: 1, padding: "4px 4px 0" }}>
+                  ● 라이브 운행 중 · {live.length}대
+                </div>
                 {live.map(([id, b]) => <BusCard key={id} id={id} bus={b} agoText={agoText} nowMin={nowMin} tripsToday={tripsToday} departedInfo={getDepartedInfo(id, b)} />)}
               </React.Fragment>
             )}
