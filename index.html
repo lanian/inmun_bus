@@ -143,7 +143,7 @@
 
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef, useMemo } = React;
-const BUILD = "b328"; /* 화면 우하단 표시 — 최신 배포 확인용 */
+const BUILD = "b329"; /* 화면 우하단 표시 — 최신 배포 확인용 */
 
 /* 실시간 위치 공유용 Firebase DB 주소. 여기에 한 번 넣어두면 승객 링크가 ?view=map 만 남아 깔끔해집니다. */
 const SHARE_DB = "https://innum-bus-default-rtdb.firebaseio.com";
@@ -4062,25 +4062,26 @@ function LiveMapView({ dbUrl, onHome, onOpenVenue }) {
         {stickerMsg}
       </div>
 
-      {/* 지도 상단 배너 영역 — 프로그램 슬라이드(있을 때) + 최근 스티커 슬라이드(있을 때) 세로 스택 */}
+      {/* 지도 상단 통합 배너 — 행사 프로그램 + 최근 스티커를 단일 carousel 로 */}
       <div style={{ position: "fixed", left: 10, right: 10, top: "calc(60px + env(safe-area-inset-top, 0px))",
         zIndex: 1080, pointerEvents: "none" }}>
-        <div style={{ pointerEvents: "auto", maxWidth: 480, margin: "0 auto",
-          display: "flex", flexDirection: "column", gap: 6 }}>
-          <UpcomingPromoCard compact onOpen={() => {
-            try { window.__mdsStats && window.__mdsStats.track("click_promo_map"); } catch (_) {}
-            if (typeof onOpenVenue === "function") onOpenVenue();
-            else if (typeof onHome === "function") onHome();
-          }} />
-          <RecentStickersBanner stickers={stickers} onTap={(s) => {
-            try { window.__mdsStats && window.__mdsStats.track("click_sticker_banner"); } catch (_) {}
-            if (!mapRef.current) return;
-            try {
-              mapRef.current.flyTo([s.lat, s.lng], Math.max(mapRef.current.getZoom(), 16), { duration: 0.6 });
-              const layer = stickerLayersRef.current[s.id];
-              if (layer && typeof layer.openPopup === "function") setTimeout(() => layer.openPopup(), 700);
-            } catch (_) {}
-          }} />
+        <div style={{ pointerEvents: "auto", maxWidth: 480, margin: "0 auto" }}>
+          <UnifiedMapBanner
+            stickers={stickers}
+            onOpenVenue={() => {
+              try { window.__mdsStats && window.__mdsStats.track("click_promo_map"); } catch (_) {}
+              if (typeof onOpenVenue === "function") onOpenVenue();
+              else if (typeof onHome === "function") onHome();
+            }}
+            onTapSticker={(s) => {
+              try { window.__mdsStats && window.__mdsStats.track("click_sticker_banner"); } catch (_) {}
+              if (!mapRef.current) return;
+              try {
+                mapRef.current.flyTo([s.lat, s.lng], Math.max(mapRef.current.getZoom(), 16), { duration: 0.6 });
+                const layer = stickerLayersRef.current[s.id];
+                if (layer && typeof layer.openPopup === "function") setTimeout(() => layer.openPopup(), 700);
+              } catch (_) {}
+            }} />
         </div>
       </div>
 
@@ -4404,6 +4405,194 @@ function RecentStickersBanner({ stickers, onTap }) {
               aria-label={`스티커 ${i + 1}`}
               style={{ width: i === safeIdx ? 12 : 4, height: 4, borderRadius: 999,
                 background: i === safeIdx ? FT.ink : FT.mute + "88",
+                border: "none", padding: 0, cursor: "pointer",
+                transition: "width 0.2s, background 0.2s" }} />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* 통합 지도 상단 배너 — 행사 프로그램 슬라이드 + 최근 스티커 슬라이드를 단일 carousel 로.
+   같은 카드 프레임 (border/radius/padding 통일), 좌측 액센트 색상으로만 타입 구분
+   · festival: zone 색(orange/teal) — 클릭 시 행사장 탭으로
+   · sticker: tealDark — 클릭 시 지도가 해당 위치로 이동 + popup */
+function UnifiedMapBanner({ stickers, onOpenVenue, onTapSticker }) {
+  // 행사 슬라이드 후보 산출 (UpcomingPromoCard 와 동일 로직)
+  const d = getNow();
+  const todayDay = d.getMonth() === 5 && d.getDate() === 13 ? "day1"
+    : d.getMonth() === 5 && d.getDate() === 14 ? "day2" : null;
+  const today0 = new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+  const day1Ts = new Date(2026, 5, 13).getTime();
+  const day2Ts = new Date(2026, 5, 14).getTime();
+  const preFestival = today0 < day1Ts;
+  const postFestival = today0 > day2Ts;
+  const nm = d.getHours() * 60 + d.getMinutes();
+  let festivalSlides = [];
+  let festivalMode = "preview";
+  if (!postFestival) {
+    if (preFestival) {
+      const all = [
+        ...(FESTIVAL_PROGRAM.day1?.items || []).filter((it) => it.time && /^(\d\d:\d\d)~(\d\d:\d\d)$/.test(it.time)).map((it) => ({ ...it, _day: "day1" })),
+        ...(FESTIVAL_PROGRAM.day2?.items || []).filter((it) => it.time && /^(\d\d:\d\d)~(\d\d:\d\d)$/.test(it.time)).map((it) => ({ ...it, _day: "day2" })),
+      ].sort((a, b) => {
+        const dc = (a._day || "").localeCompare(b._day || "");
+        if (dc !== 0) return dc;
+        return (a.time || "").localeCompare(b.time || "");
+      });
+      const N = Math.min(5, all.length);
+      if (all.length <= N) festivalSlides = all;
+      else { const s = all.length / N; festivalSlides = Array.from({ length: N }, (_, i) => all[Math.floor(i * s)]); }
+    } else if (todayDay) {
+      const todayItems = (FESTIVAL_PROGRAM[todayDay]?.items || []).filter((it) => it.time && /^(\d\d:\d\d)~(\d\d:\d\d)$/.test(it.time)).map((it) => ({ ...it, _day: todayDay }));
+      const upcoming = [], ongoing = [], past = [];
+      todayItems.forEach((it) => {
+        const [_, s, e] = it.time.match(/^(\d\d:\d\d)~(\d\d:\d\d)$/);
+        const sMin = toMin(s), eMin = toMin(e);
+        if (sMin > nm) upcoming.push(it);
+        else if (eMin > nm) ongoing.push(it);
+        else past.push(it);
+      });
+      const byStart = (a, b) => (a.time || "").localeCompare(b.time || "");
+      upcoming.sort(byStart); ongoing.sort(byStart); past.sort(byStart);
+      festivalSlides = [...upcoming, ...ongoing, ...past].slice(0, 5);
+      festivalMode = upcoming.length > 0 ? "upcoming" : ongoing.length > 0 ? "ongoing" : "ended";
+    }
+  }
+
+  // 스티커 후보 산출 (RecentStickersBanner 로직과 동일 — 1시간 이내)
+  const STICKER_VIEW_WINDOW_MS = 60 * 60 * 1000;
+  const stickerCutoff = Date.now() - STICKER_VIEW_WINDOW_MS;
+  const STICKER_LABEL = { "👍": "좋아요", "📸": "포토스팟", "💤": "쉬는 곳", "🚻": "화장실", "🍱": "음식" };
+  const stickerSlides = Object.entries(stickers || {})
+    .map(([id, s]) => ({ id, ...(s || {}) }))
+    .filter((s) => s && typeof s.lat === "number" && typeof s.lng === "number" && typeof s.ts === "number" && s.ts >= stickerCutoff)
+    .sort((a, b) => {
+      const aHas = a.label ? 1 : 0;
+      const bHas = b.label ? 1 : 0;
+      if (aHas !== bHas) return bHas - aHas;
+      return b.ts - a.ts;
+    })
+    .slice(0, 6);
+
+  // 통합 슬라이드 — 행사 먼저, 스티커 다음
+  const slides = [
+    ...festivalSlides.map((p) => ({ type: "festival", data: p, mode: festivalMode })),
+    ...stickerSlides.map((p) => ({ type: "sticker", data: p })),
+  ];
+  if (slides.length === 0) return null;
+
+  const [idx, setIdx] = useState(0);
+  const [paused, setPaused] = useState(false);
+  useEffect(() => {
+    if (paused || slides.length <= 1) return;
+    const id = setInterval(() => setIdx((i) => (i + 1) % slides.length), 5000);
+    return () => clearInterval(id);
+  }, [paused, slides.length]);
+  const touchStartX = useRef(null);
+  const onTouchStart = (e) => { touchStartX.current = e.touches[0].clientX; setPaused(true); };
+  const onTouchEnd = (e) => {
+    if (touchStartX.current == null) return;
+    const dx = e.changedTouches[0].clientX - touchStartX.current;
+    if (Math.abs(dx) > 30) {
+      if (dx < 0) setIdx((i) => (i + 1) % slides.length);
+      else setIdx((i) => (i - 1 + slides.length) % slides.length);
+    }
+    touchStartX.current = null;
+    setTimeout(() => setPaused(false), 4000);
+  };
+  const safeIdx = Math.min(idx, slides.length - 1);
+
+  // 각 슬라이드 렌더 (festival vs sticker)
+  const renderSlide = (slide, i) => {
+    if (slide.type === "festival") {
+      const pick = slide.data;
+      const accent = pick.zone % 2 ? FT.orangeDark : FT.tealDark;
+      const cSoft = pick.zone % 2 ? FT.orangeSoft : FT.tealSoft;
+      const dayLabel = pick._day === "day2" ? "6.14 (일)" : pick._day === "day1" ? "6.13 (토)" : "";
+      return (
+        <button key={`f${i}`} onClick={() => onOpenVenue && onOpenVenue()}
+          aria-roledescription="slide" aria-label={`${i + 1}/${slides.length} · 행사: ${pick.title}`}
+          tabIndex={i === safeIdx ? 0 : -1}
+          style={{ flex: `0 0 ${100 / slides.length}%`, display: "flex", flexDirection: "column", gap: 3,
+            background: "rgba(255,255,255,0.95)", color: FT.ink,
+            border: "1.5px solid " + FT.mute + "55", borderRadius: 10,
+            borderLeft: `4px solid ${accent}`, padding: "6px 9px", boxShadow: "none",
+            fontFamily: "'Jua', sans-serif", cursor: "pointer", textAlign: "left" }}>
+          <div style={{ fontSize: 12, color: FT.ink, fontWeight: 700, lineHeight: 1.25,
+            display: "-webkit-box", WebkitLineClamp: 1, WebkitBoxOrient: "vertical", overflow: "hidden" }}>
+            {pick.title}
+          </div>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <span style={{ fontSize: 10, color: accent, fontFamily: "'IBM Plex Mono', monospace", fontWeight: 700,
+              display: "inline-flex", alignItems: "center", gap: 4 }}>
+              {pick.time}
+              {pick.zone != null && <span style={{ fontSize: 9, opacity: 0.8 }}>· {pick.zone}존</span>}
+              {slide.mode === "preview" && dayLabel && <span style={{ fontSize: 9, opacity: 0.8 }}>· {dayLabel}</span>}
+            </span>
+            <span style={{ fontSize: 10, color: accent, fontWeight: 700 }}>자세히 →</span>
+          </div>
+        </button>
+      );
+    } else {
+      const pick = slide.data;
+      const accent = FT.tealDark;
+      const ageMin = Math.max(0, Math.floor((Date.now() - pick.ts) / 60000));
+      const kindName = STICKER_LABEL[pick.kind] || "";
+      return (
+        <button key={`s${i}-${pick.id}`} onClick={() => onTapSticker && onTapSticker(pick)}
+          aria-roledescription="slide" aria-label={`${i + 1}/${slides.length} · 스티커: ${pick.label || kindName}`}
+          tabIndex={i === safeIdx ? 0 : -1}
+          style={{ flex: `0 0 ${100 / slides.length}%`, display: "flex", alignItems: "center", gap: 8,
+            background: "rgba(255,255,255,0.95)", color: FT.ink,
+            border: "1.5px solid " + FT.mute + "55", borderRadius: 10,
+            borderLeft: `4px solid ${accent}`, padding: "6px 9px", boxShadow: "none",
+            fontFamily: "'Jua', sans-serif", cursor: "pointer", textAlign: "left" }}>
+          <span style={{ display: "inline-flex", alignItems: "center", justifyContent: "center",
+            width: 26, height: 26, borderRadius: "50%", background: "#fff",
+            border: "1.5px solid " + accent, fontSize: 16, flexShrink: 0 }}>{pick.kind || "📍"}</span>
+          <div style={{ flex: 1, minWidth: 0, lineHeight: 1.25,
+            display: "flex", flexDirection: "column", gap: 1 }}>
+            <div style={{ fontSize: 12, color: FT.ink, fontWeight: 700,
+              overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+              display: "-webkit-box", WebkitLineClamp: 1, WebkitBoxOrient: "vertical" }}>
+              {pick.label || kindName || "스티커"}
+            </div>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <span style={{ fontSize: 10, color: accent, fontFamily: "'IBM Plex Mono', monospace", fontWeight: 700 }}>
+                {ageMin <= 0 ? "방금" : `${ageMin}분 전`}
+                {kindName && pick.label ? <span style={{ fontSize: 9, opacity: 0.8 }}> · {kindName}</span> : null}
+              </span>
+              <span style={{ fontSize: 10, color: accent, fontWeight: 700 }}>찾기 →</span>
+            </div>
+          </div>
+        </button>
+      );
+    }
+  };
+
+  return (
+    <div role="region" aria-roledescription="carousel" aria-label="지도 상단 정보 배너">
+      <div style={{ position: "relative", overflow: "hidden", borderRadius: 10 }}
+        onTouchStart={onTouchStart} onTouchEnd={onTouchEnd}
+        onMouseEnter={() => setPaused(true)} onMouseLeave={() => setPaused(false)}>
+        <div style={{ display: "flex", width: `${slides.length * 100}%`,
+          transform: `translateX(-${safeIdx * (100 / slides.length)}%)`,
+          transition: "transform 0.35s cubic-bezier(0.2, 0.9, 0.3, 1)" }}>
+          {slides.map((s, i) => renderSlide(s, i))}
+        </div>
+      </div>
+      {slides.length > 1 && (
+        <div style={{ display: "flex", justifyContent: "center", gap: 4, marginTop: 4 }}>
+          {slides.map((s, i) => (
+            <button key={i} onClick={() => { setIdx(i); setPaused(true); setTimeout(() => setPaused(false), 4000); }}
+              aria-label={`슬라이드 ${i + 1}`}
+              title={s.type === "festival" ? "행사" : "스티커"}
+              style={{ width: i === safeIdx ? 12 : 4, height: 4, borderRadius: 999,
+                background: i === safeIdx
+                  ? (s.type === "festival" ? (s.data.zone % 2 ? FT.orangeDark : FT.tealDark) : FT.tealDark)
+                  : FT.mute + "88",
                 border: "none", padding: 0, cursor: "pointer",
                 transition: "width 0.2s, background 0.2s" }} />
           ))}
