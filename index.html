@@ -143,7 +143,7 @@
 
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef, useMemo } = React;
-const BUILD = "b318"; /* 화면 우하단 표시 — 최신 배포 확인용 */
+const BUILD = "b319"; /* 화면 우하단 표시 — 최신 배포 확인용 */
 
 /* 실시간 위치 공유용 Firebase DB 주소. 여기에 한 번 넣어두면 승객 링크가 ?view=map 만 남아 깔끔해집니다. */
 const SHARE_DB = "https://innum-bus-default-rtdb.firebaseio.com";
@@ -4270,21 +4270,21 @@ function UpcomingPromoCard({ onOpen }) {
   }
   if (pool.length === 0) return null;
 
-  // 슬라이드용 후보 — 5개로 고정. 시드 기반(시각 변경마다 다른 셔플)으로 안정성 + 다양성 확보.
+  // 슬라이드용 후보 — 모두 시간순. 5개 고정.
+  // upcoming(행사 당일): 아직 시작 안 한 프로그램 중 가장 가까운 5개
+  // preview(행사 전/후): 양일 통합 시간순 정렬 후 시간대를 골고루 보여주도록 균등 간격 추출
   const SLIDE_N = Math.min(5, pool.length);
-  const seed = useRef(Math.floor(Math.random() * 100000)).current;
   const slides = (() => {
-    const sorted = [...pool].sort((a, b) => ((a.time || "").localeCompare(b.time || "")));
+    const sorted = [...pool].sort((a, b) => {
+      const dayCmp = (a._day || "").localeCompare(b._day || "");
+      if (dayCmp !== 0) return dayCmp;
+      return (a.time || "").localeCompare(b.time || "");
+    });
     if (mode === "upcoming") return sorted.slice(0, SLIDE_N);
-    // preview 모드: 시드 기반 deterministic shuffle 으로 다양한 후보 노출
-    const arr = [...sorted];
-    let rng = seed;
-    const rand = () => { rng = (rng * 1103515245 + 12345) & 0x7fffffff; return rng / 0x7fffffff; };
-    for (let i = arr.length - 1; i > 0; i--) {
-      const j = Math.floor(rand() * (i + 1));
-      [arr[i], arr[j]] = [arr[j], arr[i]];
-    }
-    return arr.slice(0, SLIDE_N);
+    // preview: 일·시간 정렬 후 균등 간격(stride) 으로 5개 — 오전~저녁 / day1·day2 골고루
+    if (sorted.length <= SLIDE_N) return sorted;
+    const stride = sorted.length / SLIDE_N;
+    return Array.from({ length: SLIDE_N }, (_, i) => sorted[Math.floor(i * stride)]);
   })();
 
   const [idx, setIdx] = useState(0);
