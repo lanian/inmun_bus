@@ -143,7 +143,7 @@
 
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef, useMemo } = React;
-const BUILD = "b317"; /* 화면 우하단 표시 — 최신 배포 확인용 */
+const BUILD = "b318"; /* 화면 우하단 표시 — 최신 배포 확인용 */
 
 /* 실시간 위치 공유용 Firebase DB 주소. 여기에 한 번 넣어두면 승객 링크가 ?view=map 만 남아 깔끔해집니다. */
 const SHARE_DB = "https://innum-bus-default-rtdb.firebaseio.com";
@@ -1844,9 +1844,72 @@ function UsageStatsViewer({ onClose, dbUrl, getAuth, refreshAuth }) {
   const [status, setStatus] = useState("");
   const [loading, setLoading] = useState(false);
   const catLabels = {
-    session: "세션", view: "탭 view", click: "클릭", toggle: "토글",
-    open: "열기", notice: "공지", transition: "탭 이동", stop: "정류장", sticker: "스티커", error: "에러", etc: "기타",
+    session: "세션", view: "화면 진입", click: "주요 클릭", toggle: "토글",
+    open: "기능 열기", notice: "공지", transition: "화면 이동", stop: "정류장 탭", sticker: "스티커", error: "오류", etc: "기타",
   };
+  /* 이벤트 키 → 사용자 친화 한글 라벨. 알려진 키만 매핑하고 없으면 raw 키 그대로 노출. */
+  const EVENT_LABELS = {
+    "session.start": "세션 시작",
+    "session.endView.list": "종료 직전: 메인",
+    "session.endView.venue": "종료 직전: 행사장",
+    "session.endView.live": "종료 직전: 라이브 지도",
+    "view.list": "메인 진입",
+    "view.venue": "행사장 진입",
+    "view.live": "라이브 지도 진입",
+    "transition.list_to_venue": "메인 → 행사장",
+    "transition.list_to_live": "메인 → 지도",
+    "transition.venue_to_list": "행사장 → 메인",
+    "transition.venue_to_live": "행사장 → 지도",
+    "transition.live_to_list": "지도 → 메인",
+    "transition.live_to_venue": "지도 → 행사장",
+    "click.banner.festival": "행사 안내 배너",
+    "click.promo": "다가올 프로그램 슬라이드",
+    "open.timetable": "운행 시간표 열기",
+    "notice.show.info": "공지 노출 (정보)",
+    "notice.show.warn": "공지 노출 (경고)",
+    "notice.show.danger": "공지 노출 (위험)",
+    "notice.dismiss.info": "공지 닫음 (정보)",
+    "notice.dismiss.warn": "공지 닫음 (경고)",
+    "notice.dismiss.danger": "공지 닫음 (위험)",
+    "stop.popup.square518": "5·18민주광장 탭",
+    "stop.popup.haneul": "하늘마당 탭",
+    "stop.popup.hakdong": "학동증심사역 탭",
+    "stop.popup.hongnim": "홍림교 탭",
+    "stop.popup.unrim": "운림중학교 탭",
+    "stop.popup.hakun": "학운초등학교 탭",
+    "stop.popup.festival": "축제장 탭",
+    "sticker.place.like": "스티커 👍 좋아요",
+    "sticker.place.photo": "스티커 📸 포토스팟",
+    "sticker.place.rest": "스티커 💤 쉬는 곳",
+    "sticker.place.wc": "스티커 🚻 화장실",
+    "sticker.place.food": "스티커 🍱 음식",
+    "error.conn.buses": "연결 실패 · 메인 버스 폴",
+    "error.conn.live": "연결 실패 · 라이브 지도",
+    "error.sticker.save": "스티커 저장 실패",
+  };
+  const labelEv = (k) => EVENT_LABELS[k] || k;
+  /* 디바이스 카테고리 (parseUaCategory) → 사용자 친화 라벨 */
+  const DEVICE_LABELS = {
+    "ios.safari.mobile": "iPhone · Safari",
+    "ios.chrome.mobile": "iPhone · Chrome",
+    "ios.firefox.mobile": "iPhone · Firefox",
+    "ios.edge.mobile": "iPhone · Edge",
+    "android.chrome.mobile": "Android · Chrome",
+    "android.samsung.mobile": "Samsung Browser",
+    "android.firefox.mobile": "Android · Firefox",
+    "android.edge.mobile": "Android · Edge",
+    "android.other.mobile": "Android · 기타",
+    "windows.chrome.desktop": "Windows · Chrome (PC)",
+    "windows.edge.desktop": "Windows · Edge (PC)",
+    "windows.firefox.desktop": "Windows · Firefox (PC)",
+    "mac.safari.desktop": "Mac · Safari",
+    "mac.chrome.desktop": "Mac · Chrome",
+    "mac.firefox.desktop": "Mac · Firefox",
+    "linux.chrome.desktop": "Linux · Chrome",
+    "linux.firefox.desktop": "Linux · Firefox",
+    "unknown": "알 수 없음",
+  };
+  const labelDevice = (k) => DEVICE_LABELS[k] || k;
   const fetchDate = async (d) => {
     if (!d) return null;
     const base = dbUrl.replace(/\/+$/, "");
@@ -1921,14 +1984,15 @@ function UsageStatsViewer({ onClose, dbUrl, getAuth, refreshAuth }) {
       `# 날짜 A: ${dateA} · 총세션: ${aggA.total} · 평균: ${aggA.avgDurMin}분`,
       aggB ? `# 날짜 B: ${dateB} · 총세션: ${aggB.total} · 평균: ${aggB.avgDurMin}분` : null,
       `# 생성: ${new Date().toISOString()}`,
-      "category,key,count_A,count_B",
+      "category,label,key,count_A,count_B",
     ].filter(Boolean);
     const allKeys = new Set([...Object.keys(aggA.evSum), ...(aggB ? Object.keys(aggB.evSum) : [])]);
+    const csvSafe = (s) => `"${String(s).replace(/"/g, '""')}"`;
     const rows = [...allKeys].sort().map((k) => {
       const cat = k.split(".")[0] || "etc";
       const a = aggA.evSum[k] || 0;
       const b = aggB ? (aggB.evSum[k] || 0) : "";
-      return `${cat},${k},${a},${b}`;
+      return `${cat},${csvSafe(labelEv(k))},${k},${a},${b}`;
     });
     return [...meta, ...rows].join("\n");
   };
@@ -2011,7 +2075,7 @@ function UsageStatsViewer({ onClose, dbUrl, getAuth, refreshAuth }) {
             <div className="space-y-0.5">
               {Object.entries(agg.byDevice).sort((a, b) => b[1] - a[1]).slice(0, 8).map(([k, v]) => (
                 <div key={k} className="flex items-center justify-between text-[11px]">
-                  <span style={{ color: "#cbd5e1", fontFamily: "'IBM Plex Mono', monospace" }}>{k}</span>
+                  <span style={{ color: "#cbd5e1", fontFamily: "'Jua', sans-serif" }} title={k}>{labelDevice(k)}</span>
                   <span style={{ color: color, fontFamily: "'Jua', sans-serif", fontWeight: 700 }}>{v}</span>
                 </div>
               ))}
@@ -2027,7 +2091,7 @@ function UsageStatsViewer({ onClose, dbUrl, getAuth, refreshAuth }) {
             <div className="space-y-0.5">
               {agg.byEvCat[cat].slice(0, 12).map(([k, v]) => (
                 <div key={k} className="flex items-center justify-between text-[11px]">
-                  <span className="truncate" style={{ color: "#cbd5e1", fontFamily: "'IBM Plex Mono', monospace" }}>{k}</span>
+                  <span className="truncate" style={{ color: "#cbd5e1", fontFamily: "'Jua', sans-serif" }} title={k}>{labelEv(k)}</span>
                   <span style={{ color: color, fontFamily: "'Jua', sans-serif", fontWeight: 700, marginLeft: 8 }}>{v}</span>
                 </div>
               ))}
