@@ -143,7 +143,7 @@
 
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef, useMemo } = React;
-const BUILD = "b344"; /* 화면 우하단 표시 — 최신 배포 확인용 */
+const BUILD = "b344b"; /* 화면 우하단 표시 — 최신 배포 확인용 */
 
 /* 실시간 위치 공유용 Firebase DB 주소. 여기에 한 번 넣어두면 승객 링크가 ?view=map 만 남아 깔끔해집니다. */
 const SHARE_DB = "https://innum-bus-default-rtdb.firebaseio.com";
@@ -7062,12 +7062,14 @@ function App() {
 
   /* FAKE GPS 시뮬레이션 — FAKE 시각이 진행됨에 따라 시간표 기준 가상 좌표를 setUserPos.
      운영자가 운행 모드를 집에서 시연·연습할 때 자동 안내·도착 트리거를 재현 가능.
-     회차 시간 사이(대기 구간)에는 시작/종점 정류장에 정차한 상태로 표시. */
+     회차 시간 사이(대기 구간)에는 시작/종점 정류장에 정차한 상태로 표시.
+     b344b: 초 단위 소수 분(nowMinFrac) 으로 scheduledBusPos 호출 → 가속 배율 ×1 에서도 부드럽게 이동 */
   useEffect(() => {
     if (!FAKE_GPS) return;
     const tick = () => {
-      const nowMin = getNowMin();
-      const p = scheduledBusPos(direction, tripIdx, nowMin);
+      const d = getNow();
+      const nowMinFrac = d.getHours() * 60 + d.getMinutes() + d.getSeconds() / 60 + d.getMilliseconds() / 60000;
+      const p = scheduledBusPos(direction, tripIdx, nowMinFrac);
       if (p) {
         setUserPos({ lat: p.lat, lng: p.lng, accuracy: 12, speed: 8 }); // ~30km/h
         gpsLastUpdateRef.current = Date.now();
@@ -7079,7 +7081,7 @@ function App() {
       let stopIdx = 0;
       if (sched) {
         const startMin = toMin(sched[0]);
-        stopIdx = nowMin < startMin ? 0 : route.stops.length - 1;
+        stopIdx = nowMinFrac < startMin ? 0 : route.stops.length - 1;
       }
       const s = route.stops[stopIdx];
       if (s && typeof s.lat === "number") {
@@ -7088,7 +7090,9 @@ function App() {
       }
     };
     tick();
-    const id = setInterval(tick, 2000);
+    // 가속 배율 높을수록 더 자주 갱신 (×10 이상에선 0.5s)
+    const intervalMs = FAKE && FAKE.speed >= 10 ? 500 : 1000;
+    const id = setInterval(tick, intervalMs);
     return () => clearInterval(id);
   }, [direction, tripIdx]);
 
