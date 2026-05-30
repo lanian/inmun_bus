@@ -143,7 +143,7 @@
 
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef, useMemo } = React;
-const BUILD = "b351"; /* 화면 우하단 표시 — 최신 배포 확인용 */
+const BUILD = "b352"; /* 화면 우하단 표시 — 최신 배포 확인용 */
 
 /* 실시간 위치 공유용 Firebase DB 주소. 여기에 한 번 넣어두면 승객 링크가 ?view=map 만 남아 깔끔해집니다. */
 const SHARE_DB = "https://innum-bus-default-rtdb.firebaseio.com";
@@ -2333,6 +2333,94 @@ function UsageStatsViewer({ onClose, dbUrl, getAuth, refreshAuth }) {
 /* 시연·테스트 모드 (FAKE) 운영자 진입 UI — URL 파라미터 대신 모달에서 날짜/시간/가속배율 입력
    적용 시 LS 저장 + 페이지 리로드 → 모든 화면이 가짜 시각으로 동작
    행사 당일 실수 방지 — 적용 전 큰 경고 + 상단 칩(b340)으로 시각 표시 강제 */
+/* 정류장별 안내 타이밍 설정 — 방향×정류장 매트릭스에서 enter/arrive/pass/기본 선택.
+   기본 타이밍과 다른 값으로 설정한 정류장만 LS 에 저장(공간 절약 + 명시적). */
+function StopTimingEditor({ onClose, stopTimings, setStopTimings, defaultTiming }) {
+  const opts = [
+    { v: "", lbl: "기본", color: "#64748b" },
+    { v: "enter", lbl: "진입", color: "#22d65f" },
+    { v: "arrive", lbl: "도착", color: "#60a5fa" },
+    { v: "pass", lbl: "통과", color: "#fbbf24" },
+  ];
+  const setTiming = (dir, name, v) => {
+    const key = `${dir}|${name}`;
+    setStopTimings((prev) => {
+      const next = { ...prev };
+      if (!v) delete next[key]; else next[key] = v;
+      return next;
+    });
+  };
+  const resetAll = () => {
+    if (!window.confirm("정류장별 타이밍 오버라이드를 모두 초기화할까요? (기본 타이밍으로 복귀)")) return;
+    setStopTimings({});
+  };
+  const DirBlock = ({ dir, label }) => (
+    <div>
+      <div className="text-[12px] font-bold mb-1.5" style={{ color: dir === "outbound" ? "#fb923c" : "#5eead4", fontFamily: "'Jua', sans-serif" }}>
+        {label}
+      </div>
+      <div className="space-y-1.5">
+        {ROUTES[dir].stops.map((s) => {
+          const k = `${dir}|${s.name}`;
+          const cur = stopTimings[k] || "";
+          return (
+            <div key={k} className="flex items-center gap-2">
+              <div className="text-[11px] flex-1 truncate" style={{ color: "#cbd5e1", fontFamily: "'Jua', sans-serif" }}>
+                {s.name}
+              </div>
+              <div className="flex gap-0.5 flex-shrink-0">
+                {opts.map((o) => (
+                  <button key={o.v} onClick={() => setTiming(dir, s.name, o.v)}
+                    className="px-1.5 py-0.5 rounded text-[10px] font-bold"
+                    style={{ background: cur === o.v ? o.color : "rgba(100,116,139,0.08)",
+                      color: cur === o.v ? "#0a0b0f" : o.color,
+                      border: `1px solid ${cur === o.v ? o.color : "rgba(100,116,139,0.2)"}`,
+                      fontFamily: "'Jua', sans-serif" }}>
+                    {o.lbl}
+                  </button>
+                ))}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      style={{ background: "rgba(0,0,0,0.7)" }} onClick={onClose}>
+      <div className="w-full max-w-lg rounded-2xl border-2 p-4 space-y-3 max-h-[92vh] overflow-y-auto"
+        style={{ background: "#13151c", borderColor: "#3a3f54" }} onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between">
+          <div className="text-sm font-bold" style={{ color: "#fbbf24", fontFamily: "'Jua', sans-serif" }}>
+            📋 정류장별 안내 타이밍
+          </div>
+          <button onClick={onClose} className="text-slate-400 hover:text-amber-400 text-lg leading-none px-1" aria-label="닫기">×</button>
+        </div>
+        <div className="text-[10px] leading-relaxed" style={{ color: "#94a3b8" }}>
+          정류장 도착마다 어느 시점에 안내가 발화될지 개별 지정. <b style={{ color: "#fbbf24" }}>기본</b> = 자동 탭 기본 타이밍(<b>{defaultTiming === "enter" ? "진입" : defaultTiming === "arrive" ? "도착" : "통과"}</b>) 사용.
+          <br />
+          <b style={{ color: "#22d65f" }}>진입</b> 반경 진입 즉시 · <b style={{ color: "#60a5fa" }}>도착</b> 30m 안+저속 · <b style={{ color: "#fbbf24" }}>통과</b> 반경 벗어난 직후
+        </div>
+        <DirBlock dir="outbound" label="🟧 축제장 방향" />
+        <DirBlock dir="inbound" label="🟦 민주광장 방향" />
+        <div className="grid grid-cols-2 gap-2 pt-2">
+          <button onClick={resetAll}
+            className="px-3 py-2 rounded-lg text-xs font-bold"
+            style={{ background: "rgba(100,116,139,0.18)", color: "#cbd5e1", border: "1px solid #3a3f54", fontFamily: "'Jua', sans-serif" }}>
+            전체 초기화
+          </button>
+          <button onClick={onClose}
+            className="px-3 py-2 rounded-lg text-xs font-bold"
+            style={{ background: "#fbbf24", color: "#0a0b0f", fontFamily: "'Jua', sans-serif" }}>
+            닫기
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function DemoModeEditor({ onClose }) {
   const fmtDateTimeLocal = (d) => {
     const pad = (n) => String(n).padStart(2, "0");
@@ -6386,14 +6474,20 @@ function App() {
   // 기본 route — 도착 시각 예측·표시 정확. 짧은 우회/잘못 매칭에 약하면 straight 로 전환.
   const [distanceMode, setDistanceMode] = useState(() => LS.get("distmode", "route"));
   useEffect(() => LS.set("distmode", distanceMode), [distanceMode]);
-  // 축제장행 중간 정류장 통과 안내 — 기본 ON. 끄면 종점·홍보 정류장만 발화(이전 기본 동작).
-  const [outboundPassAnnounce, setOutboundPassAnnounce] = useState(() => LS.get("outpass", "1") === "1");
+  // 축제장행 중간 정류장 통과 안내 — 기본 OFF. ON 이면 promo·programStop 없는 정류장에서
+  // "정차하지 않고 통과합니다" 일괄 발화. 보통은 정류장별 promo + 정류장별 타이밍 설정 권장.
+  const [outboundPassAnnounce, setOutboundPassAnnounce] = useState(() => LS.get("outpass", "0") === "1");
   useEffect(() => LS.set("outpass", outboundPassAnnounce ? "1" : "0"), [outboundPassAnnounce]);
-  // 자동 안내 타이밍 — "enter" 진입 시(기본) | "pass" 통과 후(반경 벗어난 직후)
+  // 자동 안내 기본 타이밍 — 정류장별 설정이 없을 때 사용. enter | arrive | pass
   const [autoAnnTiming, setAutoAnnTiming] = useState(() => LS.get("anntiming", "enter"));
   useEffect(() => LS.set("anntiming", autoAnnTiming), [autoAnnTiming]);
+  // 정류장별 안내 타이밍 오버라이드 — { "outbound|운림중학교": "pass", ... }. 빈 값/없음 = 기본 타이밍 사용
+  const [stopTimings, setStopTimings] = useState(() => LS.getJSON("stoptimings", {}));
+  useEffect(() => LS.setJSON("stoptimings", stopTimings), [stopTimings]);
+  const getStopTiming = (dir, stopName) => stopTimings[`${dir}|${stopName}`] || autoAnnTiming || "enter";
   // 통과 모드에서 안내 대기 중인 정류장 인덱스 집합 — 반경 진입 후 벗어날 때 발화
   const pendingPassRef = useRef(new Set());
+  const [showStopTimingEditor, setShowStopTimingEditor] = useState(false);
   const [permissionState, setPermissionState] = useState("unknown");
   const [showHelp, setShowHelp] = useState(false);
   const [autoLegSwitch, setAutoLegSwitch] = useState(() => LS.get("autoleg", "0") === "1");
@@ -7317,20 +7411,30 @@ function App() {
       // 건너뛴 앞쪽 정류장들은 지나간 것으로 표시 (이후 재안내 방지)
       for (let k = currentIdx; k < nearestIdx; k++) { announcedRef.current.add(k); pendingPassRef.current.delete(k); }
       setCurrentIdx(nearestIdx);
-      if (autoAnnTiming === "pass") {
+      const nearTiming = getStopTiming(direction, stops[nearestIdx].name);
+      if (nearTiming === "pass") {
         // 통과 모드 — 지금 발화하지 않고 큐에 넣음. 반경 벗어난 직후 announceStop 호출.
         pendingPassRef.current.add(nearestIdx);
+      } else if (nearTiming === "arrive") {
+        // 도착 모드 — 좁은 반경(30m) + 저속(<1.5m/s, 속도 미보고 시 허용) 일 때 발화
+        const arrivedR = Math.min(nearStopRadius, 30);
+        const sp = userPos.speed;
+        const slow = sp == null || sp < 1.5;
+        if (nearestDist <= arrivedR && slow) {
+          announcedRef.current.add(nearestIdx);
+          announceStop(nearestIdx);
+          if (nearestIdx === stops.length - 1 && nextLeg) { legSwitchArmedRef.current = true; legDepartCountRef.current = 0; }
+        }
+        // else: 다음 tick 에서 재확인
       } else {
         announcedRef.current.add(nearestIdx);
-        // 시작 승강장 안내: 출발지(5·18민주광장 환영 / 축제장 하차 안내)도 자동 방송
         announceStop(nearestIdx);
-        // 종점 도착 시 자동 회차 전환 무장
         if (nearestIdx === stops.length - 1 && nextLeg) { legSwitchArmedRef.current = true; legDepartCountRef.current = 0; }
       }
       return;
     }
-    // 통과 모드 — pending 정류장들이 반경 벗어났는지 확인 후 발화
-    if (autoAnnTiming === "pass" && pendingPassRef.current.size) {
+    // 통과(pass) 큐 — 반경 벗어났는지 확인 후 발화
+    if (pendingPassRef.current.size) {
       pendingPassRef.current.forEach((idx) => {
         const c = coords[coordKey(direction, stops[idx].name)]; if (!c) return;
         const r = stops[idx]?.radius || triggerRadius;
@@ -7359,7 +7463,7 @@ function App() {
         if (dCur > curStopRadius && dNext < dCur) setCurrentIdx(currentIdx + 1);
       }
     }
-  }, [userPos, autoMode, stops, triggerRadius, coords, direction, currentIdx, autoAnnTiming]);
+  }, [userPos, autoMode, stops, triggerRadius, coords, direction, currentIdx, autoAnnTiming, stopTimings]);
 
   /* --- Auto leg-switch: 종점 도착 후, 연속으로 반경*1.5를 벗어나면 전환 (GPS 노이즈 히스테리시스) --- */
   useEffect(() => {
@@ -8991,14 +9095,13 @@ function App() {
 
           <div className="flex items-center justify-between gap-3">
             <div className="min-w-0">
-              <div className="text-xs text-slate-400">자동 안내 타이밍</div>
+              <div className="text-xs text-slate-400">자동 안내 기본 타이밍</div>
               <div className="text-[10px] text-slate-600">
-                진입 = 반경 진입 즉시 발화 · 통과 = 반경 벗어난 직후 발화
-                <br />축제장행 통과 안내처럼 '지나간 뒤'에 알리고 싶을 때 통과 선택
+                정류장별 설정이 없을 때 적용 · 진입(반경 진입 즉시) · 도착(좁은 반경+저속) · 통과(반경 벗어난 직후)
               </div>
             </div>
             <div className="flex gap-1 flex-shrink-0">
-              {[["enter","진입"],["pass","통과"]].map(([v, lbl]) => (
+              {[["enter","진입"],["arrive","도착"],["pass","통과"]].map(([v, lbl]) => (
                 <button key={v} onClick={() => setAutoAnnTiming(v)}
                   className="px-2 py-1 rounded text-[11px] font-bold"
                   style={{
@@ -9011,6 +9114,15 @@ function App() {
               ))}
             </div>
           </div>
+          <button onClick={() => setShowStopTimingEditor(true)}
+            className="w-full px-3 py-2 rounded-lg text-[11px] font-bold flex items-center justify-between"
+            style={{ background: "rgba(251,191,36,0.08)", color: "#fbbf24",
+              border: "1px solid rgba(251,191,36,0.3)", fontFamily: "'Jua', sans-serif" }}>
+            <span>📋 정류장별 안내 타이밍 설정</span>
+            <span className="text-[10px] opacity-70">
+              {Object.keys(stopTimings).length > 0 ? `${Object.keys(stopTimings).length}개 오버라이드` : "기본 타이밍만"}
+            </span>
+          </button>
 
           <div className="flex items-center justify-between gap-3">
             <div className="min-w-0">
@@ -9353,6 +9465,7 @@ function App() {
         // 경유점 변경되었을 수 있음 — FAKE GPS OSRM 폴리라인 재로드(새 via 반영)
         if (FAKE_GPS) setFakeOsrmPolys({});
       }} dbUrl={shareUrl} getAuth={() => authTokenRef.current} />}
+      {showStopTimingEditor && <StopTimingEditor onClose={() => setShowStopTimingEditor(false)} stopTimings={stopTimings} setStopTimings={setStopTimings} defaultTiming={autoAnnTiming} />}
       {showZoneEditor && <ZoneEditor onClose={() => setShowZoneEditor(false)} dbUrl={shareUrl} getAuth={() => authTokenRef.current}
         refreshAuth={async () => { try { const d = await firebaseSignIn(); if (d && d.idToken) { authTokenRef.current = d.idToken; tokenIssuedAtRef.current = Date.now(); return d.idToken; } } catch (_) {} return null; }} />}
       {showNoticeEditor && <NoticeEditor onClose={() => setShowNoticeEditor(false)} dbUrl={shareUrl} getAuth={() => authTokenRef.current}
