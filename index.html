@@ -143,7 +143,7 @@
 
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef, useMemo } = React;
-const BUILD = "b370"; /* 화면 우하단 표시 — 최신 배포 확인용 */
+const BUILD = "b371"; /* 화면 우하단 표시 — 최신 배포 확인용 */
 
 /* 실시간 위치 공유용 Firebase DB 주소. 여기에 한 번 넣어두면 승객 링크가 ?view=map 만 남아 깔끔해집니다. */
 const SHARE_DB = "https://innum-bus-default-rtdb.firebaseio.com";
@@ -1156,35 +1156,70 @@ function StatsModal({ counts, dateKey, onClose, onReset, busCapacity, setBusCapa
   );
 }
 
-/* 카테고리 → 시각 요소 매핑. cat 문자열의 키워드를 부분 매칭해 이모지·색·소제목 패턴 결정.
-   각 프로그램 카드 펼친 헤더에 색 그라데이션 + 큰 이모지로 시각 강조. */
+/* 카테고리 → 시각 요소 매핑. cat 문자열의 키워드를 부분 매칭해 SVG 일러스트·색·라벨 결정.
+   line-art 일러스트(hanji+sumi 톤) — 이모지보다 일관·정돈된 인상. fill="none" stroke 기반. */
+const CategoryArt = {
+  // 각 path/group 은 32x32 viewBox 기준 stroke 2.5
+  OPENING: <g><circle cx="16" cy="16" r="3"/><path d="M16 2v6M16 24v6M2 16h6M24 16h6M6 6l4 4M22 22l4 4M26 6l-4 4M10 22l-4 4"/></g>,
+  TALK: <g><rect x="13" y="3" width="6" height="13" rx="3"/><path d="M9 14a7 7 0 0 0 14 0M16 21v6M11 28h10"/></g>,
+  BOOK: <g><path d="M4 5l12 3 12-3v22l-12 3-12-3z"/><path d="M16 8v22"/></g>,
+  YOUTH: <g><path d="M5 6h22v20H5z"/><path d="M9 11h14M9 16h14M9 21h8"/><path d="M22 23l3-3 2 2-3 3"/></g>,
+  CINEMA: <g><circle cx="16" cy="16" r="11"/><circle cx="16" cy="16" r="3"/><circle cx="16" cy="6" r="2"/><circle cx="16" cy="26" r="2"/><circle cx="6" cy="16" r="2"/><circle cx="26" cy="16" r="2"/></g>,
+  PERFORM: <g><path d="M6 28c4-8 6-14 10-14s6 6 10 14"/><path d="M16 14c0-4 2-8 6-10M16 14c0-4-2-8-6-10"/><circle cx="16" cy="14" r="1.5"/></g>,
+  DETOX: <g><circle cx="16" cy="13" r="4"/><path d="M16 17v4M9 26c0-4 3-6 7-6s7 2 7 6"/><path d="M11 8l10 10M21 8L11 18" strokeWidth="1.5" opacity="0.4"/></g>,
+  POETRY: <g><path d="M6 5l10 3 10-3v22l-10 3-10-3z"/><path d="M16 8v22"/><path d="M9 12h4M9 15h4M19 12h4M19 15h4"/></g>,
+  MEDITATION: <g><path d="M16 26c0-6 4-8 8-8M16 26c0-6-4-8-8-8M16 26c-2-5 0-10 0-14M16 26c2-5 0-10 0-14M16 12a3 3 0 1 0 0 6 3 3 0 0 0 0-6z"/></g>,
+  TEA: <g><path d="M7 12h16v8a6 6 0 0 1-6 6h-4a6 6 0 0 1-6-6z"/><path d="M23 14h3a3 3 0 0 1 0 6h-3"/><path d="M11 4c0 2-2 2-2 4M15 4c0 2-2 2-2 4M19 4c0 2-2 2-2 4" opacity="0.7"/></g>,
+  RADIO: <g><rect x="3" y="13" width="26" height="14" rx="2"/><circle cx="22" cy="20" r="3"/><circle cx="9" cy="20" r="1"/><path d="M22 13l-10-7M22 13l-3-1" opacity="0.6"/></g>,
+  ART: <g><path d="M16 4c-7 0-12 5-12 11 0 4 3 6 6 6 2 0 2 1 2 3 0 3 2 4 4 4 7 0 12-5 12-11C28 9 22 4 16 4z"/><circle cx="10" cy="13" r="1.5" fill="currentColor"/><circle cx="14" cy="9" r="1.5" fill="currentColor"/><circle cx="21" cy="9" r="1.5" fill="currentColor"/><circle cx="24" cy="14" r="1.5" fill="currentColor"/></g>,
+  WORKSHOP: <g><path d="M6 14c0-2 1-3 3-3h4l3-4 3 4h4c2 0 3 1 3 3v10c0 2-1 3-3 3H9c-2 0-3-1-3-3z"/><circle cx="16" cy="19" r="3"/></g>,
+  WALK: <g><path d="M11 5c-2 0-3 1-3 3 0 4 4 6 4 10 0 2-2 3-2 5 0 2 2 3 4 3"/><path d="M21 5c2 0 3 1 3 3 0 4-4 6-4 10 0 2 2 3 2 5 0 2-2 3-4 3"/></g>,
+  QUEST: <g><circle cx="13" cy="13" r="8"/><line x1="19" y1="19" x2="27" y2="27"/><path d="M13 9l1 3h3l-2.5 2 1 3-2.5-2-2.5 2 1-3-2.5-2h3z" fill="currentColor"/></g>,
+  EARTH: <g><path d="M3 26L11 12l5 8 3-5 10 11z"/><circle cx="22" cy="9" r="2.5"/></g>,
+  MUSIC: <g><path d="M11 22V6l14-3v18"/><circle cx="8" cy="22" r="3"/><circle cx="22" cy="20" r="3"/></g>,
+  WRITE: <g><path d="M5 27l4-1L25 10l-3-3L6 23z"/><path d="M22 7l3 3M9 26l-3 1 1-3"/></g>,
+  EXHIBIT: <g><rect x="4" y="6" width="6" height="22"/><rect x="13" y="9" width="6" height="19"/><rect x="22" y="4" width="6" height="24"/></g>,
+  AWARD: <g><path d="M12 4h8v8a4 4 0 0 1-8 0z"/><path d="M12 8H8v2a4 4 0 0 0 4 4M20 8h4v2a4 4 0 0 1-4 4"/><path d="M14 16h4v6h-4z"/><path d="M10 28h12"/></g>,
+  EVENT: <g><path d="M16 4l2 9 9 2-9 2-2 9-2-9-9-2 9-2z"/></g>,
+};
 const CATEGORY_VISUALS = [
-  { keys: ["개막"],           icon: "🎉", color: "#fbbf24", label: "OPENING" },
-  { keys: ["인문 토크", "북콘", "토크", "아카데미", "강연"], icon: "🎤", color: "#fb923c", label: "TALK" },
-  { keys: ["인문다시보기", "북토크", "책"], icon: "📖", color: "#fb923c", label: "BOOK" },
-  { keys: ["청소년", "백일장"], icon: "📜", color: "#fbbf24", label: "YOUTH" },
-  { keys: ["무성영화", "영화", "극장"], icon: "🎬", color: "#1f2937", label: "CINEMA" },
-  { keys: ["몸짓", "퍼포먼스", "공연"], icon: "🌿", color: "#10b981", label: "PERFORM" },
-  { keys: ["디지털 디톡스", "디톡스"], icon: "🧘", color: "#06b6d4", label: "DETOX" },
-  { keys: ["낭독", "시 낭독", "시(詩)"], icon: "📖", color: "#a78bfa", label: "POETRY" },
-  { keys: ["명상", "고요", "싱잉"], icon: "🪷", color: "#a78bfa", label: "MEDITATION" },
-  { keys: ["차담"],            icon: "🍵", color: "#84cc16", label: "TEA" },
-  { keys: ["라디오", "방송", "청음"], icon: "📻", color: "#f97316", label: "RADIO" },
-  { keys: ["사생", "그림", "전시", "미술"], icon: "🎨", color: "#ec4899", label: "ART" },
-  { keys: ["체험", "팝업", "스토어", "체험존"], icon: "🛍", color: "#06b6d4", label: "WORKSHOP" },
-  { keys: ["투어", "산책", "걷기"], icon: "🥾", color: "#22c55e", label: "WALK" },
-  { keys: ["보물", "찾기", "EVENT"], icon: "🔍", color: "#f59e0b", label: "QUEST" },
-  { keys: ["지질"],            icon: "⛰", color: "#0ea5e9", label: "EARTH" },
-  { keys: ["버스킹", "음악"],   icon: "🎸", color: "#ef4444", label: "MUSIC" },
-  { keys: ["엽서", "글쓰기", "쓰기"], icon: "✍", color: "#7c3aed", label: "WRITE" },
-  { keys: ["상설전시"],         icon: "📚", color: "#0d9488", label: "EXHIBIT" },
-  { keys: ["시상"],            icon: "🏆", color: "#fbbf24", label: "AWARD" },
+  { keys: ["개막"],           key: "OPENING",     color: "#fbbf24", label: "OPENING" },
+  { keys: ["인문 토크", "북콘", "토크", "아카데미", "강연"], key: "TALK", color: "#fb923c", label: "TALK" },
+  { keys: ["인문다시보기", "북토크", "책"], key: "BOOK", color: "#fb923c", label: "BOOK" },
+  { keys: ["청소년", "백일장"], key: "YOUTH",       color: "#eab308", label: "YOUTH" },
+  { keys: ["무성영화", "영화", "극장"], key: "CINEMA", color: "#1f2937", label: "CINEMA" },
+  { keys: ["몸짓", "퍼포먼스", "공연"], key: "PERFORM", color: "#10b981", label: "PERFORM" },
+  { keys: ["디지털 디톡스", "디톡스"], key: "DETOX", color: "#06b6d4", label: "DETOX" },
+  { keys: ["낭독"],            key: "POETRY",      color: "#a78bfa", label: "POETRY" },
+  { keys: ["명상", "고요", "싱잉"], key: "MEDITATION", color: "#a78bfa", label: "MEDITATION" },
+  { keys: ["차담"],            key: "TEA",         color: "#65a30d", label: "TEA" },
+  { keys: ["라디오", "방송", "청음"], key: "RADIO", color: "#f97316", label: "RADIO" },
+  { keys: ["사생", "그림", "전시", "미술"], key: "ART", color: "#ec4899", label: "ART" },
+  { keys: ["체험", "팝업", "스토어", "체험존"], key: "WORKSHOP", color: "#0891b2", label: "WORKSHOP" },
+  { keys: ["투어", "산책", "걷기"], key: "WALK", color: "#16a34a", label: "WALK" },
+  { keys: ["보물", "찾기", "EVENT"], key: "QUEST", color: "#d97706", label: "QUEST" },
+  { keys: ["지질"],            key: "EARTH",       color: "#0284c7", label: "EARTH" },
+  { keys: ["버스킹", "음악"],   key: "MUSIC",       color: "#dc2626", label: "MUSIC" },
+  { keys: ["엽서", "글쓰기", "쓰기"], key: "WRITE", color: "#7c3aed", label: "WRITE" },
+  { keys: ["상설전시"],         key: "EXHIBIT",     color: "#0d9488", label: "EXHIBIT" },
+  { keys: ["시상"],            key: "AWARD",       color: "#ca8a04", label: "AWARD" },
 ];
 const categoryVisual = (cat = "") => {
   for (const v of CATEGORY_VISUALS) {
     if (v.keys.some((k) => cat.includes(k))) return v;
   }
-  return { icon: "✨", color: "#94a3b8", label: "EVENT" };
+  return { key: "EVENT", color: "#64748b", label: "EVENT" };
+};
+const CategoryIcon = ({ cat, size = 32, color = "currentColor", strokeWidth = 2.5 }) => {
+  const v = categoryVisual(cat);
+  const art = CategoryArt[v.key] || CategoryArt.EVENT;
+  return (
+    <svg width={size} height={size} viewBox="0 0 32 32" fill="none"
+      stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round"
+      aria-hidden style={{ display: "inline-block", verticalAlign: "middle" }}>
+      {art}
+    </svg>
+  );
 };
 
 function VenueModal({ onClose, initialZone = 0, initialProgram = null, onOpenLiveMap, pageMode = false }) {
@@ -1478,7 +1513,7 @@ function VenueModal({ onClose, initialZone = 0, initialProgram = null, onOpenLiv
                   </div>
                   <div style={{ minWidth: 0, flex: 1 }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap", marginBottom: 2 }}>
-                      <span aria-hidden style={{ fontSize: 16, lineHeight: 1 }}>{categoryVisual(it.cat).icon}</span>
+                      <CategoryIcon cat={it.cat} size={16} color={categoryVisual(it.cat).color} strokeWidth={2.5} />
                       <span style={{ background: zoneColor, color: "#fff", border: "1.5px solid " + FT.ink,
                         borderRadius: 999, padding: "0px 7px", fontSize: 10, fontFamily: "'Jua', sans-serif", fontWeight: 700 }}>
                         {it.zone}
@@ -1514,30 +1549,50 @@ function VenueModal({ onClose, initialZone = 0, initialProgram = null, onOpenLiv
                     {isExpanded && (
                       <div style={{ marginTop: 6, paddingTop: 6, borderTop: "1px dashed " + FT.mute + "55" }}>
                         {(() => {
-                          // 카테고리별 시각 헤더 — 큰 이모지 + 그라데이션 배경 + 카테고리 라벨
+                          // 카테고리별 시각 헤더 — line-art SVG 일러스트 + 그라데이션 + 점 패턴 배경 + 모서리 브래킷
                           const v = categoryVisual(it.cat);
+                          const patternId = `dots-${v.key}-${i}`;
                           return (
-                            <div style={{ position: "relative", height: 80, marginBottom: 6, borderRadius: 8,
-                              border: "1.5px solid " + FT.ink,
-                              background: `linear-gradient(135deg, ${v.color}33 0%, ${v.color}11 60%, ${FT.paper} 100%)`,
-                              overflow: "hidden", display: "flex", alignItems: "center", padding: "0 14px", gap: 12 }}>
-                              <span aria-hidden style={{ fontSize: 44, lineHeight: 1, filter: "drop-shadow(1px 1px 0 rgba(0,0,0,0.15))" }}>
-                                {v.icon}
-                              </span>
-                              <div style={{ flex: 1, minWidth: 0 }}>
-                                <div style={{ fontSize: 9, color: v.color, letterSpacing: 2, fontFamily: "'IBM Plex Mono', monospace", fontWeight: 700 }}>
-                                  {v.label}
+                            <div style={{ position: "relative", height: 96, marginBottom: 6, borderRadius: 10,
+                              border: "2px solid " + FT.ink,
+                              background: `linear-gradient(135deg, ${v.color}26 0%, ${v.color}10 55%, ${FT.paper} 100%)`,
+                              overflow: "hidden", display: "flex", alignItems: "center", padding: "0 16px", gap: 14,
+                              boxShadow: `2px 2px 0 ${FT.ink}` }}>
+                              {/* 배경 점 패턴 (SVG) */}
+                              <svg width="100%" height="100%" style={{ position: "absolute", inset: 0, opacity: 0.18, pointerEvents: "none" }}>
+                                <defs>
+                                  <pattern id={patternId} x="0" y="0" width="14" height="14" patternUnits="userSpaceOnUse">
+                                    <circle cx="2" cy="2" r="1.1" fill={v.color} />
+                                  </pattern>
+                                </defs>
+                                <rect width="100%" height="100%" fill={`url(#${patternId})`} />
+                              </svg>
+                              {/* 좌상 / 우하 브래킷 — 인쇄물 톤 */}
+                              <span aria-hidden style={{ position: "absolute", left: 6, top: 4, fontSize: 12,
+                                color: FT.ink, opacity: 0.55, fontFamily: "'IBM Plex Mono', monospace", lineHeight: 1 }}>┌</span>
+                              <span aria-hidden style={{ position: "absolute", right: 6, bottom: 4, fontSize: 12,
+                                color: FT.ink, opacity: 0.55, fontFamily: "'IBM Plex Mono', monospace", lineHeight: 1 }}>┘</span>
+                              {/* 일러스트 — 둥근 흰 배경 위에 line art */}
+                              <div style={{ position: "relative", width: 64, height: 64, flexShrink: 0,
+                                background: "#fff", border: "2px solid " + FT.ink, borderRadius: 14,
+                                display: "flex", alignItems: "center", justifyContent: "center",
+                                boxShadow: `1.5px 1.5px 0 ${FT.ink}` }}>
+                                <CategoryIcon cat={it.cat} size={38} color={v.color} strokeWidth={2.2} />
+                              </div>
+                              <div style={{ flex: 1, minWidth: 0, position: "relative" }}>
+                                <div style={{ fontSize: 9, color: v.color, letterSpacing: 2.5,
+                                  fontFamily: "'IBM Plex Mono', monospace", fontWeight: 700, marginBottom: 2 }}>
+                                  ▸ {v.label}
                                 </div>
-                                <div style={{ fontSize: 13, color: FT.ink, fontFamily: "'Jua', sans-serif", fontWeight: 700, lineHeight: 1.2,
+                                <div style={{ fontSize: 14, color: FT.ink, fontFamily: "'Jua', sans-serif", fontWeight: 700, lineHeight: 1.2,
                                   overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                                   {it.title}
                                 </div>
+                                <div style={{ fontSize: 9, color: FT.inkSoft, marginTop: 2,
+                                  fontFamily: "'IBM Plex Mono', monospace" }}>
+                                  {it.time}
+                                </div>
                               </div>
-                              {/* 우측 장식 패턴 — 반복 점 */}
-                              <span aria-hidden style={{ position: "absolute", right: 8, top: 6, fontSize: 9,
-                                color: v.color, opacity: 0.4, fontFamily: "'IBM Plex Mono', monospace", letterSpacing: 1, lineHeight: 1 }}>
-                                ░▒▓
-                              </span>
                             </div>
                           );
                         })()}
