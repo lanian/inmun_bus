@@ -143,7 +143,7 @@
 
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef, useMemo } = React;
-const BUILD = "b360"; /* 화면 우하단 표시 — 최신 배포 확인용 */
+const BUILD = "b361"; /* 화면 우하단 표시 — 최신 배포 확인용 */
 
 /* 실시간 위치 공유용 Firebase DB 주소. 여기에 한 번 넣어두면 승객 링크가 ?view=map 만 남아 깔끔해집니다. */
 const SHARE_DB = "https://innum-bus-default-rtdb.firebaseio.com";
@@ -7438,14 +7438,30 @@ function App() {
       setCurrentIdx(nearestIdx);
       const nearTiming = getStopTiming(direction, stops[nearestIdx].name);
       if (nearTiming === "pass") {
-        // 통과 모드 — 지금 발화하지 않고 큐에 넣음. 반경 벗어난 직후 announceStop 호출.
-        pendingPassRef.current.add(nearestIdx);
+        // 이미 지나간 상태(폴리라인 투영 past + 다음 정류장이 더 가까움) 면 즉시 통과 발화.
+        // GPS 자동 켠 시점 버스가 이탈 영역(진입반경 안 + 정류장 막 지난 위치) 일 때 통과 대기에 갇히는 문제 방지.
+        const routeD = routeDistanceToStop(userPos, direction, stops, nearestIdx);
+        const nextC = nearestIdx + 1 < stops.length ? coords[coordKey(direction, stops[nearestIdx + 1].name)] : null;
+        const alreadyPast = routeD === 0 || (nextC && distanceMeters(userPos, nextC) < nearestDist);
+        if (alreadyPast) {
+          announcedRef.current.add(nearestIdx);
+          announceStop(nearestIdx);
+          if (nearestIdx === stops.length - 1 && nextLeg) { legSwitchArmedRef.current = true; legDepartCountRef.current = 0; }
+        } else {
+          // 통과 모드 — 지금 발화하지 않고 큐에 넣음. 반경 벗어난 직후 announceStop 호출.
+          pendingPassRef.current.add(nearestIdx);
+        }
       } else if (nearTiming === "arrive") {
-        // 도착 모드 — 좁은 반경(30m) + 저속(<1.5m/s, 속도 미보고 시 허용) 일 때 발화
+        // 도착 모드 — 좁은 반경(30m) + 저속(<1.5m/s) OR 폴리라인 투영 past 면 발화.
+        // FAKE_GPS 는 정차 시뮬레이션 안 하므로 속도 조건 우회 — 거리만으로 판정.
         const arrivedR = Math.min(nearStopRadius, 30);
         const sp = userPos.speed;
         const slow = sp == null || sp < 1.5;
-        if (nearestDist <= arrivedR && slow) {
+        const routeD = routeDistanceToStop(userPos, direction, stops, nearestIdx);
+        const nextC = nearestIdx + 1 < stops.length ? coords[coordKey(direction, stops[nearestIdx + 1].name)] : null;
+        const alreadyPast = routeD === 0 || (nextC && distanceMeters(userPos, nextC) < nearestDist);
+        const closeEnough = nearestDist <= arrivedR;
+        if (alreadyPast || (closeEnough && (slow || FAKE_GPS))) {
           announcedRef.current.add(nearestIdx);
           announceStop(nearestIdx);
           if (nearestIdx === stops.length - 1 && nextLeg) { legSwitchArmedRef.current = true; legDepartCountRef.current = 0; }
