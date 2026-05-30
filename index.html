@@ -143,7 +143,7 @@
 
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef, useMemo } = React;
-const BUILD = "b353b"; /* 화면 우하단 표시 — 최신 배포 확인용 */
+const BUILD = "b354"; /* 화면 우하단 표시 — 최신 배포 확인용 */
 
 /* 실시간 위치 공유용 Firebase DB 주소. 여기에 한 번 넣어두면 승객 링크가 ?view=map 만 남아 깔끔해집니다. */
 const SHARE_DB = "https://innum-bus-default-rtdb.firebaseio.com";
@@ -7100,8 +7100,9 @@ function App() {
           return;
         }
         if (ments.promos[cur.name]) { speakOrClip(ments.promos[cur.name], AUDIO_KEYS[cur.name]); return; }
-        // 통과 안내 ON 이면 정류장명만 짧게 알림. OFF 면 침묵(이전 기본).
-        if (outboundPassAnnounce) {
+        // 컨텐츠 없는 중간 정류장 — 정류장별 통과 타이밍이거나 글로벌 통과 안내 ON 이면 통과 멘트 발화
+        const stopTiming = getStopTiming("outbound", cur.name);
+        if (stopTiming === "pass" || outboundPassAnnounce) {
           chimeThenSpeak(`이번 정류장은 ${curSay}입니다. 정차하지 않고 통과합니다.`);
         }
         return;
@@ -8707,13 +8708,13 @@ function App() {
                 fontFamily: "'IBM Plex Mono', monospace" }}>
               이번 정류장 · {trip[currentIdx]}
             </span>
-            {distToCur != null && distToCur > 10 && (
+            {distToCur != null && (
               <span className="text-[10px] px-2 py-0.5 rounded"
                 style={{ background: distToCur < triggerRadius ? "rgba(239,68,68,0.2)" : "rgba(251,191,36,0.12)",
                   color: distToCur < triggerRadius ? "#ef4444" : "#fbbf24",
                   fontFamily: "'IBM Plex Mono', monospace" }}
-                title="노선 따라 이번 정류장까지 남은 거리">
-                ↓ {fmtDist(distToCur)}
+                title="이번 정류장까지 남은 거리(노선/직선은 거리 계산 방식 설정 따름)">
+                {distToCur < 10 ? "✓ 도착" : `↓ ${fmtDist(distToCur)}`}
               </span>
             )}
           </div>
