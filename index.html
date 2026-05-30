@@ -110,7 +110,7 @@
 
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef, useMemo } = React;
-const BUILD = "b305"; /* 화면 우하단 표시 — 최신 배포 확인용 */
+const BUILD = "b306"; /* 화면 우하단 표시 — 최신 배포 확인용 */
 
 /* 실시간 위치 공유용 Firebase DB 주소. 여기에 한 번 넣어두면 승객 링크가 ?view=map 만 남아 깔끔해집니다. */
 const SHARE_DB = "https://innum-bus-default-rtdb.firebaseio.com";
@@ -475,7 +475,10 @@ function TimetableModal({ tripsToday, onClose, focusTrip = null }) {
             <div className="flex items-center gap-2">
               <span style={{ background: dir === "outbound" ? FT.orange : FT.teal, color: "#fff",
                 border: "1.5px solid " + FT.ink, padding: "2px 10px", borderRadius: 999,
-                fontSize: 11, fontFamily: "'Jua', sans-serif", fontWeight: 700 }}>
+                fontSize: 11, fontFamily: "'Jua', sans-serif", fontWeight: 700,
+                display: "inline-flex", alignItems: "center", gap: 4 }}
+                aria-label={ROUTES[dir].label}>
+                <span aria-hidden style={{ fontSize: 9 }}>{dir === "outbound" ? "▶" : "◀"}</span>
                 {ROUTES[dir].label}
               </span>
               <span style={{ fontSize: 11, color: FT.inkSoft, fontFamily: "'Jua', sans-serif" }}>{ROUTES[dir].full}</span>
@@ -2953,7 +2956,7 @@ function LiveMapView({ dbUrl, onHome }) {
         }).join("");
         const dColor = d === "outbound" ? FT.orange : FT.teal;
         const dLabel = route.label;
-        return `<div style="margin-top:6px"><div style="font-size:11px;color:${dColor};font-weight:700;margin-bottom:2px">● ${dLabel}</div>${rows}</div>`;
+        return `<div style="margin-top:6px"><div style="font-size:11px;color:${dColor};font-weight:700;margin-bottom:2px">${d === "outbound" ? "▶" : "◀"} ${dLabel}</div>${rows}</div>`;
       }).join("");
       return `<div style="font-family:'Jua',sans-serif;max-width:240px"><b>${stopName}</b>`
         + (sub ? `<div style="color:#4A4E55;font-size:11px">${sub}</div>` : "")
@@ -3597,7 +3600,9 @@ function BusCard({ id, bus, agoText, nowMin, tripsToday, departedInfo }) {
           <span className="flex-shrink-0" style={{ color: FT.ink, fontFamily: "'Jua', sans-serif", fontWeight: 700 }}>{id}</span>
           <span className="truncate" style={{ background: dir === "outbound" ? FT.orange : FT.teal, color: "#fff",
             border: "1.5px solid " + FT.ink, padding: "2px 8px", borderRadius: 999,
-            fontSize: 11, fontFamily: "'Jua', sans-serif" }}>
+            fontSize: 11, fontFamily: "'Jua', sans-serif", display: "inline-flex", alignItems: "center", gap: 4 }}
+            aria-label={`${route.label} ${bus.trip || "-"}회차`}>
+            <span aria-hidden style={{ fontSize: 9 }}>{dir === "outbound" ? "▶" : "◀"}</span>
             {route.label} · {bus.trip || "-"}회차
           </span>
         </div>
@@ -4254,7 +4259,12 @@ function PassengerView({ dbUrl, onAdmin, initialTab = "list" }) {
                         padding: "10px 12px 10px 14px", boxShadow: "2px 2px 0 " + FT.ink,
                         borderLeft: `8px solid ${c}`, cursor: clickable ? "pointer" : "default" }}>
                       <div className="flex items-center gap-2" style={{ marginBottom: 4 }}>
-                        <span style={{ fontSize: 11, color: c, fontFamily: "'Jua', sans-serif", fontWeight: 700 }}>{ROUTES[dir].label}</span>
+                        <span style={{ fontSize: 11, color: c, fontFamily: "'Jua', sans-serif", fontWeight: 700,
+                          display: "inline-flex", alignItems: "center", gap: 3 }}
+                          aria-label={ROUTES[dir].label}>
+                          <span aria-hidden style={{ fontSize: 9 }}>{dir === "outbound" ? "▶" : "◀"}</span>
+                          {ROUTES[dir].label}
+                        </span>
                         {nd && <span style={{ marginLeft: "auto", fontSize: 10, color: FT.mute, fontFamily: "'Jua', sans-serif" }}>{nd.idx + 1}회차 →</span>}
                       </div>
                       <div className="flex items-baseline" style={{ gap: 10 }}>
