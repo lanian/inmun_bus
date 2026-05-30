@@ -143,7 +143,7 @@
 
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef, useMemo } = React;
-const BUILD = "b330"; /* 화면 우하단 표시 — 최신 배포 확인용 */
+const BUILD = "b331"; /* 화면 우하단 표시 — 최신 배포 확인용 */
 
 /* 실시간 위치 공유용 Firebase DB 주소. 여기에 한 번 넣어두면 승객 링크가 ?view=map 만 남아 깔끔해집니다. */
 const SHARE_DB = "https://innum-bus-default-rtdb.firebaseio.com";
@@ -4062,28 +4062,30 @@ function LiveMapView({ dbUrl, onHome, onOpenVenue }) {
         {stickerMsg}
       </div>
 
-      {/* 지도 상단 통합 배너 — 행사 프로그램 + 최근 스티커를 단일 carousel 로 */}
-      <div style={{ position: "fixed", left: 10, right: 10, top: "calc(60px + env(safe-area-inset-top, 0px))",
-        zIndex: 1080, pointerEvents: "none" }}>
-        <div style={{ pointerEvents: "auto", maxWidth: 480, margin: "0 auto" }}>
-          <UnifiedMapBanner
-            stickers={stickers}
-            onOpenVenue={() => {
-              try { window.__mdsStats && window.__mdsStats.track("click_promo_map"); } catch (_) {}
-              if (typeof onOpenVenue === "function") onOpenVenue();
-              else if (typeof onHome === "function") onHome();
-            }}
-            onTapSticker={(s) => {
-              try { window.__mdsStats && window.__mdsStats.track("click_sticker_banner"); } catch (_) {}
-              if (!mapRef.current) return;
-              try {
-                mapRef.current.flyTo([s.lat, s.lng], Math.max(mapRef.current.getZoom(), 16), { duration: 0.6 });
-                const layer = stickerLayersRef.current[s.id];
-                if (layer && typeof layer.openPopup === "function") setTimeout(() => layer.openPopup(), 700);
-              } catch (_) {}
-            }} />
+      {/* 지도 상단 통합 배너 — 행사 프로그램 + 최근 스티커. place mode 진입 시엔 숨김(상단 컨트롤 바와 겹침 방지) */}
+      {!stickerKind && (
+        <div style={{ position: "fixed", left: 10, right: 10, top: "calc(60px + env(safe-area-inset-top, 0px))",
+          zIndex: 1080, pointerEvents: "none" }}>
+          <div style={{ pointerEvents: "auto", maxWidth: 480, margin: "0 auto" }}>
+            <UnifiedMapBanner
+              stickers={stickers}
+              onOpenVenue={() => {
+                try { window.__mdsStats && window.__mdsStats.track("click_promo_map"); } catch (_) {}
+                if (typeof onOpenVenue === "function") onOpenVenue();
+                else if (typeof onHome === "function") onHome();
+              }}
+              onTapSticker={(s) => {
+                try { window.__mdsStats && window.__mdsStats.track("click_sticker_banner"); } catch (_) {}
+                if (!mapRef.current) return;
+                try {
+                  mapRef.current.flyTo([s.lat, s.lng], Math.max(mapRef.current.getZoom(), 16), { duration: 0.6 });
+                  const layer = stickerLayersRef.current[s.id];
+                  if (layer && typeof layer.openPopup === "function") setTimeout(() => layer.openPopup(), 700);
+                } catch (_) {}
+              }} />
+          </div>
         </div>
-      </div>
+      )}
 
       {/* 범례 (좌하단) — 스티커 버튼과 같은 baseline */}
       <div style={{ position: "fixed", bottom: "calc(16px + env(safe-area-inset-bottom, 0px))", left: 10, zIndex: 1000,
