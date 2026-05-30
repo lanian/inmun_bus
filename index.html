@@ -143,7 +143,7 @@
 
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef, useMemo } = React;
-const BUILD = "b310"; /* 화면 우하단 표시 — 최신 배포 확인용 */
+const BUILD = "b311"; /* 화면 우하단 표시 — 최신 배포 확인용 */
 
 /* 실시간 위치 공유용 Firebase DB 주소. 여기에 한 번 넣어두면 승객 링크가 ?view=map 만 남아 깔끔해집니다. */
 const SHARE_DB = "https://innum-bus-default-rtdb.firebaseio.com";
@@ -413,6 +413,65 @@ const LS = {
   getJSON: (k, d) => { try { const v = localStorage.getItem("shuttle:" + k); return v == null ? d : JSON.parse(v); } catch (_) { return d; } },
   set: (k, v) => { try { localStorage.setItem("shuttle:" + k, v); } catch (_) {} },
   setJSON: (k, v) => { try { localStorage.setItem("shuttle:" + k, JSON.stringify(v)); } catch (_) {} },
+};
+
+/* 익명 사용 통계 트래커 — 사후 분석용. 개인정보·좌표·시간 외엔 수집 안 함.
+   - 세션: sessionStorage 기반 (탭 닫으면 종료) — sid 12자 랜덤
+   - 이벤트: { [key]: count } in-memory + sessionStorage backup
+   - flush: 30초 주기 + visibility hidden + pagehide → /stats/{date}/sessions/{sid} PUT
+   - 운영자만 읽기, 익명 PUT 만 허용 (DB 규칙). */
+const createStatsTracker = (dbUrl) => {
+  const noop = { track: () => {}, flush: () => {} };
+  if (!dbUrl || typeof sessionStorage === "undefined") return noop;
+  let sid = "";
+  try {
+    sid = sessionStorage.getItem("mds:sid") || "";
+    if (!sid) { sid = Date.now().toString(36) + Math.random().toString(36).slice(2, 8); sessionStorage.setItem("mds:sid", sid); }
+  } catch (_) { return noop; }
+  const startedAt = Date.now();
+  let events = {};
+  try { events = JSON.parse(sessionStorage.getItem("mds:stats") || "{}") || {}; } catch (_) {}
+  let dirty = false;
+  let flushing = false;
+  const base = dbUrl.replace(/\/+$/, "");
+  const dateKey = () => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  };
+  const flush = async () => {
+    if (!dirty || flushing) return;
+    flushing = true;
+    try {
+      const body = { ts: Date.now(), startedAt, durMs: Date.now() - startedAt, ev: events,
+        ua: (navigator && navigator.userAgent || "").slice(0, 80),
+        lang: (navigator && navigator.language || "").slice(0, 12) };
+      await fetch(`${base}/stats/${dateKey()}/sessions/${encodeURIComponent(sid)}.json`,
+        { method: "PUT", body: JSON.stringify(body), keepalive: true });
+      dirty = false;
+    } catch (_) { /* 무시 — 다음 주기에 재시도 */ }
+    flushing = false;
+  };
+  const track = (key, count = 1) => {
+    if (!key) return;
+    const safeKey = String(key).slice(0, 48).replace(/[.#$/[\]]/g, "_");
+    events[safeKey] = (events[safeKey] || 0) + (count || 1);
+    dirty = true;
+    try { sessionStorage.setItem("mds:stats", JSON.stringify(events)); } catch (_) {}
+  };
+  const intervalId = setInterval(flush, 30000);
+  const onVis = () => { if (document.hidden) flush(); };
+  const onHide = () => flush();
+  document.addEventListener("visibilitychange", onVis);
+  window.addEventListener("pagehide", onHide);
+  return {
+    track, flush,
+    destroy: () => {
+      flush();
+      clearInterval(intervalId);
+      document.removeEventListener("visibilitychange", onVis);
+      window.removeEventListener("pagehide", onHide);
+    },
+  };
 };
 
 /* Leaflet map picker — click or drag pin to choose a coordinate.
@@ -3912,16 +3971,26 @@ function UpcomingPromoCard({ onOpen }) {
 function PassengerView({ dbUrl, onAdmin, initialTab = "list" }) {
   const [buses, setBuses] = useState({});
   const [tab, setTab] = useState(initialTab);
+  // 탭 변경 시 통계 — 첫 마운트(initialTab) 포함
+  useEffect(() => { try { statsRef.current && statsRef.current.track(`view.${tab}`); } catch (_) {} }, [tab]);
   const [conn, setConn] = useState("loading"); // loading | ok | error
   const [showTimetable, setShowTimetable] = useState(false);
   const [tableFocus, setTableFocus] = useState(null); // { dir, ti } — 다음 출발 카드 탭 시 해당 회차 강조
-  const openTableAt = (dir, ti) => { setTableFocus({ dir, ti }); setShowTimetable(true); };
+  const openTableAt = (dir, ti) => { try { statsRef.current && statsRef.current.track("open.timetable"); } catch (_) {} setTableFocus({ dir, ti }); setShowTimetable(true); };
   const closeTable = () => { setShowTimetable(false); setTableFocus(null); };
   const [venueZone, setVenueZone] = useState(0);
+  // 익명 사용 통계 — 행사 후 운영자가 분석. 개인정보 비수집, 카운트만.
+  const statsRef = useRef(null);
+  useEffect(() => {
+    statsRef.current = createStatsTracker(dbUrl);
+    statsRef.current.track("session.start");
+    return () => { try { statsRef.current && statsRef.current.destroy(); } catch (_) {} };
+  }, [dbUrl]);
+  const trackStat = (key, n) => { try { statsRef.current && statsRef.current.track(key, n); } catch (_) {} };
   // 언어 토글 — ko/en. LS 영속. 정류장명·노선 라벨에 적용 (UI 라벨은 기본 한국어 유지).
   const [lang, setLangRaw] = useState(() => LS.get("lang", "ko") === "en" ? "en" : "ko");
   const setLang = (v) => { const x = v === "en" ? "en" : "ko"; setLangRaw(x); LS.set("lang", x); };
-  const toggleLang = () => setLang(lang === "en" ? "ko" : "en");
+  const toggleLang = () => { setLang(lang === "en" ? "ko" : "en"); trackStat("toggle.lang"); };
   const dirLabel = (dir) => (lang === "en" && ROUTES[dir].labelEn) ? ROUTES[dir].labelEn : ROUTES[dir].label;
   const dirFull = (dir) => (lang === "en" && ROUTES[dir].fullEn) ? ROUTES[dir].fullEn : ROUTES[dir].full;
   const [notice, setNotice] = useState(null); // P1-2: 운영자 공지/재난 안내
@@ -3970,6 +4039,7 @@ function PassengerView({ dbUrl, onAdmin, initialTab = "list" }) {
     if (!notice) return;
     LS.set("noticeDismissedAt", String(notice.ts || Date.now()));
     setNoticeDismissedAt(notice.ts || Date.now());
+    trackStat(`notice.dismiss.${notice.level || "info"}`);
   };
   /* 공지 표시 정책:
      - 신규 ts (운영자가 새 공지 발송) > 사용자가 마지막 dismiss 한 ts → 다시 노출 (= 새 공지)
@@ -3980,6 +4050,8 @@ function PassengerView({ dbUrl, onAdmin, initialTab = "list" }) {
     (notice.ts || 0) > noticeDismissedAt
     || (notice.level === "danger" && noticeDismissedAt > 0 && (Date.now() - noticeDismissedAt) > NOTICE_DANGER_REDISPLAY_MS)
   );
+  // 공지 노출 시 통계 카운트 (level 별)
+  useEffect(() => { if (showNotice && notice) trackStat(`notice.show.${notice.level || "info"}`); }, [showNotice]);
 
   const onTitleTap = () => {
     const t = Date.now();
@@ -4585,7 +4657,7 @@ function PassengerView({ dbUrl, onAdmin, initialTab = "list" }) {
                     )}
 
                     {/* 풀폭 그라데이션 배너 — 좌 D-day 큰 배지 + 중앙 텍스트 + 우 썸네일 + → */}
-                    <button onClick={() => { setVenueZone(0); setTab("venue"); }}
+                    <button onClick={() => { trackStat("click.banner.festival"); setVenueZone(0); setTab("venue"); }}
                       style={{ width: "100%", display: "flex", alignItems: "center", gap: 12,
                         background: bgGradient, color: "#fff",
                         border: "2.5px solid " + FT.ink, borderRadius: 12,
@@ -4619,7 +4691,7 @@ function PassengerView({ dbUrl, onAdmin, initialTab = "list" }) {
 
                     {/* 다가올 프로그램 랜덤 홍보 — 행사 종료 후엔 숨김 */}
                     {!ended && (
-                      <UpcomingPromoCard onOpen={() => { setVenueZone(0); setTab("venue"); }} />
+                      <UpcomingPromoCard onOpen={() => { trackStat("click.promo"); setVenueZone(0); setTab("venue"); }} />
                     )}
                   </>
                 );

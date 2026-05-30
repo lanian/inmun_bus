@@ -30,6 +30,7 @@ P0-5: 행사 당일 누구나 `/zones`, `/counts`, `/buses` 같은 운영 데이
 | `/notice` | 누구나 | driver 또는 admin |
 | `/drivers`, `/admins` | admin | admin |
 | `/stickers/{id}` | 누구나 | **신규(create) 는 누구나** · 등록 후 30분 이내 본인 DELETE 익명 허용 · 그 외 수정·삭제는 driver·admin |
+| `/stats/{date}/sessions/{sid}` | driver·admin | **누구나 PUT** (익명 세션 통계 보고) · 읽기는 운영자만 (사후 분석용) |
 
 ## 주의
 - 익명 읽기는 의도적으로 허용(승객 페이지가 누구나 접근). API 키 노출은
