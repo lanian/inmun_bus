@@ -143,7 +143,7 @@
 
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef, useMemo } = React;
-const BUILD = "b334"; /* 화면 우하단 표시 — 최신 배포 확인용 */
+const BUILD = "b335"; /* 화면 우하단 표시 — 최신 배포 확인용 */
 
 /* 실시간 위치 공유용 Firebase DB 주소. 여기에 한 번 넣어두면 승객 링크가 ?view=map 만 남아 깔끔해집니다. */
 const SHARE_DB = "https://innum-bus-default-rtdb.firebaseio.com";
@@ -1932,6 +1932,8 @@ function UsageStatsViewer({ onClose, dbUrl, getAuth, refreshAuth }) {
     "open_timetable_inbound_trip_5": "시간표: 민주광장 방향 5회차",
     "open_timetable_inbound_trip_6": "시간표: 민주광장 방향 6회차",
     "sticker_popup_open": "스티커 마커 popup 열기",
+    "open_sticker_list": "스티커 목록 시트 열기",
+    "click_sticker_list_item": "스티커 목록에서 항목 선택",
     "notice_show_info": "공지 노출 (정보)",
     "notice_show_warn": "공지 노출 (경고)",
     "notice_show_danger": "공지 노출 (위험)",
@@ -3193,6 +3195,7 @@ function LiveMapView({ dbUrl, onHome, onOpenVenue }) {
   const stickerHistoryRef = useRef([]); // [{ts, lat, lng}, ...]
   const [stickers, setStickers] = useState({});
   const [stickerKind, setStickerKind] = useState(null); // null = idle, 'X' = place mode
+  const [stickerListOpen, setStickerListOpen] = useState(false); // 스티커 목록 시트
   const [stickerLabel, setStickerLabel] = useState(""); // 선택 메시지(<=60자) — place mode 동안 유지
   const stickerLabelRef = useRef("");
   useEffect(() => { stickerLabelRef.current = stickerLabel; }, [stickerLabel]);
@@ -4133,8 +4136,46 @@ function LiveMapView({ dbUrl, onHome, onOpenVenue }) {
                   if (layer && typeof layer.openPopup === "function") setTimeout(() => layer.openPopup(), 700);
                 } catch (_) {}
               }} />
+            {/* 스티커 N건 이상 있을 때 '모두 보기' 링크 노출 — 시트 모달 진입 */}
+            {(() => {
+              const cnt = Object.values(stickers || {}).filter((s) =>
+                s && typeof s.lat === "number" && typeof s.ts === "number" && (Date.now() - s.ts) < 2 * 60 * 60 * 1000).length;
+              if (cnt < 1) return null;
+              return (
+                <div style={{ display: "flex", justifyContent: "center", marginTop: 4 }}>
+                  <button onClick={() => {
+                      try { window.__mdsStats && window.__mdsStats.track("open_sticker_list"); } catch (_) {}
+                      setStickerListOpen(true);
+                    }}
+                    style={{ display: "inline-flex", alignItems: "center", gap: 4,
+                      background: "rgba(255,255,255,0.9)", color: FT.ink,
+                      border: "1px solid " + FT.mute + "88", borderRadius: 999,
+                      padding: "3px 10px", fontSize: 10, fontWeight: 700,
+                      fontFamily: "'Jua', sans-serif", cursor: "pointer" }}
+                    aria-label={`스티커 ${cnt}건 목록 보기`}>
+                    ≡ 스티커 {cnt}건 모두 보기
+                  </button>
+                </div>
+              );
+            })()}
           </div>
         </div>
+      )}
+
+      {/* 스티커 목록 시트 — 모달 */}
+      {stickerListOpen && (
+        <StickerListSheet stickers={stickers}
+          onClose={() => setStickerListOpen(false)}
+          onTap={(s) => {
+            try { window.__mdsStats && window.__mdsStats.track("click_sticker_list_item"); } catch (_) {}
+            setStickerListOpen(false);
+            if (!mapRef.current) return;
+            try {
+              mapRef.current.flyTo([s.lat, s.lng], Math.max(mapRef.current.getZoom(), 16), { duration: 0.6 });
+              const layer = stickerLayersRef.current[s.id];
+              if (layer && typeof layer.openPopup === "function") setTimeout(() => layer.openPopup(), 700);
+            } catch (_) {}
+          }} />
       )}
 
       {/* 범례 (좌하단) — 스티커 버튼과 같은 baseline */}
@@ -4470,6 +4511,117 @@ function RecentStickersBanner({ stickers, onTap }) {
    같은 카드 프레임 (border/radius/padding 통일), 좌측 액센트 색상으로만 타입 구분
    · festival: zone 색(orange/teal) — 클릭 시 행사장 탭으로
    · sticker: tealDark — 클릭 시 지도가 해당 위치로 이동 + popup */
+/* 스티커 목록 시트 — 라이브 지도 위 모달.
+   carousel 보다 한 화면에 더 많이 보고 싶을 때, 또는 특정 스티커 빨리 찾을 때. */
+function StickerListSheet({ stickers, onClose, onTap }) {
+  const VIEW_WINDOW_MS = 2 * 60 * 60 * 1000; // 2시간 (마커 TTL 과 동일)
+  const cutoff = Date.now() - VIEW_WINDOW_MS;
+  const STICKER_LABEL = { "👍": "좋아요", "📸": "포토스팟", "💤": "쉬는 곳", "🚻": "화장실", "🍱": "음식" };
+  const items = Object.entries(stickers || {})
+    .map(([id, s]) => ({ id, ...(s || {}) }))
+    .filter((s) => s && typeof s.lat === "number" && typeof s.lng === "number" && typeof s.ts === "number" && s.ts >= cutoff)
+    .sort((a, b) => b.ts - a.ts);
+  // 종류별 빠른 필터
+  const [filterKind, setFilterKind] = useState(""); // "" = 전체
+  const filtered = filterKind ? items.filter((s) => s.kind === filterKind) : items;
+  const kindCounts = items.reduce((acc, s) => { acc[s.kind] = (acc[s.kind] || 0) + 1; return acc; }, {});
+  return (
+    <div role="dialog" aria-modal="true" aria-label="최근 스티커 목록"
+      style={{ position: "fixed", inset: 0, zIndex: 1300, background: "rgba(0,0,0,0.5)",
+        display: "flex", alignItems: "flex-end", justifyContent: "center" }}
+      onClick={onClose}>
+      <div onClick={(e) => e.stopPropagation()}
+        style={{ background: "#fff", color: FT.ink, width: "100%", maxWidth: 560,
+          borderTopLeftRadius: 16, borderTopRightRadius: 16,
+          borderTop: "2.5px solid " + FT.ink, borderLeft: "2.5px solid " + FT.ink, borderRight: "2.5px solid " + FT.ink,
+          boxShadow: "0 -3px 0 " + FT.ink + "33",
+          maxHeight: "75svh", display: "flex", flexDirection: "column",
+          paddingBottom: "env(safe-area-inset-bottom, 0px)",
+          fontFamily: "'Jua', sans-serif" }}>
+        {/* drag handle */}
+        <div style={{ display: "flex", justifyContent: "center", padding: "8px 0 4px" }}>
+          <div style={{ width: 40, height: 4, borderRadius: 999, background: FT.mute + "88" }} />
+        </div>
+        {/* header */}
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between",
+          padding: "4px 14px 8px", borderBottom: "1.5px solid " + FT.mute + "55" }}>
+          <div>
+            <div style={{ fontSize: 14, fontWeight: 700, color: FT.ink }}>최근 스티커</div>
+            <div style={{ fontSize: 10, color: FT.inkSoft }}>{items.length}건 · 최근 2시간 이내</div>
+          </div>
+          <button onClick={onClose} aria-label="닫기"
+            style={{ background: "transparent", border: "none", color: FT.inkSoft, fontSize: 22,
+              padding: "4px 8px", cursor: "pointer", lineHeight: 1 }}>×</button>
+        </div>
+        {/* kind filter chips */}
+        {items.length > 0 && (
+          <div style={{ display: "flex", gap: 6, padding: "8px 14px", flexWrap: "wrap",
+            borderBottom: "1px solid " + FT.mute + "33" }}>
+            <button onClick={() => setFilterKind("")}
+              style={{ padding: "4px 10px", borderRadius: 999, fontSize: 11, fontWeight: 700,
+                background: filterKind === "" ? FT.ink : "#fff", color: filterKind === "" ? "#fff" : FT.ink,
+                border: "1.5px solid " + FT.ink, cursor: "pointer", fontFamily: "'Jua', sans-serif" }}>
+              전체 {items.length}
+            </button>
+            {Object.entries(kindCounts).sort((a, b) => b[1] - a[1]).map(([k, n]) => (
+              <button key={k} onClick={() => setFilterKind(filterKind === k ? "" : k)}
+                style={{ display: "inline-flex", alignItems: "center", gap: 4,
+                  padding: "4px 10px", borderRadius: 999, fontSize: 11, fontWeight: 700,
+                  background: filterKind === k ? FT.tealDark : "#fff", color: filterKind === k ? "#fff" : FT.ink,
+                  border: "1.5px solid " + (filterKind === k ? FT.tealDark : FT.mute + "88"),
+                  cursor: "pointer", fontFamily: "'Jua', sans-serif" }}>
+                <span style={{ fontSize: 13 }}>{k}</span>
+                <span>{STICKER_LABEL[k] || ""}</span>
+                <span style={{ opacity: 0.7 }}>{n}</span>
+              </button>
+            ))}
+          </div>
+        )}
+        {/* list */}
+        <div style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: "8px 14px 16px" }}>
+          {items.length === 0 ? (
+            <div style={{ textAlign: "center", color: FT.inkSoft, padding: "32px 0", fontSize: 12 }}>
+              최근 2시간 이내 스티커가 없어요
+            </div>
+          ) : filtered.length === 0 ? (
+            <div style={{ textAlign: "center", color: FT.inkSoft, padding: "24px 0", fontSize: 12 }}>
+              해당 종류 스티커가 없어요
+            </div>
+          ) : (
+            filtered.map((s) => {
+              const ageMin = Math.max(0, Math.floor((Date.now() - s.ts) / 60000));
+              const kindName = STICKER_LABEL[s.kind] || "";
+              const accent = FT.tealDark;
+              return (
+                <button key={s.id} onClick={() => onTap && onTap(s)}
+                  style={{ width: "100%", display: "flex", alignItems: "center", gap: 10,
+                    marginBottom: 6, padding: "8px 10px", borderRadius: 10,
+                    background: FT.paper, border: "1.5px solid " + FT.mute + "55",
+                    borderLeft: `4px solid ${accent}`,
+                    fontFamily: "'Jua', sans-serif", cursor: "pointer", textAlign: "left" }}>
+                  <span style={{ display: "inline-flex", alignItems: "center", justifyContent: "center",
+                    width: 28, height: 28, borderRadius: "50%", background: "#fff",
+                    border: "1.5px solid " + accent, fontSize: 17, flexShrink: 0 }}>{s.kind || "📍"}</span>
+                  <div style={{ flex: 1, minWidth: 0, lineHeight: 1.25 }}>
+                    <div style={{ fontSize: 13, color: FT.ink, fontWeight: 700,
+                      overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      {s.label || kindName || "스티커"}
+                    </div>
+                    <div style={{ fontSize: 10, color: FT.inkSoft, fontWeight: 400 }}>
+                      {ageMin <= 0 ? "방금" : `${ageMin}분 전`}{s.label && kindName ? ` · ${kindName}` : ""}
+                    </div>
+                  </div>
+                  <span style={{ fontSize: 11, color: accent, fontWeight: 700, flexShrink: 0 }}>찾기 →</span>
+                </button>
+              );
+            })
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function UnifiedMapBanner({ stickers, onOpenVenue, onTapSticker }) {
   // 행사 슬라이드 후보 산출 (UpcomingPromoCard 와 동일 로직)
   const d = getNow();
