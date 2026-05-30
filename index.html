@@ -143,7 +143,7 @@
 
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef, useMemo } = React;
-const BUILD = "b376"; /* 화면 우하단 표시 — 최신 배포 확인용 */
+const BUILD = "b377"; /* 화면 우하단 표시 — 최신 배포 확인용 */
 
 /* 실시간 위치 공유용 Firebase DB 주소. 여기에 한 번 넣어두면 승객 링크가 ?view=map 만 남아 깔끔해집니다. */
 const SHARE_DB = "https://innum-bus-default-rtdb.firebaseio.com";
@@ -1222,30 +1222,27 @@ const CategoryIcon = ({ cat, size = 32, color = "currentColor", strokeWidth = 2.
   );
 };
 
-/* 스티커 — Lucide(MIT) 기반 아이콘 라이브러리. 24x24 viewBox stroke 기반.
-   각 entry: { color, body } — body 는 SVG 내부 마크업(여러 path/circle 허용).
+/* 스티커 — Lucide(MIT) 기반 아이콘 라이브러리. 24x24 viewBox.
+   각 entry: { color, body, filled? } — body 는 SVG 내부 마크업, filled 는 채움 아이콘 표시(stroke=none).
    DB kind 값은 이모지 문자 그대로 → 레거시(👍 💤 등)도 대응. */
 const STICKER_ART = {
-  // === 메인 6종 (Lucide 디자인 차용) ===
-  // 💭 생각 — MessageCircle (말풍선) + 작은 점 트레일
-  "💭": { color: "#a78bfa", body: '<path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z"/><circle cx="9" cy="10" r="0.8" fill="currentColor" stroke="none"/><circle cx="13" cy="10" r="0.8" fill="currentColor" stroke="none"/><circle cx="17" cy="10" r="0.8" fill="currentColor" stroke="none"/>' },
-  // 💛 좋아요 — Heart filled
-  "💛": { color: "#eab308", body: '<path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z" fill="currentColor"/>' },
-  // 📸 포토스팟 — Camera
-  "📸": { color: "#0d9488", body: '<path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3Z"/><circle cx="12" cy="13" r="3"/>' },
-  // 🌿 쉼터 — Leaf
-  "🌿": { color: "#16a34a", body: '<path d="M11 20A7 7 0 0 1 9.8 6.1C15.5 5 17 4.48 19.2 2.96a1 1 0 0 1 1.5 1.07 19.32 19.32 0 0 1-7.1 12.32 7 7 0 0 1-2.4.7c-2.46.45-4.96.94-7.4 1.45"/><path d="M2 21c0-3 1.85-5.36 5.08-6"/>' },
-  // 🚻 화장실 — WC 글자 (보편적 인지)
-  "🚻": { color: "#0284c7", body: '<rect x="2" y="3" width="20" height="18" rx="3"/><text x="12" y="16" text-anchor="middle" font-family="system-ui,sans-serif" font-weight="900" font-size="10" fill="currentColor" stroke="none">WC</text>' },
-  // 🍱 음식 — Utensils (포크+나이프)
-  "🍱": { color: "#ea580c", body: '<path d="M3 2v7c0 1.1.9 2 2 2h4a2 2 0 0 0 2-2V2"/><path d="M7 2v20"/><path d="M21 15V2a5 5 0 0 0-5 5v6c0 1.1.9 2 2 2h3Zm0 0v7"/>' },
+  // === 메인 6종 ===
+  // 💭 생각 — MessageSquare 말풍선 + 내부 ... 점 3개 (생각 중인 느낌)
+  "💭": { color: "#8b5cf6", body: '<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><circle cx="8" cy="11" r="1.3" fill="currentColor" stroke="none"/><circle cx="12" cy="11" r="1.3" fill="currentColor" stroke="none"/><circle cx="16" cy="11" r="1.3" fill="currentColor" stroke="none"/>' },
+  // 💛 좋아요 — Heart 채움 + 내부 하이라이트 (밝은 그라데이션 느낌)
+  "💛": { color: "#eab308", body: '<path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z" fill="currentColor" stroke-linejoin="round" stroke-width="1.5"/><path d="M8 7.5c-.5 1-1.5 1-2 2.5" stroke="#fff" stroke-width="1.2" stroke-linecap="round" fill="none" opacity="0.6"/>' },
+  // 📸 포토스팟 — Camera + 작은 플래시 점(우상)
+  "📸": { color: "#0d9488", body: '<path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3Z"/><circle cx="12" cy="13" r="3"/><circle cx="19" cy="10" r="0.7" fill="currentColor" stroke="none"/>' },
+  // 🌿 쉼터 — Sprout (싹) — 두 잎이 부드럽게 자라는 모습 (Leaf 보다 친근)
+  "🌿": { color: "#16a34a", body: '<path d="M7 20h10"/><path d="M10 20c5.5-2.5.8-6.4 3-10" stroke-linecap="round"/><path d="M9.5 9.4c1.1.8 1.8 2.2 2.3 3.7-2 .4-3.5.4-4.8-.3-1.2-.6-2.3-1.9-3-4.2 2.8-.5 4.4 0 5.5.8z"/><path d="M14.1 6a7 7 0 0 0-1.1 4c1.9-.1 3.3-.6 4.3-1.4 1-1 1.6-2.3 1.7-4.6-2.7.1-4 1-4.9 2z"/>' },
+  // 🚻 화장실 — 두 사람 픽토그램(남녀) — 가장 보편적인 화장실 표시
+  "🚻": { color: "#0284c7", body: '<circle cx="7.5" cy="4.5" r="2.2" fill="currentColor" stroke="none"/><path d="M5.2 9h4.6l1 7H9v6H6v-6H4.2z" fill="currentColor" stroke="none"/><line x1="12" y1="3" x2="12" y2="22" stroke-dasharray="2 2" stroke-width="1" opacity="0.5"/><circle cx="16.5" cy="4.5" r="2.2" fill="currentColor" stroke="none"/><path d="M14 9h5l1.3 6.5h-1.8V22h-3.8v-6.5h-1.8z" fill="currentColor" stroke="none"/>' },
+  // 🍱 음식 — UtensilsCrossed (포크+나이프 교차 — 식사 보편 기호)
+  "🍱": { color: "#ea580c", body: '<path d="m16 2-2.3 2.3a3 3 0 0 0 0 4.2l1.8 1.8a3 3 0 0 0 4.2 0L22 8"/><path d="M15 15 3.3 3.3a4.2 4.2 0 0 0 0 6L12 18Z"/><path d="m2.1 21.8 6.4-6.3"/><path d="m19 5-7 7"/>' },
   // === 레거시 호환 ===
-  // 👍 — ThumbsUp
-  "👍": { color: "#eab308", body: '<path d="M7 10v12"/><path d="M15 5.88 14 10h5.83a2 2 0 0 1 1.92 2.56l-2.33 8A2 2 0 0 1 17.5 22H7V10l5-9 .56 1.13a3 3 0 0 1 .44 1.55Z" fill="currentColor"/>' },
-  // 📷 — Camera (📸와 동일)
+  "👍": { color: "#eab308", body: '<path d="M7 10v12"/><path d="M15 5.88 14 10h5.83a2 2 0 0 1 1.92 2.56l-2.33 8A2 2 0 0 1 17.5 22H7V10l5-9 .56 1.13a3 3 0 0 1 .44 1.55Z" fill="currentColor" stroke-linejoin="round" stroke-width="1.5"/>' },
   "📷": { color: "#0d9488", body: '<path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3Z"/><circle cx="12" cy="13" r="3"/>' },
-  // 💤 — Moon
-  "💤": { color: "#64748b", body: '<path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z" fill="currentColor"/>' },
+  "💤": { color: "#64748b", body: '<path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z" fill="currentColor" stroke-linejoin="round" stroke-width="1.5"/><path d="M14 6h4l-4 4h4" stroke="#fff" stroke-width="1" opacity="0.7"/>' },
 };
 const STICKER_ART_FALLBACK = { color: "#64748b", body: '<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3" fill="currentColor" stroke="none"/>' };
 const StickerIcon = ({ kind, size = 22, color }) => {
