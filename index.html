@@ -143,7 +143,7 @@
 
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef, useMemo } = React;
-const BUILD = "b313"; /* 화면 우하단 표시 — 최신 배포 확인용 */
+const BUILD = "b314"; /* 화면 우하단 표시 — 최신 배포 확인용 */
 
 /* 실시간 위치 공유용 Firebase DB 주소. 여기에 한 번 넣어두면 승객 링크가 ?view=map 만 남아 깔끔해집니다. */
 const SHARE_DB = "https://innum-bus-default-rtdb.firebaseio.com";
@@ -399,13 +399,36 @@ const LS = {
   setJSON: (k, v) => { try { localStorage.setItem("shuttle:" + k, JSON.stringify(v)); } catch (_) {} },
 };
 
-/* 익명 사용 통계 트래커 — 사후 분석용. 개인정보·좌표·시간 외엔 수집 안 함.
+/* UA 카테고리화 — fingerprint 위험 없는 OS·브라우저·폼팩터 조합만 추출.
+   결과 예: 'ios.safari.mobile', 'android.chrome.mobile', 'windows.chrome.desktop'. */
+const parseUaCategory = (ua) => {
+  if (!ua) return "unknown";
+  const isAndroid = /Android/i.test(ua);
+  const isIOS = /iPhone|iPad|iPod/i.test(ua);
+  const isMobile = isAndroid || isIOS || /Mobile/i.test(ua);
+  let os = "other";
+  if (isIOS) os = "ios";
+  else if (isAndroid) os = "android";
+  else if (/Windows/i.test(ua)) os = "windows";
+  else if (/Macintosh|Mac OS/i.test(ua)) os = "mac";
+  else if (/Linux/i.test(ua)) os = "linux";
+  let br = "other";
+  if (/SamsungBrowser/i.test(ua)) br = "samsung";
+  else if (/EdgiOS|Edge|Edg\//i.test(ua)) br = "edge";
+  else if (/CriOS|Chrome/i.test(ua)) br = "chrome";
+  else if (/FxiOS|Firefox/i.test(ua)) br = "firefox";
+  else if (/Safari/i.test(ua) && !/Chrome|CriOS/i.test(ua)) br = "safari";
+  return `${os}.${br}.${isMobile ? "mobile" : "desktop"}`;
+};
+
+/* 익명 사용 통계 트래커 — 사후 분석용. 개인정보·좌표·풀 UA 비수집.
    - 세션: sessionStorage 기반 (탭 닫으면 종료) — sid 12자 랜덤
-   - 이벤트: { [key]: count } in-memory + sessionStorage backup
-   - flush: 30초 주기 + visibility hidden + pagehide → /stats/{date}/sessions/{sid} PUT
+   - 이벤트: { [key]: count } in-memory + sessionStorage backup. key 는 카테고리.동작 형태만 허용 (DB 규칙도 동일 화이트리스트)
+   - 디바이스 정보: parseUaCategory 결과(os.br.formfactor) 만 저장. navigator.language 등 fingerprint 위험 필드 비저장.
+   - flush: 60초 주기 + visibility hidden + pagehide → /stats/{date}/sessions/{sid} PUT (실패 시 exponential backoff)
    - 운영자만 읽기, 익명 PUT 만 허용 (DB 규칙). */
 const createStatsTracker = (dbUrl) => {
-  const noop = { track: () => {}, flush: () => {} };
+  const noop = { track: () => {}, flush: () => {}, destroy: () => {} };
   if (!dbUrl || typeof sessionStorage === "undefined") return noop;
   let sid = "";
   try {
@@ -413,36 +436,54 @@ const createStatsTracker = (dbUrl) => {
     if (!sid) { sid = Date.now().toString(36) + Math.random().toString(36).slice(2, 8); sessionStorage.setItem("mds:sid", sid); }
   } catch (_) { return noop; }
   const startedAt = Date.now();
+  const cat = parseUaCategory(navigator && navigator.userAgent || "");
   let events = {};
   try { events = JSON.parse(sessionStorage.getItem("mds:stats") || "{}") || {}; } catch (_) {}
-  let dirty = false;
+  let dirty = Object.keys(events).length > 0;
   let flushing = false;
+  let backoffMs = 0; // 다음 flush 까지 추가 대기. 실패 시 증가, 성공 시 0.
+  let lastTryAt = 0;
   const base = dbUrl.replace(/\/+$/, "");
+  // 허용 이벤트 키 패턴 (DB validate 와 동일)
+  const KEY_RE = /^(session|view|click|toggle|open|notice|transition|stop|sticker|error)\.[a-zA-Z0-9_.]+$/;
+  // 키 수 cap — 키 종류가 200 초과면 새로운 키 무시 (PUT body 크기 방어)
+  const KEY_CAP = 200;
   const dateKey = () => {
     const d = new Date();
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
   };
   const flush = async () => {
     if (!dirty || flushing) return;
+    const now = Date.now();
+    if (backoffMs > 0 && now - lastTryAt < backoffMs) return; // backoff 대기 중
     flushing = true;
+    lastTryAt = now;
     try {
-      const body = { ts: Date.now(), startedAt, durMs: Date.now() - startedAt, ev: events,
-        ua: (navigator && navigator.userAgent || "").slice(0, 80),
-        lang: (navigator && navigator.language || "").slice(0, 12) };
-      await fetch(`${base}/stats/${dateKey()}/sessions/${encodeURIComponent(sid)}.json`,
+      const body = { ts: now, startedAt, durMs: now - startedAt, ev: events, cat };
+      const r = await fetch(`${base}/stats/${dateKey()}/sessions/${encodeURIComponent(sid)}.json`,
         { method: "PUT", body: JSON.stringify(body), keepalive: true });
-      dirty = false;
-    } catch (_) { /* 무시 — 다음 주기에 재시도 */ }
+      if (r.ok) {
+        dirty = false;
+        backoffMs = 0;
+      } else {
+        // 4xx (validation) 는 재시도해도 같은 결과 — backoff 최대로
+        backoffMs = (r.status >= 400 && r.status < 500) ? 10 * 60 * 1000 : Math.min((backoffMs || 60000) * 2, 10 * 60 * 1000);
+      }
+    } catch (_) {
+      backoffMs = Math.min((backoffMs || 60000) * 2, 10 * 60 * 1000);
+    }
     flushing = false;
   };
   const track = (key, count = 1) => {
     if (!key) return;
-    const safeKey = String(key).slice(0, 48).replace(/[.#$/[\]]/g, "_");
-    events[safeKey] = (events[safeKey] || 0) + (count || 1);
+    const k = String(key).slice(0, 48);
+    if (!KEY_RE.test(k)) return; // 화이트리스트 외 무시
+    if (!(k in events) && Object.keys(events).length >= KEY_CAP) return;
+    events[k] = (events[k] || 0) + (count || 1);
     dirty = true;
     try { sessionStorage.setItem("mds:stats", JSON.stringify(events)); } catch (_) {}
   };
-  const intervalId = setInterval(flush, 30000);
+  const intervalId = setInterval(flush, 60000);
   const onVis = () => { if (document.hidden) flush(); };
   const onHide = () => flush();
   document.addEventListener("visibilitychange", onVis);

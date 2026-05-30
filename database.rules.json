@@ -74,8 +74,16 @@
       "$date": {
         "sessions": {
           "$sid": {
-            ".write": true,
-            ".validate": "newData.hasChildren(['ts','ev']) && newData.child('ts').isNumber() && newData.child('ev').hasChildren() && $sid.length <= 32"
+            ".write": "$sid.length <= 32 && $sid.length >= 6",
+            ".validate": "newData.hasChildren(['ts','ev']) && newData.child('ts').isNumber() && newData.child('ev').hasChildren() && (!newData.hasChild('cat') || (newData.child('cat').isString() && newData.child('cat').val().length <= 32)) && (!newData.hasChild('startedAt') || newData.child('startedAt').isNumber()) && (!newData.hasChild('durMs') || newData.child('durMs').isNumber())",
+            "ev": {
+              "$key": {
+                ".validate": "$key.matches(/^(session|view|click|toggle|open|notice|transition|stop|sticker|error)[.][a-zA-Z0-9_.]+$/) && newData.isNumber()"
+              }
+            },
+            "$other": {
+              ".validate": "$other.matches(/^(ts|startedAt|durMs|cat|ev)$/)"
+            }
           }
         }
       }
