@@ -143,7 +143,7 @@
 
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef, useMemo } = React;
-const BUILD = "b336"; /* 화면 우하단 표시 — 최신 배포 확인용 */
+const BUILD = "b337"; /* 화면 우하단 표시 — 최신 배포 확인용 */
 
 /* 실시간 위치 공유용 Firebase DB 주소. 여기에 한 번 넣어두면 승객 링크가 ?view=map 만 남아 깔끔해집니다. */
 const SHARE_DB = "https://innum-bus-default-rtdb.firebaseio.com";
@@ -1941,6 +1941,7 @@ function UsageStatsViewer({ onClose, dbUrl, getAuth, refreshAuth }) {
     "sticker_popup_open": "스티커 마커 popup 열기",
     "open_sticker_list": "스티커 목록 시트 열기",
     "click_sticker_list_item": "스티커 목록에서 항목 선택",
+    "click_sticker_add_from_list": "스티커 목록에서 + 새 스티커",
     "notice_show_info": "공지 노출 (정보)",
     "notice_show_warn": "공지 노출 (경고)",
     "notice_show_danger": "공지 노출 (위험)",
@@ -4073,18 +4074,20 @@ function LiveMapView({ dbUrl, onHome, onOpenVenue }) {
           </div>
         </div>
       )}
-      {/* 플로팅 버튼 — idle 시 '스티커', palette open / place mode 시엔 숨김 (상단 바로 제어).
-          위치 — 하단 안전영역 16px 위 (이전 96px 에서 더 가까이 내림) */}
-      {!stickerKind && (
-        <button onClick={() => setPaletteOpen((v) => !v)}
-          aria-label={paletteOpen ? "스티커 팔레트 닫기" : "스티커 남기기"}
+      {/* 플로팅 버튼 — idle 시 '스티커' 누르면 목록 시트 열림. place mode / palette open 시엔 숨김(상단 바로 제어). */}
+      {!stickerKind && !paletteOpen && (
+        <button onClick={() => {
+            try { window.__mdsStats && window.__mdsStats.track("open_sticker_list"); } catch (_) {}
+            setStickerListOpen(true);
+          }}
+          aria-label="스티커 목록 열기"
           style={{ position: "fixed", right: 14, bottom: "calc(16px + env(safe-area-inset-bottom, 0px))",
             height: 44, padding: "0 16px", borderRadius: 22, zIndex: 1100,
-            background: paletteOpen ? FT.teal : "#fff", color: paletteOpen ? "#fff" : FT.ink,
+            background: "#fff", color: FT.ink,
             border: "2px solid " + FT.ink, boxShadow: "3px 3px 0 " + FT.ink,
             fontFamily: "'Jua', sans-serif", fontSize: 13, fontWeight: 700, cursor: "pointer",
             display: "inline-flex", alignItems: "center", justifyContent: "center" }}>
-          {paletteOpen ? "닫기" : "스티커"}
+          스티커
         </button>
       )}
       {paletteOpen && (
@@ -4165,33 +4168,11 @@ function LiveMapView({ dbUrl, onHome, onOpenVenue }) {
                   if (layer && typeof layer.openPopup === "function") setTimeout(() => layer.openPopup(), 700);
                 } catch (_) {}
               }} />
-            {/* 스티커 N건 이상 있을 때 '모두 보기' 링크 노출 — 시트 모달 진입 */}
-            {(() => {
-              const cnt = Object.values(stickers || {}).filter((s) =>
-                s && typeof s.lat === "number" && typeof s.ts === "number" && (Date.now() - s.ts) < 2 * 60 * 60 * 1000).length;
-              if (cnt < 1) return null;
-              return (
-                <div style={{ display: "flex", justifyContent: "center", marginTop: 4 }}>
-                  <button onClick={() => {
-                      try { window.__mdsStats && window.__mdsStats.track("open_sticker_list"); } catch (_) {}
-                      setStickerListOpen(true);
-                    }}
-                    style={{ display: "inline-flex", alignItems: "center", gap: 4,
-                      background: "rgba(255,255,255,0.9)", color: FT.ink,
-                      border: "1px solid " + FT.mute + "88", borderRadius: 999,
-                      padding: "3px 10px", fontSize: 10, fontWeight: 700,
-                      fontFamily: "'Jua', sans-serif", cursor: "pointer" }}
-                    aria-label={`스티커 ${cnt}건 목록 보기`}>
-                    ≡ 스티커 {cnt}건 모두 보기
-                  </button>
-                </div>
-              );
-            })()}
           </div>
         </div>
       )}
 
-      {/* 스티커 목록 시트 — 모달 */}
+      {/* 스티커 목록 시트 — 모달. '새 스티커' 버튼으로 팔레트 진입 */}
       {stickerListOpen && (
         <StickerListSheet stickers={stickers}
           onClose={() => setStickerListOpen(false)}
@@ -4204,6 +4185,11 @@ function LiveMapView({ dbUrl, onHome, onOpenVenue }) {
               const layer = stickerLayersRef.current[s.id];
               if (layer && typeof layer.openPopup === "function") setTimeout(() => layer.openPopup(), 700);
             } catch (_) {}
+          }}
+          onAddNew={() => {
+            try { window.__mdsStats && window.__mdsStats.track("click_sticker_add_from_list"); } catch (_) {}
+            setStickerListOpen(false);
+            setPaletteOpen(true);
           }} />
       )}
 
@@ -4542,7 +4528,7 @@ function RecentStickersBanner({ stickers, onTap }) {
    · sticker: tealDark — 클릭 시 지도가 해당 위치로 이동 + popup */
 /* 스티커 목록 시트 — 라이브 지도 위 모달.
    carousel 보다 한 화면에 더 많이 보고 싶을 때, 또는 특정 스티커 빨리 찾을 때. */
-function StickerListSheet({ stickers, onClose, onTap }) {
+function StickerListSheet({ stickers, onClose, onTap, onAddNew }) {
   const VIEW_WINDOW_MS = 2 * 60 * 60 * 1000; // 2시간 (마커 TTL 과 동일)
   const cutoff = Date.now() - VIEW_WINDOW_MS;
   const STICKER_LABEL = { "👍": "좋아요", "📸": "포토스팟", "💤": "쉬는 곳", "🚻": "화장실", "🍱": "음식" };
@@ -4571,16 +4557,27 @@ function StickerListSheet({ stickers, onClose, onTap }) {
         <div style={{ display: "flex", justifyContent: "center", padding: "8px 0 4px" }}>
           <div style={{ width: 40, height: 4, borderRadius: 999, background: FT.mute + "88" }} />
         </div>
-        {/* header */}
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between",
+        {/* header — 제목 + '새 스티커' CTA + 닫기 */}
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8,
           padding: "4px 14px 8px", borderBottom: "1.5px solid " + FT.mute + "55" }}>
-          <div>
+          <div style={{ minWidth: 0, flex: 1 }}>
             <div style={{ fontSize: 14, fontWeight: 700, color: FT.ink }}>최근 스티커</div>
             <div style={{ fontSize: 10, color: FT.inkSoft }}>{items.length}건 · 최근 2시간 이내</div>
           </div>
+          {typeof onAddNew === "function" && (
+            <button onClick={onAddNew}
+              style={{ display: "inline-flex", alignItems: "center", gap: 4,
+                background: FT.tealDark, color: "#fff",
+                border: "1.5px solid " + FT.ink, borderRadius: 8,
+                padding: "6px 12px", fontSize: 12, fontWeight: 700,
+                fontFamily: "'Jua', sans-serif", cursor: "pointer",
+                boxShadow: "2px 2px 0 " + FT.ink }}>
+              + 새 스티커
+            </button>
+          )}
           <button onClick={onClose} aria-label="닫기"
             style={{ background: "transparent", border: "none", color: FT.inkSoft, fontSize: 22,
-              padding: "4px 8px", cursor: "pointer", lineHeight: 1 }}>×</button>
+              padding: "4px 8px", cursor: "pointer", lineHeight: 1, flexShrink: 0 }}>×</button>
         </div>
         {/* kind filter chips */}
         {items.length > 0 && (
