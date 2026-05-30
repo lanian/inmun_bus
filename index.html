@@ -143,7 +143,7 @@
 
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef, useMemo } = React;
-const BUILD = "b357b"; /* 화면 우하단 표시 — 최신 배포 확인용 */
+const BUILD = "b358"; /* 화면 우하단 표시 — 최신 배포 확인용 */
 
 /* 실시간 위치 공유용 Firebase DB 주소. 여기에 한 번 넣어두면 승객 링크가 ?view=map 만 남아 깔끔해집니다. */
 const SHARE_DB = "https://innum-bus-default-rtdb.firebaseio.com";
@@ -7451,6 +7451,14 @@ function App() {
       }
       return;
     }
+    // 전진 확인 헬퍼 — 항상 직선 거리로 비교(route 0 + next route 혼합 비교가 늘 false 되는 문제 방지)
+    const isForward = (curIdx) => {
+      if (curIdx + 1 >= stops.length) return true;
+      const cc = coords[coordKey(direction, stops[curIdx].name)];
+      const nc = coords[coordKey(direction, stops[curIdx + 1].name)];
+      if (!cc || !nc) return true;
+      return distanceMeters(userPos, nc) < distanceMeters(userPos, cc);
+    };
     // 통과(pass) 큐 — passRadius(이탈 반경) 벗어났는지 확인 후 발화
     if (pendingPassRef.current.size) {
       pendingPassRef.current.forEach((idx) => {
@@ -7460,11 +7468,8 @@ function App() {
         const exitR = stops[idx]?.radius ? Math.round(baseEnter * (passRadius / triggerRadius)) : passRadius;
         const d = measureTo(idx);
         if (d == null || d <= exitR) return; // 아직 이탈 반경 안
-        // 전진 확인: 다음 정류장이 있으면 더 가까워야 함(역방향 노이즈 방어)
-        if (idx + 1 < stops.length) {
-          const dn = measureTo(idx + 1);
-          if (dn != null && dn >= d) return;
-        }
+        // 전진 확인: 다음 정류장이 더 가까워야 함 — 직선 거리 기준
+        if (!isForward(idx)) return;
         // 통과 확정 — 발화 + 마킹
         pendingPassRef.current.delete(idx);
         announcedRef.current.add(idx);
@@ -7476,11 +7481,10 @@ function App() {
     // 통과 모드에서 passRadius < triggerRadius 인 경우에도 즉시 advance 되도록 min 사용
     if (currentIdx < stops.length - 1 && announcedRef.current.has(currentIdx)) {
       const dCur = measureTo(currentIdx);
-      const dNext = measureTo(currentIdx + 1);
-      if (dCur != null && dNext != null) {
+      if (dCur != null) {
         const baseR = stops[currentIdx]?.radius || triggerRadius;
         const advanceR = Math.min(baseR, passRadius);
-        if (dCur > advanceR && dNext < dCur) setCurrentIdx(currentIdx + 1);
+        if (dCur > advanceR && isForward(currentIdx)) setCurrentIdx(currentIdx + 1);
       }
     }
   }, [userPos, autoMode, stops, triggerRadius, passRadius, coords, direction, currentIdx, autoAnnTiming, stopTimings, distanceMode]);
