@@ -175,7 +175,7 @@
 
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef, useMemo } = React;
-const BUILD = "b393b"; /* 화면 우하단 표시 — 최신 배포 확인용 */
+const BUILD = "b394"; /* 화면 우하단 표시 — 최신 배포 확인용 */
 
 /* 실시간 위치 공유용 Firebase DB 주소. 여기에 한 번 넣어두면 승객 링크가 ?view=map 만 남아 깔끔해집니다. */
 const SHARE_DB = "https://innum-bus-default-rtdb.firebaseio.com";
@@ -6164,9 +6164,9 @@ function PassengerView({ dbUrl, onAdmin, initialTab = "list" }) {
   // 풋터 공통 — 어디서나 동일 3-버튼. 현재 화면(active)은 검정 강조, 활성 버튼 재클릭 시 홈(list) 복귀
   const renderFooter = (currentKey) => {
     const items = [
-      { key: "map", label: "🗺️ 무등생각 지도" },
-      { key: "venue", label: "🎪 행사장" },
-      { key: "timetable", label: "🕒 시간표" },
+      { key: "map", icon: "🗺️", label: "지도" },
+      { key: "venue", icon: "🎪", label: "행사장" },
+      { key: "timetable", icon: "🕒", label: "시간표" },
     ];
     const handle = (key) => {
       if (key === "timetable") { setShowTimetable(true); return; }
@@ -6180,15 +6180,18 @@ function PassengerView({ dbUrl, onAdmin, initialTab = "list" }) {
         {items.map((b) => {
           const active = b.key === currentKey;
           return (
-            <button key={b.key} onClick={() => handle(b.key)} className="py-2.5 text-[12px]"
+            <button key={b.key} onClick={() => handle(b.key)}
               title={active ? "다시 누르면 홈으로 돌아갑니다" : undefined}
               style={{ background: active ? FT.ink : "#fff",
                 color: active ? "#fff" : FT.ink,
                 border: "2px solid " + FT.ink, borderRadius: 10,
                 boxShadow: active ? "none" : "2px 2px 0 " + FT.ink,
                 transform: active ? "translate(2px, 2px)" : "none",
-                fontFamily: "'Jua', sans-serif", fontWeight: 700, cursor: "pointer" }}>
-              {b.label}
+                fontFamily: "'Jua', sans-serif", fontWeight: 700, cursor: "pointer",
+                padding: "8px 6px",
+                display: "flex", flexDirection: "column", alignItems: "center", gap: 2 }}>
+              <span aria-hidden style={{ fontSize: 16, lineHeight: 1 }}>{b.icon}</span>
+              <span style={{ fontSize: 11, lineHeight: 1 }}>{b.label}</span>
             </button>
           );
         })}
@@ -6268,11 +6271,21 @@ function PassengerView({ dbUrl, onAdmin, initialTab = "list" }) {
                 &lt;무등생각&gt; 셔틀버스 안내
               </div>
             </div>
-            <div title={statusText} role="status" aria-live="polite" aria-label={statusText}
-              className={live.length > 0 ? "animate-pulse" : ""}
-              style={{ position: "absolute", top: 12, right: 12, width: 12, height: 12, borderRadius: "50%",
-                background: conn === "error" ? "#B91C1C" : live.length > 0 ? FT.teal : FT.mute,
-                border: "1.5px solid " + FT.ink, boxShadow: "1px 1px 0 " + FT.ink }} />
+            {/* 상태 chip — 점 + 텍스트로 라이브/대기/오류 명확 표시. tooltip 의존 ↓ */}
+            <div role="status" aria-live="polite" aria-label={statusText}
+              style={{ position: "absolute", top: 10, right: 10,
+                display: "inline-flex", alignItems: "center", gap: 5,
+                padding: "3px 8px 3px 6px", borderRadius: 999,
+                background: conn === "error" ? "#fee2e2" : live.length > 0 ? FT.tealSoft : "#f1f5f9",
+                border: `1.5px solid ${conn === "error" ? "#B91C1C" : live.length > 0 ? FT.tealDark : FT.mute}`,
+                fontFamily: "'Jua', sans-serif", fontSize: 10, fontWeight: 700,
+                color: conn === "error" ? "#B91C1C" : live.length > 0 ? FT.tealDark : FT.inkSoft }}>
+              <span aria-hidden className={live.length > 0 ? "animate-pulse" : ""}
+                style={{ width: 8, height: 8, borderRadius: "50%",
+                  background: conn === "error" ? "#B91C1C" : live.length > 0 ? FT.teal : FT.mute,
+                  flexShrink: 0 }} />
+              <span>{conn === "error" ? "연결 오류" : live.length > 0 ? `라이브 · ${live.length}대` : "신호 없음"}</span>
+            </div>
           </div>
 
 
