@@ -143,10 +143,15 @@
 
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef, useMemo } = React;
-const BUILD = "b378"; /* 화면 우하단 표시 — 최신 배포 확인용 */
+const BUILD = "b379"; /* 화면 우하단 표시 — 최신 배포 확인용 */
 
 /* 실시간 위치 공유용 Firebase DB 주소. 여기에 한 번 넣어두면 승객 링크가 ?view=map 만 남아 깔끔해집니다. */
 const SHARE_DB = "https://innum-bus-default-rtdb.firebaseio.com";
+
+/* 스티커 유효 종료 시점 — 행사 종료(6.14 자정 = 6.15 00:00 KST) 후 모든 스티커 노출 종료.
+   행사 기간 동안은 개별 TTL 없이 누적 표시(2시간 자동 소멸 정책 폐기, 사용자 요청). */
+const STICKER_EXPIRY_MS = Date.UTC(2026, 5, 14, 15, 0, 0); // KST 2026-06-15 00:00 = UTC 6.14 15:00
+const isStickerLive = (s) => !!s && typeof s.lat === "number" && typeof s.lng === "number" && typeof s.ts === "number" && Date.now() < STICKER_EXPIRY_MS;
 /* 기사 쓰기 로그인용 Firebase 웹 API 키 (콘솔 → 프로젝트 설정 → 일반 → 웹 API 키). 공개돼도 안전(규칙으로 보호). */
 const SHARE_API_KEY = "AIzaSyAmR4zFCvD-uODve6zsZ-ENe3Y8aJkHrRg";
 
@@ -2769,7 +2774,6 @@ function StickerEditor({ onClose, dbUrl, getAuth, refreshAuth }) {
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [status, setStatus] = useState("");
-  const STICKER_TTL_MS = 2 * 60 * 60 * 1000;
   const reload = async () => {
     if (!dbUrl) { setStatus("⚠ DB 주소 없음"); setLoading(false); return; }
     setLoading(true);
@@ -2812,9 +2816,9 @@ function StickerEditor({ onClose, dbUrl, getAuth, refreshAuth }) {
     } catch (e) { setStatus(`⚠ ${e && e.message ? e.message : "네트워크 오류"}`); }
   };
   const sweepExpired = async () => {
-    const cutoff = Date.now() - STICKER_TTL_MS;
-    const dead = items.filter((it) => it.ts < cutoff);
-    if (dead.length === 0) { setStatus("✅ 만료된 스티커가 없어요"); return; }
+    // 행사 종료 후에만 'expired' 일괄 삭제 — 행사 중엔 sweep 무의미(개별 TTL 폐기)
+    const dead = Date.now() >= STICKER_EXPIRY_MS ? items.slice() : [];
+    if (dead.length === 0) { setStatus("✅ 정리할 스티커가 없어요 (행사 종료 후 일괄 정리 가능)"); return; }
     if (!window.confirm(`만료된 스티커 ${dead.length}개를 정리할까요?`)) return;
     setStatus("정리 중…");
     let ok = 0, fail = 0;
@@ -2836,7 +2840,7 @@ function StickerEditor({ onClose, dbUrl, getAuth, refreshAuth }) {
     } catch (e) { setStatus(`⚠ ${e && e.message ? e.message : "네트워크 오류"}`); }
   };
   const now = Date.now();
-  const expiredCount = items.filter((it) => it.ts < now - STICKER_TTL_MS).length;
+  const expiredCount = now >= STICKER_EXPIRY_MS ? items.length : 0;
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
       style={{ background: "rgba(0,0,0,0.7)" }} onClick={onClose}>
@@ -2879,7 +2883,7 @@ function StickerEditor({ onClose, dbUrl, getAuth, refreshAuth }) {
             <div className="text-[11px] text-slate-500 text-center py-4">아직 스티커가 없어요.</div>
           ) : items.map((it) => {
             const ageMin = Math.floor((now - it.ts) / 60000);
-            const expired = it.ts < now - STICKER_TTL_MS;
+            const expired = now >= STICKER_EXPIRY_MS;
             return (
               <div key={it.id} className="flex items-center gap-2 p-2 rounded-lg"
                 style={{ background: expired ? "rgba(100,116,139,0.10)" : "rgba(34,214,95,0.06)",
@@ -3780,7 +3784,6 @@ function LiveMapView({ dbUrl, onHome, onOpenVenue }) {
     { k: "🚻", t: "화장실" },
     { k: "🍱", t: "음식" },
   ];
-  const STICKER_TTL_MS = 2 * 60 * 60 * 1000; // 2시간
   // 본인이 등록 후 30분 이내라면 본인이 직접 삭제 가능 (DB 규칙도 동일 윈도우)
   const STICKER_OWNER_DELETE_WINDOW_MS = 30 * 60 * 1000;
   // 도배 방지 — 간격(2.5초) + 거리(15m) + 분당 개수(8개) 제한
@@ -3969,10 +3972,9 @@ function LiveMapView({ dbUrl, onHome, onOpenVenue }) {
   useEffect(() => {
     const map = mapRef.current; if (!map || !window.L) return;
     const L = window.L;
-    const cutoff = Date.now() - STICKER_TTL_MS;
     const mine = getMyStickerIds();
-    const live = Object.entries(stickers || {}).filter(([, s]) =>
-      s && typeof s.lat === "number" && typeof s.lng === "number" && typeof s.ts === "number" && s.ts >= cutoff);
+    // 행사 종료 전엔 모든 스티커 표시. 종료 후 즉시 0건.
+    const live = Object.entries(stickers || {}).filter(([, s]) => isStickerLive(s));
     // 제거 대상: 더 이상 없거나 만료된 마커
     const aliveIds = new Set(live.map(([id]) => id));
     Object.entries(stickerLayersRef.current).forEach(([id, layer]) => {
@@ -3992,7 +3994,7 @@ function LiveMapView({ dbUrl, onHome, onOpenVenue }) {
     // 추가/갱신
     live.forEach(([id, s]) => {
       const ageMin = Math.floor((Date.now() - s.ts) / 60000);
-      const left = Math.max(0, 120 - ageMin);
+      const ageText = ageMin <= 0 ? "방금" : ageMin < 60 ? `${ageMin}분 전` : `${Math.floor(ageMin / 60)}시간 전`;
       const isMine = mine.has(id);
       const canSelfDelete = isMine && (Date.now() - s.ts) < STICKER_OWNER_DELETE_WINDOW_MS;
       const myMark = isMine ? `<div style="font-size:9px;color:#0F786E;font-weight:700;margin-top:2px">● 내가 남긴 스티커</div>` : "";
@@ -4002,7 +4004,7 @@ function LiveMapView({ dbUrl, onHome, onOpenVenue }) {
       const popup = `<div style="font-family:'Jua',sans-serif;min-width:140px;text-align:center">`
         + `<div style="line-height:1;display:flex;justify-content:center">${stickerSvgHtml(s.kind, 30)}</div>`
         + (s.label ? `<div style="font-size:12px;color:#101113;margin-top:4px;font-weight:700">${s.label.replace(/</g,"&lt;")}</div>` : "")
-        + `<div style="font-size:10px;color:#4A4E55;margin-top:4px">${ageMin <= 0 ? "방금" : ageMin + "분 전"} · ${left}분 후 사라짐</div>`
+        + `<div style="font-size:10px;color:#4A4E55;margin-top:4px">${ageText} · 행사 종료 시 사라짐</div>`
         + myMark
         + delBtn
         + `</div>`;
@@ -4735,7 +4737,7 @@ function LiveMapView({ dbUrl, onHome, onOpenVenue }) {
                 })}
               </div>
               <div style={{ fontSize: 10, color: FT.mute, marginTop: 10, lineHeight: 1.4, textAlign: "center" }}>
-                누구나 남길 수 있어요 · 약 2시간 후 자동 사라짐 · 본인 스티커는 청록 테두리
+                누구나 남길 수 있어요 · 행사 종료 시 자동 사라짐 · 본인 스티커는 청록 테두리
               </div>
             </div>
           </div>
@@ -5135,12 +5137,11 @@ function RecentStickersBanner({ stickers, onTap }) {
 /* 스티커 목록 시트 — 라이브 지도 위 모달.
    carousel 보다 한 화면에 더 많이 보고 싶을 때, 또는 특정 스티커 빨리 찾을 때. */
 function StickerListSheet({ stickers, onClose, onTap, onAddNew }) {
-  const VIEW_WINDOW_MS = 2 * 60 * 60 * 1000; // 2시간 (마커 TTL 과 동일)
-  const cutoff = Date.now() - VIEW_WINDOW_MS;
-  const STICKER_LABEL = { "👍": "좋아요", "📸": "포토스팟", "💤": "쉬는 곳", "🚻": "화장실", "🍱": "음식" };
+  // 행사 종료 전엔 전체 노출, 종료 후 0건 (개별 TTL 폐기)
+  const STICKER_LABEL = { "💭": "생각", "💛": "좋아요", "📸": "포토스팟", "🌿": "쉼터", "🚻": "화장실", "🍱": "음식", "👍": "좋아요", "📷": "포토스팟", "💤": "쉬는 곳" };
   const items = Object.entries(stickers || {})
     .map(([id, s]) => ({ id, ...(s || {}) }))
-    .filter((s) => s && typeof s.lat === "number" && typeof s.lng === "number" && typeof s.ts === "number" && s.ts >= cutoff)
+    .filter((s) => isStickerLive(s))
     .sort((a, b) => b.ts - a.ts);
   // 종류별 빠른 필터
   const [filterKind, setFilterKind] = useState(""); // "" = 전체
