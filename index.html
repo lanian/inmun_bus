@@ -143,7 +143,7 @@
 
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef, useMemo } = React;
-const BUILD = "b369"; /* 화면 우하단 표시 — 최신 배포 확인용 */
+const BUILD = "b369b"; /* 화면 우하단 표시 — 최신 배포 확인용 */
 
 /* 실시간 위치 공유용 Firebase DB 주소. 여기에 한 번 넣어두면 승객 링크가 ?view=map 만 남아 깔끔해집니다. */
 const SHARE_DB = "https://innum-bus-default-rtdb.firebaseio.com";
@@ -899,8 +899,7 @@ const FESTIVAL_PROGRAM = {
       { time: "10:00~10:20", zone: 1, cat: "개막식", title: "무등생각의 동구라미",
         desc: "학운초 학생들의 합창 공연에 이은 축제 선언문 낭독. 우리의 첫 무등생각을 켜는 무대." },
       { time: "10:20~11:30", zone: 1, cat: "인문 토크", title: "내 생각에 이름을 붙인다면",
-        desc: "『내 말이 그 말이에요』 저자 김제동 강연과 함께 관객들의 다양한 생각을 주고받는 소통의 시간.",
-        pdf: "posters/poster-01.pdf" },
+        desc: "『내 말이 그 말이에요』 저자 김제동 강연과 함께 관객들의 다양한 생각을 주고받는 소통의 시간." },
       { time: "13:30~14:30", zone: 1, cat: "청소년인문사업", title: "무등생각 청소년 시(詩) 백일장",
         desc: "올해 처음 선보이는 전국 중학생 연령 청소년 백일장. 전통의상을 입고 옛 과거시험의 정경 속에서 나만의 고유한 생각을 시로 짓는 시간. (사전접수)",
         sub: ["시상식 17:00~18:00 / 축하공연 조대부고 밴드 Starlight"] },
@@ -1428,7 +1427,7 @@ function VenueModal({ onClose, initialZone = 0, initialProgram = null, onOpenLiv
             }
             return filtered.map((it, i) => {
               const zoneColor = it.zone % 2 ? FT.orange : FT.teal;
-              const hasMore = !!(it.desc || it.host || (Array.isArray(it.sub) && it.sub.length) || it.image || it.pdf);
+              const hasMore = !!(it.desc || it.host || (Array.isArray(it.sub) && it.sub.length) || it.image);
               const key = `${progDay}|${it.time}|${it.title}`;
               const isExpanded = expandedSet.has(key);
               const Tag = hasMore ? "button" : "div";
@@ -1505,17 +1504,6 @@ function VenueModal({ onClose, initialZone = 0, initialProgram = null, onOpenLiv
                               </div>
                             ))}
                           </div>
-                        )}
-                        {it.pdf && (
-                          <a href={it.pdf} target="_blank" rel="noopener noreferrer"
-                            onClick={(e) => e.stopPropagation()}
-                            style={{ display: "inline-flex", alignItems: "center", gap: 5, marginTop: 8,
-                              padding: "5px 10px", background: "#fff", color: FT.ink,
-                              border: "1.5px solid " + FT.ink, borderRadius: 6, fontSize: 10,
-                              fontFamily: "'Jua', sans-serif", fontWeight: 700, textDecoration: "none",
-                              boxShadow: "1.5px 1.5px 0 " + FT.ink }}>
-                            📄 포스터·자료 PDF
-                          </a>
                         )}
                       </div>
                     )}
