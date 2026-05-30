@@ -154,7 +154,7 @@
 
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef, useMemo } = React;
-const BUILD = "b384"; /* 화면 우하단 표시 — 최신 배포 확인용 */
+const BUILD = "b384b"; /* 화면 우하단 표시 — 최신 배포 확인용 */
 
 /* 실시간 위치 공유용 Firebase DB 주소. 여기에 한 번 넣어두면 승객 링크가 ?view=map 만 남아 깔끔해집니다. */
 const SHARE_DB = "https://innum-bus-default-rtdb.firebaseio.com";
@@ -7627,7 +7627,14 @@ function App() {
   const [showNoticeEditor, setShowNoticeEditor] = useState(false);
   const [showStickerEditor, setShowStickerEditor] = useState(false);
   // 사용자가 남긴 신규 스티커 운영자 알림 — LS 에 마지막 확인 ts 기억, 신규 개수 표시 + 토스트.
-  const [lastSeenStickerTs, setLastSeenStickerTs] = useState(() => parseInt(LS.get("seenStickerTs", "0"), 10) || 0);
+  // 첫 진입(LS 값 없음): 현재 시각으로 초기화 → 기존 스티커는 'seen' 으로 간주(시작 시 스팸 토스트 방지).
+  const [lastSeenStickerTs, setLastSeenStickerTs] = useState(() => {
+    const stored = parseInt(LS.get("seenStickerTs", "0"), 10) || 0;
+    if (stored > 0) return stored;
+    const init = Date.now();
+    LS.set("seenStickerTs", String(init));
+    return init;
+  });
   const [newStickerCount, setNewStickerCount] = useState(0);
   const [stickerNotifMsg, setStickerNotifMsg] = useState(""); // '💭 새 스티커 N개' 토스트
   const seenAlertedRef = useRef(new Set()); // 이번 세션 중 알림 띄운 sticker id (중복 토스트/chime 방지)
