@@ -143,7 +143,7 @@
 
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef, useMemo } = React;
-const BUILD = "b365"; /* 화면 우하단 표시 — 최신 배포 확인용 */
+const BUILD = "b366"; /* 화면 우하단 표시 — 최신 배포 확인용 */
 
 /* 실시간 위치 공유용 Firebase DB 주소. 여기에 한 번 넣어두면 승객 링크가 ?view=map 만 남아 깔끔해집니다. */
 const SHARE_DB = "https://innum-bus-default-rtdb.firebaseio.com";
@@ -7448,7 +7448,7 @@ function App() {
           announcedRef.current.add(nearestIdx);
           pendingPassRef.current.delete(nearestIdx); // 큐에서 제거 — 다음 tick 의 pending 발화 중복 방지
           announceStop(nearestIdx);
-          if (nearestIdx === stops.length - 1 && nextLeg) { legSwitchArmedRef.current = true; legDepartCountRef.current = 0; }
+          armLegSwitchIfTerminus(nearestIdx);
         } else {
           // 통과 모드 — 지금 발화하지 않고 큐에 넣음. 반경 벗어난 직후 announceStop 호출.
           pendingPassRef.current.add(nearestIdx);
@@ -7466,13 +7466,13 @@ function App() {
         if (alreadyPast || (closeEnough && (slow || FAKE_GPS))) {
           announcedRef.current.add(nearestIdx);
           announceStop(nearestIdx);
-          if (nearestIdx === stops.length - 1 && nextLeg) { legSwitchArmedRef.current = true; legDepartCountRef.current = 0; }
+          armLegSwitchIfTerminus(nearestIdx);
         }
         // else: 다음 tick 에서 재확인
       } else {
         announcedRef.current.add(nearestIdx);
         announceStop(nearestIdx);
-        if (nearestIdx === stops.length - 1 && nextLeg) { legSwitchArmedRef.current = true; legDepartCountRef.current = 0; }
+        armLegSwitchIfTerminus(nearestIdx);
       }
       return;
     }
@@ -7504,7 +7504,7 @@ function App() {
         pendingPassRef.current.delete(idx);
         announcedRef.current.add(idx);
         announceStop(idx);
-        if (idx === stops.length - 1 && nextLeg) { legSwitchArmedRef.current = true; legDepartCountRef.current = 0; }
+        armLegSwitchIfTerminus(idx);
       });
     }
     // 안내한 현재 정류장을 통과 → 표시를 다음 정류장으로 전환.
@@ -7521,22 +7521,37 @@ function App() {
     }
   }, [userPos, autoMode, stops, triggerRadius, passRadius, coords, direction, currentIdx, autoAnnTiming, stopTimings, distanceMode]);
 
-  /* --- Auto leg-switch: 종점 도착 후, 연속으로 반경*1.5를 벗어나면 전환 (GPS 노이즈 히스테리시스) --- */
+  /* --- Auto leg-switch: 종점 도착 후, 연속으로 max(passRadius, triggerRadius)+α 벗어나면 전환 (GPS 노이즈 히스테리시스).
+         legDepartCount 카운트를 state 화해 LED 에 진행 표시 가능. --- */
+  const armLegSwitchIfTerminus = (idx) => {
+    if (idx === stops.length - 1 && nextLeg) {
+      legSwitchArmedRef.current = true;
+      legDepartCountRef.current = 0;
+      setLegDepartCount(0);
+    }
+  };
+  const [legDepartCount, setLegDepartCount] = useState(0);
   useEffect(() => {
     if (!autoMode || !autoLegSwitch || !userPos) return;
     if (manualWaiting) return; // P1-1: 일시정지(대기) 중에는 자동 회차 전환 잠금
     if (!isAtTerminus || !nextLeg || !legSwitchArmedRef.current) return;
     const tc = coords[coordKey(direction, stops[stops.length - 1].name)];
     if (!tc) return;
-    if (distanceMeters(userPos, tc) > triggerRadius * 1.5) {
+    // 종점 이탈 임계 — 진입/통과 반경 중 큰 값 + 50m 여유. 사용자 설정 반영.
+    const switchR = Math.max(triggerRadius, passRadius) + 50;
+    if (distanceMeters(userPos, tc) > switchR) {
       legDepartCountRef.current += 1;
+      setLegDepartCount(legDepartCountRef.current);
       if (legDepartCountRef.current >= 3) goToNextLeg(); // 연속 3회 확인 후 전환
-    } else {
-      legDepartCountRef.current = 0; // 다시 반경 안이면 리셋
+    } else if (legDepartCountRef.current !== 0) {
+      legDepartCountRef.current = 0;
+      setLegDepartCount(0);
     }
-  }, [userPos, autoMode, autoLegSwitch, isAtTerminus, nextLeg, triggerRadius, coords, manualWaiting]);
+  }, [userPos, autoMode, autoLegSwitch, isAtTerminus, nextLeg, triggerRadius, passRadius, coords, direction, manualWaiting]);
 
-  useEffect(() => { if (!autoMode) { announcedRef.current = new Set(); pendingPassRef.current = new Set(); legSwitchArmedRef.current = false; legDepartCountRef.current = 0; } }, [autoMode]);
+  // autoMode/autoLegSwitch/회차·방향 변경 시 무장·카운터 깨끗하게 리셋
+  useEffect(() => { if (!autoMode) { announcedRef.current = new Set(); pendingPassRef.current = new Set(); legSwitchArmedRef.current = false; legDepartCountRef.current = 0; setLegDepartCount(0); } }, [autoMode]);
+  useEffect(() => { legSwitchArmedRef.current = false; legDepartCountRef.current = 0; setLegDepartCount(0); }, [autoLegSwitch, direction, tripIdx]);
   // 회차/방향 전환 시 통과 큐 비우기 — 이전 leg 의 미발화 알림이 새 leg 에서 잘못 발화되는 것 방지
   useEffect(() => { pendingPassRef.current = new Set(); }, [direction, tripIdx]);
 
@@ -7589,7 +7604,7 @@ function App() {
       }
       // 종점 도달 + 다음 leg 출발 시각 지나면 자동 회차 전환 (A3: 데이터 누락 시 데드락 방지)
       if (k === stops.length - 1 && nextLeg) {
-        legSwitchArmedRef.current = true;
+        armLegSwitchIfTerminus(k);
         const nl = ROUTES[nextLeg.direction]?.trips?.[nextLeg.tripIdx];
         if (nl && nl[0]) {
           const nlSec = toMin(nl[0]) * 60;
@@ -8319,13 +8334,22 @@ function App() {
                     {nextLegInfo.label} {nextLegInfo.tripNum}회차
                   </div>
                 </div>
-                <button onClick={goToNextLeg}
-                  className="flex-shrink-0 px-4 py-2 rounded-lg text-sm font-bold whitespace-nowrap"
-                  style={{ background: "#22d65f", color: "#0a0b0f",
-                    fontFamily: "'Jua', sans-serif",
-                    boxShadow: "0 0 16px rgba(34, 214, 95, 0.4)" }}>
-                  전환 →
-                </button>
+                <div className="flex items-center gap-2 flex-shrink-0">
+                  {autoLegSwitch && legDepartCount > 0 && (
+                    <span className="text-[10px] px-2 py-1 rounded font-bold"
+                      style={{ background: "#0a0b0f", color: "#fbbf24", border: "1px solid #fbbf24", fontFamily: "'Jua', sans-serif" }}
+                      title="종점 이탈 확인 — 3회 연속이면 자동 전환">
+                      🔄 자동전환 {legDepartCount}/3
+                    </span>
+                  )}
+                  <button onClick={goToNextLeg}
+                    className="px-4 py-2 rounded-lg text-sm font-bold whitespace-nowrap"
+                    style={{ background: "#22d65f", color: "#0a0b0f",
+                      fontFamily: "'Jua', sans-serif",
+                      boxShadow: "0 0 16px rgba(34, 214, 95, 0.4)" }}>
+                    전환 →
+                  </button>
+                </div>
             </div>
           )}
 
