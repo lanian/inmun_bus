@@ -143,7 +143,7 @@
 
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef, useMemo } = React;
-const BUILD = "b347b"; /* 화면 우하단 표시 — 최신 배포 확인용 */
+const BUILD = "b348"; /* 화면 우하단 표시 — 최신 배포 확인용 */
 
 /* 실시간 위치 공유용 Firebase DB 주소. 여기에 한 번 넣어두면 승객 링크가 ?view=map 만 남아 깔끔해집니다. */
 const SHARE_DB = "https://innum-bus-default-rtdb.firebaseio.com";
@@ -3992,8 +3992,8 @@ function LiveMapView({ dbUrl, onHome, onOpenVenue }) {
     };
     const schedIcon = (dir, tripNum) => {
       const c = dir === "inbound" ? FT.teal : FT.orange;
-      const html = `<div style="display:inline-flex;align-items:center;gap:3px;background:#fff;color:${FT.ink};border:2px dashed ${c};border-radius:999px;padding:3px 9px;font-family:'Jua',sans-serif;font-weight:700;font-size:11px;white-space:nowrap;opacity:0.92;">${tripNum}회차 예상</div>`;
-      return L.divIcon({ className: "", html, iconSize: [130, 26], iconAnchor: [65, 13] });
+      const html = `<div style="display:inline-flex;align-items:center;gap:3px;background:#fff;color:${c};border:2px dashed ${c};border-radius:999px;padding:3px 9px;font-family:'Jua',sans-serif;font-weight:700;font-size:11px;white-space:nowrap;opacity:0.95;">🚌 ${tripNum}회차 예상</div>`;
+      return L.divIcon({ className: "", html, iconSize: [140, 26], iconAnchor: [70, 13] });
     };
     // A8: 휴식(대기) 마커 — 종착지에서 다음 leg 출발까지의 휴식
     const restIcon = (mins, terminus) => {
@@ -4116,7 +4116,8 @@ function LiveMapView({ dbUrl, onHome, onOpenVenue }) {
         const today0 = new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime();
         const preFestival = today0 < day1Ts;
         const postFestival = today0 > day2Ts;
-        if (isFestivalDay) {
+        // FAKE 시각 활성이면 행사일 가드 우회 — 시연·테스트에서도 노선상에 가짜 버스 마커가 보이도록
+        if (isFestivalDay || FAKE) {
           const tripsToday = today.getMonth() === 5 && today.getDate() === 14 ? 5 : ROUTES.outbound.trips.length;
           const nowMin = today.getHours() * 60 + today.getMinutes();
           const obFirstStop = ROUTES.outbound.stops[0];
