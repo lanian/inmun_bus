@@ -143,7 +143,7 @@
 
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef, useMemo } = React;
-const BUILD = "b327"; /* 화면 우하단 표시 — 최신 배포 확인용 */
+const BUILD = "b328"; /* 화면 우하단 표시 — 최신 배포 확인용 */
 
 /* 실시간 위치 공유용 Firebase DB 주소. 여기에 한 번 넣어두면 승객 링크가 ?view=map 만 남아 깔끔해집니다. */
 const SHARE_DB = "https://innum-bus-default-rtdb.firebaseio.com";
@@ -3991,22 +3991,22 @@ function LiveMapView({ dbUrl, onHome, onOpenVenue }) {
           </div>
         </div>
       )}
-      {/* 플로팅 버튼 — idle 시 '📍 스티커', palette open / place mode 시엔 숨김 (상단 바로 제어) */}
+      {/* 플로팅 버튼 — idle 시 '스티커', palette open / place mode 시엔 숨김 (상단 바로 제어).
+          위치 — 하단 안전영역 16px 위 (이전 96px 에서 더 가까이 내림) */}
       {!stickerKind && (
         <button onClick={() => setPaletteOpen((v) => !v)}
           aria-label={paletteOpen ? "스티커 팔레트 닫기" : "스티커 남기기"}
-          style={{ position: "fixed", right: 12, bottom: "calc(96px + env(safe-area-inset-bottom, 0px))",
-            height: 44, padding: paletteOpen ? "0 14px" : "0 14px 0 12px", borderRadius: 22, zIndex: 1100,
+          style={{ position: "fixed", right: 14, bottom: "calc(16px + env(safe-area-inset-bottom, 0px))",
+            height: 44, padding: "0 16px", borderRadius: 22, zIndex: 1100,
             background: paletteOpen ? FT.teal : "#fff", color: paletteOpen ? "#fff" : FT.ink,
             border: "2px solid " + FT.ink, boxShadow: "3px 3px 0 " + FT.ink,
             fontFamily: "'Jua', sans-serif", fontSize: 13, fontWeight: 700, cursor: "pointer",
-            display: "inline-flex", alignItems: "center", gap: 6 }}>
-          <span style={{ fontSize: paletteOpen ? 16 : 17, lineHeight: 1 }}>{paletteOpen ? "✕" : "📍"}</span>
-          <span>{paletteOpen ? "닫기" : "스티커"}</span>
+            display: "inline-flex", alignItems: "center", justifyContent: "center" }}>
+          {paletteOpen ? "닫기" : "스티커"}
         </button>
       )}
       {paletteOpen && (
-        <div style={{ position: "fixed", right: 12, bottom: "calc(150px + env(safe-area-inset-bottom, 0px))",
+        <div style={{ position: "fixed", right: 14, bottom: "calc(70px + env(safe-area-inset-bottom, 0px))",
           zIndex: 1100, background: "#fff", border: "2px solid " + FT.ink, borderRadius: 14,
           boxShadow: "3px 3px 0 " + FT.ink, padding: 12, width: 260, fontFamily: "'Jua', sans-serif" }}>
           {/* 메시지 입력 — 팔레트 안에 두어 모바일 키보드 노출 시 자연스럽게 보이도록 */}
@@ -4053,7 +4053,7 @@ function LiveMapView({ dbUrl, onHome, onOpenVenue }) {
         </div>
       )}
       <div role="status" aria-live="polite" aria-atomic="true"
-        style={{ position: "fixed", left: "50%", bottom: "calc(80px + env(safe-area-inset-bottom, 0px))",
+        style={{ position: "fixed", left: "50%", bottom: "calc(76px + env(safe-area-inset-bottom, 0px))",
           transform: "translateX(-50%)", zIndex: 1300, pointerEvents: "none",
           opacity: stickerMsg ? 1 : 0, transition: "opacity 0.18s",
           background: FT.ink, color: "#fff", padding: stickerMsg ? "8px 14px" : 0, borderRadius: 999,
@@ -4084,8 +4084,8 @@ function LiveMapView({ dbUrl, onHome, onOpenVenue }) {
         </div>
       </div>
 
-      {/* 범례 (좌하단) */}
-      <div style={{ position: "absolute", bottom: 96, left: 10, zIndex: 1000,
+      {/* 범례 (좌하단) — 스티커 버튼과 같은 baseline */}
+      <div style={{ position: "fixed", bottom: "calc(16px + env(safe-area-inset-bottom, 0px))", left: 10, zIndex: 1000,
         background: "#fff", border: "2px solid " + FT.ink, borderRadius: 10, boxShadow: "3px 3px 0 " + FT.ink,
         padding: "8px 10px", fontFamily: "'Jua', sans-serif", fontSize: 11, color: FT.ink, lineHeight: 1.6 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
