@@ -76,14 +76,18 @@
         "sessions": {
           "$sid": {
             ".write": "($sid.length <= 32 && $sid.length >= 6) || (auth != null && (root.child('drivers').child(auth.uid).exists() || root.child('admins').child(auth.uid).exists()))",
-            ".validate": "newData.hasChildren(['ts','ev']) && newData.child('ts').isNumber() && newData.child('ev').hasChildren() && (!newData.hasChild('cat') || (newData.child('cat').isString() && newData.child('cat').val().length <= 32)) && (!newData.hasChild('startedAt') || newData.child('startedAt').isNumber()) && (!newData.hasChild('durMs') || newData.child('durMs').isNumber())",
-            "ev": {
-              "$key": {
-                ".validate": "$key.matches(/^(session|view|click|toggle|open|notice|transition|stop|sticker|error)_[a-zA-Z0-9_]+$/) && newData.isNumber()"
+            "flushes": {
+              "$flushTs": {
+                ".validate": "$flushTs.matches(/^[0-9]+$/) && newData.hasChildren(['ts','ev']) && newData.child('ts').isNumber() && newData.child('ev').hasChildren() && (!newData.hasChild('cat') || (newData.child('cat').isString() && newData.child('cat').val().length <= 32)) && (!newData.hasChild('startedAt') || newData.child('startedAt').isNumber()) && (!newData.hasChild('durMs') || newData.child('durMs').isNumber())",
+                "ev": {
+                  "$key": {
+                    ".validate": "$key.matches(/^(session|view|click|toggle|open|notice|transition|stop|sticker|error)_[a-zA-Z0-9_]+$/) && newData.isNumber()"
+                  }
+                },
+                "$other": {
+                  ".validate": "$other.matches(/^(ts|startedAt|durMs|cat|ev)$/)"
+                }
               }
-            },
-            "$other": {
-              ".validate": "$other.matches(/^(ts|startedAt|durMs|cat|ev)$/)"
             }
           }
         }

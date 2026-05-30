@@ -143,7 +143,7 @@
 
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef, useMemo } = React;
-const BUILD = "b335"; /* 화면 우하단 표시 — 최신 배포 확인용 */
+const BUILD = "b336"; /* 화면 우하단 표시 — 최신 배포 확인용 */
 
 /* 실시간 위치 공유용 Firebase DB 주소. 여기에 한 번 넣어두면 승객 링크가 ?view=map 만 남아 깔끔해집니다. */
 const SHARE_DB = "https://innum-bus-default-rtdb.firebaseio.com";
@@ -437,19 +437,19 @@ const createStatsTracker = (dbUrl) => {
   } catch (_) { return noop; }
   const startedAt = Date.now();
   const cat = parseUaCategory(navigator && navigator.userAgent || "");
-  // 버전 마이그레이션 — 키 형식 . → _ (Firebase RTDB 가 키에 . 허용 안 함)
-  // 이전 버전 데이터는 구 키 형식이라 PUT 시 거부됨 → 강제 clear
-  const STATS_VERSION = 2;
-  let events = {};
+  // 버전 마이그레이션 — v3: 샤드 패턴(flush 마다 새 sub-record). 이전 누적 데이터는 의미 다르므로 클리어
+  const STATS_VERSION = 3;
+  let eventsDelta = {}; // 마지막 성공 flush 이후 발생한 신규 이벤트만 보관 (서버에는 델타로 PUT)
   try {
     if (sessionStorage.getItem("mds:statsVer") === String(STATS_VERSION)) {
-      events = JSON.parse(sessionStorage.getItem("mds:stats") || "{}") || {};
+      eventsDelta = JSON.parse(sessionStorage.getItem("mds:statsDelta") || "{}") || {};
     } else {
       sessionStorage.removeItem("mds:stats");
+      sessionStorage.removeItem("mds:statsDelta");
       sessionStorage.setItem("mds:statsVer", String(STATS_VERSION));
     }
   } catch (_) {}
-  let dirty = Object.keys(events).length > 0;
+  let dirty = Object.keys(eventsDelta).length > 0;
   let flushing = false;
   let backoffMs = 0; // 다음 flush 까지 추가 대기. 실패 시 증가, 성공 시 0.
   let lastTryAt = 0;
@@ -470,18 +470,26 @@ const createStatsTracker = (dbUrl) => {
     if (backoffMs > 0 && now - lastTryAt < backoffMs) return; // backoff 대기 중
     flushing = true;
     lastTryAt = now;
+    // 델타 snapshot 을 잡아두고 PUT — 송신 중에 신규 track 이 들어오면 다음 flush 에서 처리
+    const deltaSnap = { ...eventsDelta };
     try {
-      const body = { ts: now, startedAt, durMs: now - startedAt, ev: events, cat };
-      const r = await fetch(`${base}/stats/${dateKey()}/sessions/${encodeURIComponent(sid)}.json`,
+      const body = { ts: now, startedAt, durMs: now - startedAt, ev: deltaSnap, cat };
+      // 샤드 패턴: 매 flush 가 새 sub-record. 서버에서 누적 덮어쓰기 없음 → 삭제 시 진짜 사라짐
+      const r = await fetch(`${base}/stats/${dateKey()}/sessions/${encodeURIComponent(sid)}/flushes/${now}.json`,
         { method: "PUT", body: JSON.stringify(body), keepalive: true });
       if (r.ok) {
-        dirty = false;
+        // 보낸 만큼 차감 — 동시에 들어온 신규 track 의 값은 보존
+        Object.keys(deltaSnap).forEach((k) => {
+          const sent = deltaSnap[k];
+          if ((eventsDelta[k] || 0) > sent) eventsDelta[k] = eventsDelta[k] - sent;
+          else delete eventsDelta[k];
+        });
+        dirty = Object.keys(eventsDelta).length > 0;
+        try { sessionStorage.setItem("mds:statsDelta", JSON.stringify(eventsDelta)); } catch (_) {}
         backoffMs = 0;
       } else {
-        // 본문에서 Firebase error 추출해 콘솔로 — 운영자가 dev tools 로 원인 즉시 파악 가능
         let detail = ""; try { detail = await r.text(); } catch (_) {}
         try { console.warn("[mds:stats] flush failed", r.status, detail.slice(0, 200)); } catch (_) {}
-        // 4xx (validation·권한) 는 재시도해도 같은 결과 — backoff 최대로
         backoffMs = (r.status >= 400 && r.status < 500) ? 10 * 60 * 1000 : Math.min((backoffMs || 60000) * 2, 10 * 60 * 1000);
       }
     } catch (e) {
@@ -494,11 +502,10 @@ const createStatsTracker = (dbUrl) => {
     if (!key) return;
     const k = String(key).slice(0, 48);
     if (!KEY_RE.test(k)) return; // 화이트리스트 외 무시
-    if (!(k in events) && Object.keys(events).length >= KEY_CAP) return;
-    events[k] = (events[k] || 0) + (count || 1);
+    if (!(k in eventsDelta) && Object.keys(eventsDelta).length >= KEY_CAP) return;
+    eventsDelta[k] = (eventsDelta[k] || 0) + (count || 1);
     dirty = true;
-    try { sessionStorage.setItem("mds:stats", JSON.stringify(events)); } catch (_) {}
-    // 첫 track 후 3초 뒤 첫 flush — 운영자가 곧바로 통계 viewer 에서 확인 가능
+    try { sessionStorage.setItem("mds:statsDelta", JSON.stringify(eventsDelta)); } catch (_) {}
     if (!firstFlushTimer) { firstFlushTimer = setTimeout(() => { firstFlushTimer = null; flush(); }, 3000); }
   };
   const intervalId = setInterval(flush, 60000);
@@ -2013,25 +2020,46 @@ function UsageStatsViewer({ onClose, dbUrl, getAuth, refreshAuth }) {
     setLoading(false);
   };
   useEffect(() => { load(); }, [dateA, dateB, dbUrl]);
-  /* 단일 일자 집계 */
+  /* 단일 일자 집계 — 새 샤드 스키마(sessions/{sid}/flushes/{flushTs}) 와 기존 직접 스키마(sessions/{sid}=ev) 모두 처리 */
   const aggregate = (sessions) => {
     if (!sessions) return null;
-    const list = Object.values(sessions).filter(Boolean);
-    const total = list.length;
     const evSum = {};
     const hourly = Array(24).fill(0);
     const byCat = {};
     let durSum = 0;
-    list.forEach((s) => {
-      if (typeof s.durMs === "number") durSum += s.durMs;
-      if (typeof s.startedAt === "number") {
-        const h = new Date(s.startedAt).getHours();
-        if (h >= 0 && h < 24) hourly[h]++;
+    let total = 0;
+    Object.values(sessions).forEach((s) => {
+      if (!s || typeof s !== "object") return;
+      // 새 스키마: flushes 안에 여러 sub-record. 합산.
+      if (s.flushes && typeof s.flushes === "object") {
+        const flushes = Object.values(s.flushes).filter(Boolean);
+        if (flushes.length === 0) return;
+        total++;
+        let minStart = Infinity, maxTs = 0, cat = null;
+        flushes.forEach((f) => {
+          if (typeof f.startedAt === "number") minStart = Math.min(minStart, f.startedAt);
+          if (typeof f.ts === "number") maxTs = Math.max(maxTs, f.ts);
+          if (!cat && typeof f.cat === "string") cat = f.cat;
+          Object.entries(f.ev || {}).forEach(([k, v]) => { evSum[k] = (evSum[k] || 0) + (Number(v) || 0); });
+        });
+        if (minStart < Infinity && maxTs > 0) durSum += Math.max(0, maxTs - minStart);
+        if (minStart < Infinity) {
+          const h = new Date(minStart).getHours();
+          if (h >= 0 && h < 24) hourly[h]++;
+        }
+        byCat[cat || "unknown"] = (byCat[cat || "unknown"] || 0) + 1;
+      } else if (s.ev && typeof s.ev === "object") {
+        // 기존 스키마(레거시 데이터) — 직접 ev 사용
+        total++;
+        if (typeof s.durMs === "number") durSum += s.durMs;
+        if (typeof s.startedAt === "number") {
+          const h = new Date(s.startedAt).getHours();
+          if (h >= 0 && h < 24) hourly[h]++;
+        }
+        const c = typeof s.cat === "string" ? s.cat : "unknown";
+        byCat[c] = (byCat[c] || 0) + 1;
+        Object.entries(s.ev).forEach(([k, v]) => { evSum[k] = (evSum[k] || 0) + (Number(v) || 0); });
       }
-      const c = typeof s.cat === "string" ? s.cat : "unknown";
-      byCat[c] = (byCat[c] || 0) + 1;
-      const ev = s.ev || {};
-      Object.entries(ev).forEach(([k, v]) => { evSum[k] = (evSum[k] || 0) + (Number(v) || 0); });
     });
     const avgDurMin = total > 0 ? Math.round(durSum / total / 60000 * 10) / 10 : 0;
     // 이벤트 prefix 별 그룹화
@@ -2236,6 +2264,7 @@ function UsageStatsViewer({ onClose, dbUrl, getAuth, refreshAuth }) {
         <div className="text-[10px] text-slate-500 leading-relaxed">
           익명 카운트만 (좌표·풀 UA·언어 비수집). 세션 = 브라우저 탭 한 번 열림 단위.
           세션 1건 = 최소 '진입 화면 view' + '종료 직전 화면' 2 이벤트 (탭 이동·기능 사용마다 추가). 권장 보관 30일.
+          <br/>v3 샤드 패턴 — 클라이언트가 신규 이벤트만 송신. 일자 삭제 시 활성 세션이 재기록 안 함.
         </div>
         {status && <div className="text-[11px]" style={{ color: status.startsWith("⚠") ? "#fca5a5" : status.startsWith("✅") ? "#22d65f" : "#fbbf24" }}>{status}</div>}
         {dateB ? (

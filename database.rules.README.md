@@ -30,7 +30,7 @@ P0-5: 행사 당일 누구나 `/zones`, `/counts`, `/buses` 같은 운영 데이
 | `/notice` | 누구나 | driver 또는 admin |
 | `/drivers`, `/admins` | admin | admin |
 | `/stickers/{id}` | 누구나 | **신규(create) 는 누구나** · 등록 후 30분 이내 본인 DELETE 익명 허용 · 그 외 수정·삭제는 driver·admin |
-| `/stats/{date}/sessions/{sid}` | driver·admin | **익명 PUT** (sid 6~32자, 화이트리스트 ev 키만, 알려진 필드 외 거부) + **driver·admin 모든 쓰기**(일자 단위 DELETE 포함) · 읽기는 운영자만 (사후 분석용). **권장 보관 30일** — 행사 후 운영자 화면에서 일괄 정리. |
+| `/stats/{date}/sessions/{sid}/flushes/{flushTs}` | driver·admin | **익명 PUT** (sid 6~32자, flushTs 숫자, ev 화이트리스트, 알려진 필드 외 거부) + **driver·admin 모든 쓰기**(DELETE 포함) · 읽기는 운영자만. **샤드 패턴 v3** — 각 flush 가 새 sub-record. 클라이언트는 마지막 성공 flush 이후 발생한 신규 이벤트만 보내며, 운영자가 일자 삭제 시 재기록 안 됨. 권장 보관 30일. |
 
 ## 주의
 - 익명 읽기는 의도적으로 허용(승객 페이지가 누구나 접근). API 키 노출은
