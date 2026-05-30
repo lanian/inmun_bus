@@ -161,7 +161,7 @@
 
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef, useMemo } = React;
-const BUILD = "b389"; /* 화면 우하단 표시 — 최신 배포 확인용 */
+const BUILD = "b390"; /* 화면 우하단 표시 — 최신 배포 확인용 */
 
 /* 실시간 위치 공유용 Firebase DB 주소. 여기에 한 번 넣어두면 승객 링크가 ?view=map 만 남아 깔끔해집니다. */
 const SHARE_DB = "https://innum-bus-default-rtdb.firebaseio.com";
@@ -8499,67 +8499,76 @@ function App() {
       {stickerNotif && (
         <div role="status" aria-live="polite"
           style={{ pointerEvents: "auto", display: "flex", alignItems: "stretch",
-            background: stickerArt.color, color: "#fff",
-            boxShadow: "0 2px 6px rgba(0,0,0,0.25)", borderBottom: "1.5px solid rgba(0,0,0,0.15)",
+            background: stickerArt.color, color: "#fff", minHeight: 60,
+            boxShadow: "0 3px 8px rgba(0,0,0,0.3)", borderBottom: "1.5px solid rgba(0,0,0,0.15)",
             fontFamily: "'Jua', sans-serif",
             animation: "mdsTopBarIn 0.28s cubic-bezier(0.2, 0.9, 0.3, 1) both", position: "relative" }}>
           <button
             onClick={() => { markStickersSeen(); setStickerNotif(null); setShowStickerEditor(true); }}
             aria-label={`신규 스티커 알림 — ${stickerKindName}${stickerNotif.label ? ': ' + stickerNotif.label : ''}`}
-            style={{ flex: 1, minWidth: 0, display: "flex", alignItems: "center", gap: 10,
-              padding: "8px 14px", background: "transparent", border: "none",
+            style={{ flex: 1, minWidth: 0, display: "flex", alignItems: "center", gap: 12,
+              padding: "12px 16px", background: "transparent", border: "none",
               cursor: "pointer", textAlign: "left", font: "inherit", color: "inherit" }}>
-            <span style={{ flexShrink: 0, width: 26, height: 26, borderRadius: 8,
-              background: "rgba(255,255,255,0.25)",
+            <span style={{ flexShrink: 0, width: 36, height: 36, borderRadius: 10,
+              background: "rgba(255,255,255,0.25)", border: "1.5px solid rgba(255,255,255,0.5)",
               display: "inline-flex", alignItems: "center", justifyContent: "center" }}>
-              <StickerIcon kind={stickerNotif.kind} size={18} color="#fff" />
+              <StickerIcon kind={stickerNotif.kind} size={22} color="#fff" />
             </span>
-            <div style={{ flex: 1, minWidth: 0, lineHeight: 1.2 }}>
-              <div style={{ fontSize: 13, fontWeight: 700, display: "flex", alignItems: "baseline", gap: 6, flexWrap: "nowrap" }}>
-                <span style={{ flexShrink: 0 }}>새 스티커</span>
-                <span style={{ opacity: 0.85, fontSize: 11, flexShrink: 0 }}>· {stickerKindName}{stickerExtraN > 0 ? ` 외 ${stickerExtraN}` : ""}</span>
-                {stickerNotif.label && (
-                  <span style={{ fontSize: 11, opacity: 0.9, fontWeight: 400,
-                    overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0 }}>
-                    "{stickerNotif.label}"
-                  </span>
-                )}
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 10, opacity: 0.85, letterSpacing: 1.5, fontWeight: 700,
+                fontFamily: "'IBM Plex Mono', monospace", marginBottom: 2 }}>
+                새 스티커 · {stickerKindName}{stickerExtraN > 0 ? ` 외 ${stickerExtraN}` : ""}
+              </div>
+              <div style={{ fontSize: 13, fontWeight: 700, lineHeight: 1.3,
+                overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                {stickerNotif.label ? `"${stickerNotif.label}"` : "탭하여 관리"}
               </div>
             </div>
-            <span style={{ flexShrink: 0, fontSize: 11, opacity: 0.85, fontFamily: "'IBM Plex Mono', monospace" }}>탭→</span>
+            <span style={{ flexShrink: 0, fontSize: 12, opacity: 0.9, fontFamily: "'IBM Plex Mono', monospace",
+              padding: "4px 8px", borderRadius: 6, background: "rgba(255,255,255,0.15)" }}>탭 →</span>
           </button>
           <button
             onClick={(e) => { e.stopPropagation(); setStickerNotif(null); }}
             aria-label="알림 닫기"
-            style={{ flexShrink: 0, width: 38, background: "rgba(0,0,0,0.12)", border: "none",
-              color: "#fff", cursor: "pointer", fontSize: 18, lineHeight: 1,
+            style={{ flexShrink: 0, width: 44, background: "rgba(0,0,0,0.18)", border: "none",
+              color: "#fff", cursor: "pointer", fontSize: 22, lineHeight: 1,
               display: "flex", alignItems: "center", justifyContent: "center" }}>
             ×
           </button>
-          <div style={{ position: "absolute", left: 0, right: 0, bottom: 0, height: 2, background: "rgba(0,0,0,0.18)" }}>
-            <div style={{ height: "100%", background: "rgba(255,255,255,0.6)", transformOrigin: "left",
+          <div style={{ position: "absolute", left: 0, right: 0, bottom: 0, height: 3, background: "rgba(0,0,0,0.2)" }}>
+            <div style={{ height: "100%", background: "rgba(255,255,255,0.7)", transformOrigin: "left",
               animation: "mdsStickerNotifBar 6s linear forwards" }} />
           </div>
         </div>
       )}
       {resetToast && (
         <div role="status" aria-live="polite"
-          style={{ pointerEvents: "auto", display: "flex", alignItems: "center", gap: 10,
-            padding: "7px 14px", background: "#0a0b0f", color: "#fbbf24",
+          style={{ pointerEvents: "auto", display: "flex", alignItems: "center", gap: 12,
+            padding: "11px 16px", minHeight: 48,
+            background: "#0a0b0f", color: "#fbbf24",
             borderBottom: "1.5px solid #fbbf24aa",
-            boxShadow: "0 2px 4px rgba(0,0,0,0.3)",
+            boxShadow: "0 2px 6px rgba(0,0,0,0.35)",
             fontFamily: "'Jua', sans-serif",
             animation: "mdsTopBarIn 0.28s cubic-bezier(0.2, 0.9, 0.3, 1) both" }}>
-          <span aria-hidden style={{ fontSize: 13, lineHeight: 1, flexShrink: 0 }}>⟳</span>
-          <span style={{ flex: 1, minWidth: 0, fontSize: 12, fontWeight: 700, lineHeight: 1.25,
-            display: "flex", alignItems: "baseline", gap: 6, flexWrap: "wrap" }}>
-            <span>{(resetToast.text || "").replace(/^⟳\s*/, "")}</span>
-            {!resetToast.gps && (
-              <span style={{ fontSize: 10, color: "#94a3b8", fontWeight: 400 }}>
-                · GPS OFF — 정류장은 출발지
-              </span>
-            )}
-          </span>
+          <span aria-hidden style={{ flexShrink: 0, width: 28, height: 28, borderRadius: 8,
+            background: "rgba(251,191,36,0.18)", border: "1.5px solid #fbbf24",
+            display: "inline-flex", alignItems: "center", justifyContent: "center",
+            fontSize: 15, lineHeight: 1 }}>⟳</span>
+          <div style={{ flex: 1, minWidth: 0, lineHeight: 1.25 }}>
+            <div style={{ fontSize: 10, opacity: 0.7, letterSpacing: 1.5, fontWeight: 700,
+              fontFamily: "'IBM Plex Mono', monospace", color: "#94a3b8" }}>
+              시각 기준 재설정
+            </div>
+            <div style={{ fontSize: 13, fontWeight: 700,
+              overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+              {(resetToast.text || "").replace(/^⟳\s*/, "")}
+              {!resetToast.gps && (
+                <span style={{ fontSize: 10, color: "#94a3b8", fontWeight: 400, marginLeft: 8 }}>
+                  · GPS OFF
+                </span>
+              )}
+            </div>
+          </div>
         </div>
       )}
     </div>
