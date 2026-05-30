@@ -143,7 +143,7 @@
 
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef, useMemo } = React;
-const BUILD = "b337"; /* 화면 우하단 표시 — 최신 배포 확인용 */
+const BUILD = "b338"; /* 화면 우하단 표시 — 최신 배포 확인용 */
 
 /* 실시간 위치 공유용 Firebase DB 주소. 여기에 한 번 넣어두면 승객 링크가 ?view=map 만 남아 깔끔해집니다. */
 const SHARE_DB = "https://innum-bus-default-rtdb.firebaseio.com";
@@ -4500,7 +4500,7 @@ function RecentStickersBanner({ stickers, onTap }) {
               {kindName && cur.label ? <span style={{ fontSize: 9, color: accent, opacity: 0.8 }}> · {kindName}</span> : null}
             </span>
             <span style={{ fontSize: 10, color: accent, fontWeight: 700 }}>
-              찾기 →
+              찾기
             </span>
           </div>
         </div>
@@ -4637,7 +4637,7 @@ function StickerListSheet({ stickers, onClose, onTap, onAddNew }) {
                       {ageMin <= 0 ? "방금" : `${ageMin}분 전`}{s.label && kindName ? ` · ${kindName}` : ""}
                     </div>
                   </div>
-                  <span style={{ fontSize: 11, color: accent, fontWeight: 700, flexShrink: 0 }}>찾기 →</span>
+                  <span style={{ fontSize: 11, color: accent, fontWeight: 700, flexShrink: 0 }}>찾기</span>
                 </button>
               );
             })
@@ -4761,7 +4761,7 @@ function UnifiedMapBanner({ stickers, onOpenVenue, onTapSticker }) {
               {pick.zone != null && <span style={{ fontSize: 9, opacity: 0.8 }}>· {pick.zone}존</span>}
               {slide.mode === "preview" && dayLabel && <span style={{ fontSize: 9, opacity: 0.8 }}>· {dayLabel}</span>}
             </span>
-            <span style={{ fontSize: 10, color: accent, fontWeight: 700 }}>자세히 →</span>
+            <span style={{ fontSize: 10, color: accent, fontWeight: 700 }}>자세히</span>
           </div>
         </button>
       );
@@ -4794,7 +4794,7 @@ function UnifiedMapBanner({ stickers, onOpenVenue, onTapSticker }) {
                 {ageMin <= 0 ? "방금" : `${ageMin}분 전`}
                 {kindName && pick.label ? <span style={{ fontSize: 9, opacity: 0.8 }}> · {kindName}</span> : null}
               </span>
-              <span style={{ fontSize: 10, color: accent, fontWeight: 700 }}>찾기 →</span>
+              <span style={{ fontSize: 10, color: accent, fontWeight: 700 }}>찾기</span>
             </div>
           </div>
         </button>
@@ -4996,7 +4996,7 @@ function UpcomingPromoCard({ onOpen, compact = false }) {
                     )}
                   </span>
                   <span style={{ fontSize: compact ? 10 : 11, color: cDark, fontWeight: 700 }}>
-                    자세히 →
+                    자세히
                   </span>
                 </div>
               </button>
