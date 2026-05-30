@@ -110,7 +110,7 @@
 
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef, useMemo } = React;
-const BUILD = "b306"; /* 화면 우하단 표시 — 최신 배포 확인용 */
+const BUILD = "b307"; /* 화면 우하단 표시 — 최신 배포 확인용 */
 
 /* 실시간 위치 공유용 Firebase DB 주소. 여기에 한 번 넣어두면 승객 링크가 ?view=map 만 남아 깔끔해집니다. */
 const SHARE_DB = "https://innum-bus-default-rtdb.firebaseio.com";
@@ -121,7 +121,9 @@ const SHARE_API_KEY = "AIzaSyAmR4zFCvD-uODve6zsZ-ENe3Y8aJkHrRg";
 const FT = {
   teal: "#16A89E", tealDark: "#0F7C73", tealSoft: "#D7EFEB",
   orange: "#EE6B2E", orangeDark: "#C2521D", orangeSoft: "#FBE0CF",
-  paper: "#F6F1E4", ink: "#101113", inkSoft: "#4A4E55", mute: "#8A8E96",
+  // mute 를 darken (#8A8E96 → #64748b) — WCAG AA 본문 텍스트 대비(≥4.5:1) 통과.
+  // 보더/배경 알파(예: FT.mute + "55") 사용처는 자연스러운 약한 톤 유지.
+  paper: "#F6F1E4", ink: "#101113", inkSoft: "#4A4E55", mute: "#64748b",
 };
 
 /* 무등생각 로고(축제 포스터의 스위치 모티프). on=true 면 ON 상태(scaleY -1) 로 뒤집힘 */
@@ -3488,15 +3490,15 @@ function LiveMapView({ dbUrl, onHome }) {
           </div>
         </div>
       )}
-      {stickerMsg && (
-        <div style={{ position: "fixed", left: "50%", bottom: "calc(80px + env(safe-area-inset-bottom, 0px))",
-          transform: "translateX(-50%)", zIndex: 1300,
-          background: FT.ink, color: "#fff", padding: "8px 14px", borderRadius: 999,
+      <div role="status" aria-live="polite" aria-atomic="true"
+        style={{ position: "fixed", left: "50%", bottom: "calc(80px + env(safe-area-inset-bottom, 0px))",
+          transform: "translateX(-50%)", zIndex: 1300, pointerEvents: "none",
+          opacity: stickerMsg ? 1 : 0, transition: "opacity 0.18s",
+          background: FT.ink, color: "#fff", padding: stickerMsg ? "8px 14px" : 0, borderRadius: 999,
           fontFamily: "'Jua', sans-serif", fontSize: 12, fontWeight: 700,
-          boxShadow: "2px 2px 0 " + FT.ink }}>
-          {stickerMsg}
-        </div>
-      )}
+          boxShadow: stickerMsg ? "2px 2px 0 " + FT.ink : "none" }}>
+        {stickerMsg}
+      </div>
 
       {/* 범례 (좌하단) */}
       <div style={{ position: "absolute", bottom: 96, left: 10, zIndex: 1000,
@@ -3805,36 +3807,36 @@ function UpcomingPromoCard({ onOpen }) {
           ↻ 다른 프로그램
         </button>
       </div>
-      {/* 카드 */}
+      {/* 카드 — 행사 배너 hero 아래의 보조 카드: 보더 약하게, 그림자 제거, 배경 paper 톤으로 차등 */}
       <button onClick={onOpen}
-        style={{ width: "100%", display: "flex", flexDirection: "column", gap: 6,
-          background: "#fff", color: FT.ink,
-          border: "2px solid " + FT.ink, borderRadius: 10,
-          padding: "10px 12px", boxShadow: "2px 2px 0 " + FT.ink,
+        style={{ width: "100%", display: "flex", flexDirection: "column", gap: 5,
+          background: FT.paper, color: FT.ink,
+          border: "1.5px solid " + FT.mute + "55", borderRadius: 10,
+          padding: "8px 10px", boxShadow: "none",
+          borderLeft: `4px solid ${cDark}`,
           fontFamily: "'Jua', sans-serif", cursor: "pointer", textAlign: "left" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 5, flexWrap: "wrap" }}>
           {pick.cat && (
-            <span style={{ padding: "2px 8px", borderRadius: 999, background: cSoft, color: cDark,
-              border: "1.5px solid " + cDark, fontSize: 10, fontWeight: 700,
-              boxShadow: "1px 1px 0 " + cDark + "55", maxWidth: "70%",
+            <span style={{ padding: "1px 7px", borderRadius: 999, background: cSoft, color: cDark,
+              fontSize: 10, fontWeight: 700, maxWidth: "70%",
               overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
               {pick.cat}
             </span>
           )}
           {pick.zone != null && (
-            <span style={{ padding: "2px 8px", borderRadius: 999, background: "#fff", color: cDark,
-              border: "1.5px solid " + cDark, fontSize: 10, fontWeight: 700 }}>
+            <span style={{ padding: "1px 7px", borderRadius: 999, background: "transparent", color: cDark,
+              border: "1px solid " + cDark + "66", fontSize: 10, fontWeight: 700 }}>
               {pick.zone}존
             </span>
           )}
           {mode === "preview" && dayLabel && (
-            <span style={{ padding: "2px 8px", borderRadius: 999, background: "#f1f5f9", color: FT.inkSoft,
-              border: "1.5px solid " + FT.mute, fontSize: 10, fontWeight: 700 }}>
+            <span style={{ padding: "1px 7px", borderRadius: 999, background: "#fff", color: FT.inkSoft,
+              border: "1px solid " + FT.mute + "55", fontSize: 10, fontWeight: 700 }}>
               {dayLabel}
             </span>
           )}
         </div>
-        <div style={{ fontSize: 14, color: FT.ink, fontWeight: 700, lineHeight: 1.25 }}>
+        <div style={{ fontSize: 13, color: FT.ink, fontWeight: 700, lineHeight: 1.25 }}>
           {pick.title}
         </div>
         {pick.desc && (
@@ -3914,7 +3916,15 @@ function PassengerView({ dbUrl, onAdmin, initialTab = "list" }) {
     LS.set("noticeDismissedAt", String(notice.ts || Date.now()));
     setNoticeDismissedAt(notice.ts || Date.now());
   };
-  const showNotice = notice && (notice.ts || 0) > noticeDismissedAt;
+  /* 공지 표시 정책:
+     - 신규 ts (운영자가 새 공지 발송) > 사용자가 마지막 dismiss 한 ts → 다시 노출 (= 새 공지)
+     - 위험(danger) 레벨은 dismiss 후 30분 경과 시 자동 재노출 (안전 우선)
+     - info/warn 은 같은 ts 면 dismiss 영구 유지 */
+  const NOTICE_DANGER_REDISPLAY_MS = 30 * 60 * 1000;
+  const showNotice = !!notice && (
+    (notice.ts || 0) > noticeDismissedAt
+    || (notice.level === "danger" && noticeDismissedAt > 0 && (Date.now() - noticeDismissedAt) > NOTICE_DANGER_REDISPLAY_MS)
+  );
 
   const onTitleTap = () => {
     const t = Date.now();
