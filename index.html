@@ -143,7 +143,7 @@
 
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef, useMemo } = React;
-const BUILD = "b369b"; /* 화면 우하단 표시 — 최신 배포 확인용 */
+const BUILD = "b370"; /* 화면 우하단 표시 — 최신 배포 확인용 */
 
 /* 실시간 위치 공유용 Firebase DB 주소. 여기에 한 번 넣어두면 승객 링크가 ?view=map 만 남아 깔끔해집니다. */
 const SHARE_DB = "https://innum-bus-default-rtdb.firebaseio.com";
@@ -1156,6 +1156,37 @@ function StatsModal({ counts, dateKey, onClose, onReset, busCapacity, setBusCapa
   );
 }
 
+/* 카테고리 → 시각 요소 매핑. cat 문자열의 키워드를 부분 매칭해 이모지·색·소제목 패턴 결정.
+   각 프로그램 카드 펼친 헤더에 색 그라데이션 + 큰 이모지로 시각 강조. */
+const CATEGORY_VISUALS = [
+  { keys: ["개막"],           icon: "🎉", color: "#fbbf24", label: "OPENING" },
+  { keys: ["인문 토크", "북콘", "토크", "아카데미", "강연"], icon: "🎤", color: "#fb923c", label: "TALK" },
+  { keys: ["인문다시보기", "북토크", "책"], icon: "📖", color: "#fb923c", label: "BOOK" },
+  { keys: ["청소년", "백일장"], icon: "📜", color: "#fbbf24", label: "YOUTH" },
+  { keys: ["무성영화", "영화", "극장"], icon: "🎬", color: "#1f2937", label: "CINEMA" },
+  { keys: ["몸짓", "퍼포먼스", "공연"], icon: "🌿", color: "#10b981", label: "PERFORM" },
+  { keys: ["디지털 디톡스", "디톡스"], icon: "🧘", color: "#06b6d4", label: "DETOX" },
+  { keys: ["낭독", "시 낭독", "시(詩)"], icon: "📖", color: "#a78bfa", label: "POETRY" },
+  { keys: ["명상", "고요", "싱잉"], icon: "🪷", color: "#a78bfa", label: "MEDITATION" },
+  { keys: ["차담"],            icon: "🍵", color: "#84cc16", label: "TEA" },
+  { keys: ["라디오", "방송", "청음"], icon: "📻", color: "#f97316", label: "RADIO" },
+  { keys: ["사생", "그림", "전시", "미술"], icon: "🎨", color: "#ec4899", label: "ART" },
+  { keys: ["체험", "팝업", "스토어", "체험존"], icon: "🛍", color: "#06b6d4", label: "WORKSHOP" },
+  { keys: ["투어", "산책", "걷기"], icon: "🥾", color: "#22c55e", label: "WALK" },
+  { keys: ["보물", "찾기", "EVENT"], icon: "🔍", color: "#f59e0b", label: "QUEST" },
+  { keys: ["지질"],            icon: "⛰", color: "#0ea5e9", label: "EARTH" },
+  { keys: ["버스킹", "음악"],   icon: "🎸", color: "#ef4444", label: "MUSIC" },
+  { keys: ["엽서", "글쓰기", "쓰기"], icon: "✍", color: "#7c3aed", label: "WRITE" },
+  { keys: ["상설전시"],         icon: "📚", color: "#0d9488", label: "EXHIBIT" },
+  { keys: ["시상"],            icon: "🏆", color: "#fbbf24", label: "AWARD" },
+];
+const categoryVisual = (cat = "") => {
+  for (const v of CATEGORY_VISUALS) {
+    if (v.keys.some((k) => cat.includes(k))) return v;
+  }
+  return { icon: "✨", color: "#94a3b8", label: "EVENT" };
+};
+
 function VenueModal({ onClose, initialZone = 0, initialProgram = null, onOpenLiveMap, pageMode = false }) {
   const [expandedImg, setExpandedImg] = useState(null);
   const [progDay, setProgDay] = useState(() => initialProgram?._day || "day1");
@@ -1447,6 +1478,7 @@ function VenueModal({ onClose, initialZone = 0, initialProgram = null, onOpenLiv
                   </div>
                   <div style={{ minWidth: 0, flex: 1 }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap", marginBottom: 2 }}>
+                      <span aria-hidden style={{ fontSize: 16, lineHeight: 1 }}>{categoryVisual(it.cat).icon}</span>
                       <span style={{ background: zoneColor, color: "#fff", border: "1.5px solid " + FT.ink,
                         borderRadius: 999, padding: "0px 7px", fontSize: 10, fontFamily: "'Jua', sans-serif", fontWeight: 700 }}>
                         {it.zone}
@@ -1481,6 +1513,34 @@ function VenueModal({ onClose, initialZone = 0, initialProgram = null, onOpenLiv
                     )}
                     {isExpanded && (
                       <div style={{ marginTop: 6, paddingTop: 6, borderTop: "1px dashed " + FT.mute + "55" }}>
+                        {(() => {
+                          // 카테고리별 시각 헤더 — 큰 이모지 + 그라데이션 배경 + 카테고리 라벨
+                          const v = categoryVisual(it.cat);
+                          return (
+                            <div style={{ position: "relative", height: 80, marginBottom: 6, borderRadius: 8,
+                              border: "1.5px solid " + FT.ink,
+                              background: `linear-gradient(135deg, ${v.color}33 0%, ${v.color}11 60%, ${FT.paper} 100%)`,
+                              overflow: "hidden", display: "flex", alignItems: "center", padding: "0 14px", gap: 12 }}>
+                              <span aria-hidden style={{ fontSize: 44, lineHeight: 1, filter: "drop-shadow(1px 1px 0 rgba(0,0,0,0.15))" }}>
+                                {v.icon}
+                              </span>
+                              <div style={{ flex: 1, minWidth: 0 }}>
+                                <div style={{ fontSize: 9, color: v.color, letterSpacing: 2, fontFamily: "'IBM Plex Mono', monospace", fontWeight: 700 }}>
+                                  {v.label}
+                                </div>
+                                <div style={{ fontSize: 13, color: FT.ink, fontFamily: "'Jua', sans-serif", fontWeight: 700, lineHeight: 1.2,
+                                  overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                                  {it.title}
+                                </div>
+                              </div>
+                              {/* 우측 장식 패턴 — 반복 점 */}
+                              <span aria-hidden style={{ position: "absolute", right: 8, top: 6, fontSize: 9,
+                                color: v.color, opacity: 0.4, fontFamily: "'IBM Plex Mono', monospace", letterSpacing: 1, lineHeight: 1 }}>
+                                ░▒▓
+                              </span>
+                            </div>
+                          );
+                        })()}
                         {it.image && (
                           <img src={it.image} alt={it.title}
                             style={{ width: "100%", maxHeight: 220, objectFit: "cover", borderRadius: 8,
