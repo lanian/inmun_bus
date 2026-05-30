@@ -175,7 +175,7 @@
 
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef, useMemo } = React;
-const BUILD = "b392"; /* 화면 우하단 표시 — 최신 배포 확인용 */
+const BUILD = "b393"; /* 화면 우하단 표시 — 최신 배포 확인용 */
 
 /* 실시간 위치 공유용 Firebase DB 주소. 여기에 한 번 넣어두면 승객 링크가 ?view=map 만 남아 깔끔해집니다. */
 const SHARE_DB = "https://innum-bus-default-rtdb.firebaseio.com";
@@ -5495,7 +5495,6 @@ function UnifiedMapBanner({ stickers, onOpenVenue, onTapSticker }) {
   // 스티커 후보 산출 (RecentStickersBanner 로직과 동일 — 1시간 이내)
   const STICKER_VIEW_WINDOW_MS = 60 * 60 * 1000;
   const stickerCutoff = Date.now() - STICKER_VIEW_WINDOW_MS;
-  const STICKER_LABEL = { "👍": "좋아요", "📸": "포토스팟", "💤": "쉬는 곳", "🚻": "화장실", "🍱": "음식" };
   const stickerSlides = Object.entries(stickers || {})
     .map(([id, s]) => ({ id, ...(s || {}) }))
     .filter((s) => s && typeof s.lat === "number" && typeof s.lng === "number" && typeof s.ts === "number" && s.ts >= stickerCutoff)
@@ -5535,71 +5534,108 @@ function UnifiedMapBanner({ stickers, onOpenVenue, onTapSticker }) {
   };
   const safeIdx = Math.min(idx, slides.length - 1);
 
-  // 각 슬라이드 렌더 (festival vs sticker)
+  // 각 슬라이드 렌더 (festival vs sticker) — 정보 위계 강화
   const renderSlide = (slide, i) => {
     if (slide.type === "festival") {
       const pick = slide.data;
-      const accent = pick.zone % 2 ? FT.orangeDark : FT.tealDark;
-      const cSoft = pick.zone % 2 ? FT.orangeSoft : FT.tealSoft;
+      const v = categoryVisual(pick.cat || "");
+      const zoneColor = pick.zone % 2 ? FT.orangeDark : FT.tealDark;
       const dayLabel = pick._day === "day2" ? "6.14 (일)" : pick._day === "day1" ? "6.13 (토)" : "";
       return (
         <button key={`f${i}`} onClick={() => onOpenVenue && onOpenVenue(pick)}
           aria-roledescription="slide" aria-label={`${i + 1}/${slides.length} · 행사: ${pick.title}`}
           tabIndex={i === safeIdx ? 0 : -1}
-          style={{ flex: `0 0 ${100 / slides.length}%`, display: "flex", flexDirection: "column", gap: 3,
-            background: "rgba(255,255,255,0.95)", color: FT.ink,
-            border: "1.5px solid " + FT.mute + "55", borderRadius: 10,
-            borderLeft: `4px solid ${accent}`, padding: "6px 9px", boxShadow: "none",
-            fontFamily: "'Jua', sans-serif", cursor: "pointer", textAlign: "left" }}>
-          <div style={{ fontSize: 12, color: FT.ink, fontWeight: 700, lineHeight: 1.25,
-            display: "-webkit-box", WebkitLineClamp: 1, WebkitBoxOrient: "vertical", overflow: "hidden" }}>
-            {pick.title}
+          style={{ flex: `0 0 ${100 / slides.length}%`, display: "flex", alignItems: "center", gap: 10,
+            background: "rgba(255,255,255,0.97)", color: FT.ink,
+            border: "1.5px solid " + FT.ink,
+            borderLeft: `4px solid ${v.color}`, borderRadius: 12,
+            padding: "8px 10px", boxShadow: `1.5px 1.5px 0 ${FT.ink}33`,
+            fontFamily: "'Jua', sans-serif", cursor: "pointer", textAlign: "left",
+            minHeight: 56 }}>
+          {/* 카테고리 아이콘 박스 */}
+          <span style={{ flexShrink: 0, width: 34, height: 34, borderRadius: 9,
+            background: `${v.color}15`, border: `1.5px solid ${v.color}55`,
+            display: "inline-flex", alignItems: "center", justifyContent: "center" }}>
+            <CategoryIcon cat={pick.cat || ""} size={22} color={v.color} strokeWidth={2.2} />
+          </span>
+          <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 2 }}>
+            {/* 상단 메타 — 타입 chip + 존 + 시간 */}
+            <div style={{ display: "flex", alignItems: "center", gap: 5, flexWrap: "nowrap", lineHeight: 1 }}>
+              <span style={{ fontSize: 8, letterSpacing: 1, fontWeight: 700, color: v.color,
+                fontFamily: "'IBM Plex Mono', monospace",
+                background: `${v.color}1f`, padding: "1px 5px", borderRadius: 3 }}>
+                행사
+              </span>
+              {pick.zone != null && (
+                <span style={{ fontSize: 9, color: "#fff", fontWeight: 700,
+                  background: zoneColor, padding: "1px 5px", borderRadius: 3 }}>
+                  {pick.zone}존
+                </span>
+              )}
+              <span style={{ fontSize: 10, color: FT.inkSoft, fontFamily: "'IBM Plex Mono', monospace", fontWeight: 700 }}>
+                {pick.time}{slide.mode === "preview" && dayLabel ? ` · ${dayLabel}` : ""}
+              </span>
+            </div>
+            {/* 타이틀 */}
+            <div style={{ fontSize: 12.5, color: FT.ink, fontWeight: 700, lineHeight: 1.25,
+              overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+              {pick.title}
+            </div>
           </div>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <span style={{ fontSize: 10, color: accent, fontFamily: "'IBM Plex Mono', monospace", fontWeight: 700,
-              display: "inline-flex", alignItems: "center", gap: 4 }}>
-              {pick.time}
-              {pick.zone != null && <span style={{ fontSize: 9, opacity: 0.8 }}>· {pick.zone}존</span>}
-              {slide.mode === "preview" && dayLabel && <span style={{ fontSize: 9, opacity: 0.8 }}>· {dayLabel}</span>}
-            </span>
-            <span style={{ fontSize: 10, color: accent, fontWeight: 700 }}>자세히</span>
-          </div>
+          {/* 액션 chip */}
+          <span style={{ flexShrink: 0, fontSize: 10, fontWeight: 700, color: v.color,
+            background: `${v.color}1a`, border: `1px solid ${v.color}55`,
+            padding: "4px 7px", borderRadius: 6, fontFamily: "'Jua', sans-serif" }}>
+            자세히 →
+          </span>
         </button>
       );
     } else {
       const pick = slide.data;
-      const accent = FT.tealDark;
+      const art = STICKER_ART[pick.kind] || STICKER_ART_FALLBACK;
       const ageMin = Math.max(0, Math.floor((Date.now() - pick.ts) / 60000));
-      const kindName = STICKER_LABEL[pick.kind] || "";
+      const kindName = stickerKindLabel(pick.kind);
       return (
         <button key={`s${i}-${pick.id}`} onClick={() => onTapSticker && onTapSticker(pick)}
           aria-roledescription="slide" aria-label={`${i + 1}/${slides.length} · 스티커: ${pick.label || kindName}`}
           tabIndex={i === safeIdx ? 0 : -1}
-          style={{ flex: `0 0 ${100 / slides.length}%`, display: "flex", alignItems: "center", gap: 8,
-            background: "rgba(255,255,255,0.95)", color: FT.ink,
-            border: "1.5px solid " + FT.mute + "55", borderRadius: 10,
-            borderLeft: `4px solid ${accent}`, padding: "6px 9px", boxShadow: "none",
-            fontFamily: "'Jua', sans-serif", cursor: "pointer", textAlign: "left" }}>
-          <span style={{ display: "inline-flex", alignItems: "center", justifyContent: "center",
-            width: 26, height: 26, borderRadius: "50%", background: "#fff",
-            border: "1.5px solid " + accent, flexShrink: 0 }}>
-            <StickerIcon kind={pick.kind} size={16} />
+          style={{ flex: `0 0 ${100 / slides.length}%`, display: "flex", alignItems: "center", gap: 10,
+            background: "rgba(255,255,255,0.97)", color: FT.ink,
+            border: "1.5px solid " + FT.ink,
+            borderLeft: `4px solid ${art.color}`, borderRadius: 12,
+            padding: "8px 10px", boxShadow: `1.5px 1.5px 0 ${FT.ink}33`,
+            fontFamily: "'Jua', sans-serif", cursor: "pointer", textAlign: "left",
+            minHeight: 56 }}>
+          <span style={{ flexShrink: 0, width: 34, height: 34, borderRadius: 9,
+            background: `${art.color}15`, border: `1.5px solid ${art.color}55`,
+            display: "inline-flex", alignItems: "center", justifyContent: "center" }}>
+            <StickerIcon kind={pick.kind} size={22} />
           </span>
-          <div style={{ flex: 1, minWidth: 0, lineHeight: 1.25,
-            display: "flex", flexDirection: "column", gap: 1 }}>
-            <div style={{ fontSize: 12, color: FT.ink, fontWeight: 700,
-              overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-              display: "-webkit-box", WebkitLineClamp: 1, WebkitBoxOrient: "vertical" }}>
-              {pick.label || kindName || "스티커"}
-            </div>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <span style={{ fontSize: 10, color: accent, fontFamily: "'IBM Plex Mono', monospace", fontWeight: 700 }}>
-                {ageMin <= 0 ? "방금" : `${ageMin}분 전`}
-                {kindName && pick.label ? <span style={{ fontSize: 9, opacity: 0.8 }}> · {kindName}</span> : null}
+          <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 2 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 5, flexWrap: "nowrap", lineHeight: 1 }}>
+              <span style={{ fontSize: 8, letterSpacing: 1, fontWeight: 700, color: art.color,
+                fontFamily: "'IBM Plex Mono', monospace",
+                background: `${art.color}1f`, padding: "1px 5px", borderRadius: 3 }}>
+                스티커
               </span>
-              <span style={{ fontSize: 10, color: accent, fontWeight: 700 }}>찾기</span>
+              <span style={{ fontSize: 9, color: "#fff", fontWeight: 700,
+                background: art.color, padding: "1px 5px", borderRadius: 3 }}>
+                {kindName}
+              </span>
+              <span style={{ fontSize: 10, color: FT.inkSoft, fontFamily: "'IBM Plex Mono', monospace", fontWeight: 700 }}>
+                {ageMin <= 0 ? "방금" : ageMin < 60 ? `${ageMin}분 전` : `${Math.floor(ageMin / 60)}시간 전`}
+              </span>
+            </div>
+            <div style={{ fontSize: 12.5, color: FT.ink, fontWeight: 700, lineHeight: 1.25,
+              overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+              {pick.label || kindName}
             </div>
           </div>
+          <span style={{ flexShrink: 0, fontSize: 10, fontWeight: 700, color: art.color,
+            background: `${art.color}1a`, border: `1px solid ${art.color}55`,
+            padding: "4px 7px", borderRadius: 6, fontFamily: "'Jua', sans-serif" }}>
+            찾기 →
+          </span>
         </button>
       );
     }
@@ -5617,18 +5653,24 @@ function UnifiedMapBanner({ stickers, onOpenVenue, onTapSticker }) {
         </div>
       </div>
       {slides.length > 1 && (
-        <div style={{ display: "flex", justifyContent: "center", gap: 4, marginTop: 4 }}>
-          {slides.map((s, i) => (
-            <button key={i} onClick={() => { setIdx(i); setPaused(true); setTimeout(() => setPaused(false), 4000); }}
-              aria-label={`슬라이드 ${i + 1}`}
-              title={s.type === "festival" ? "행사" : "스티커"}
-              style={{ width: i === safeIdx ? 12 : 4, height: 4, borderRadius: 999,
-                background: i === safeIdx
-                  ? (s.type === "festival" ? (s.data.zone % 2 ? FT.orangeDark : FT.tealDark) : FT.tealDark)
-                  : FT.mute + "88",
-                border: "none", padding: 0, cursor: "pointer",
-                transition: "width 0.2s, background 0.2s" }} />
-          ))}
+        <div style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: 5, marginTop: 6,
+          padding: "4px 8px", background: "rgba(255,255,255,0.85)", borderRadius: 999,
+          width: "fit-content", margin: "6px auto 0", boxShadow: `1px 1px 0 ${FT.ink}26` }}>
+          {slides.map((s, i) => {
+            const active = i === safeIdx;
+            const dotColor = s.type === "festival"
+              ? categoryVisual(s.data.cat || "").color
+              : (STICKER_ART[s.data.kind] || STICKER_ART_FALLBACK).color;
+            return (
+              <button key={i} onClick={() => { setIdx(i); setPaused(true); setTimeout(() => setPaused(false), 4000); }}
+                aria-label={`슬라이드 ${i + 1} · ${s.type === "festival" ? "행사" : "스티커"}`}
+                title={s.type === "festival" ? "행사" : "스티커"}
+                style={{ width: active ? 18 : 6, height: 6, borderRadius: 999,
+                  background: active ? dotColor : FT.mute + "55",
+                  border: "none", padding: 0, cursor: "pointer",
+                  transition: "width 0.25s cubic-bezier(0.2, 0.9, 0.3, 1), background 0.2s" }} />
+            );
+          })}
         </div>
       )}
     </div>
