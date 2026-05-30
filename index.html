@@ -143,7 +143,7 @@
 
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef, useMemo } = React;
-const BUILD = "b372"; /* 화면 우하단 표시 — 최신 배포 확인용 */
+const BUILD = "b373"; /* 화면 우하단 표시 — 최신 배포 확인용 */
 
 /* 실시간 위치 공유용 Firebase DB 주소. 여기에 한 번 넣어두면 승객 링크가 ?view=map 만 남아 깔끔해집니다. */
 const SHARE_DB = "https://innum-bus-default-rtdb.firebaseio.com";
@@ -1507,15 +1507,20 @@ function VenueModal({ onClose, initialZone = 0, initialProgram = null, onOpenLiv
                     borderRadius: 10, padding: "8px 10px",
                     paddingBottom: isExpanded ? 10 : 8,
                     boxShadow: isFocused ? `0 0 0 3px ${FT.orange}33` : "none",
-                    borderLeft: `4px solid ${categoryVisual(it.cat).color}`,
                     cursor: hasMore ? "pointer" : "default", textAlign: "left", font: "inherit" }}>
-                  <div style={{ flexShrink: 0, width: 64, fontFamily: "'IBM Plex Mono', monospace",
-                    fontSize: 11, color: FT.ink, fontWeight: 700, lineHeight: 1.25, paddingTop: 2 }}>
-                    {it.time}
+                  <div style={{ flexShrink: 0, width: 60, display: "flex", flexDirection: "column", alignItems: "center", gap: 4, paddingTop: 2 }}>
+                    <span style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 11, color: FT.ink, fontWeight: 700, lineHeight: 1.2 }}>
+                      {it.time}
+                    </span>
+                    {/* 카테고리 아이콘을 시간 컬럼 내부로 이동 — 시각·시간 정보 한 블록으로 묶음 */}
+                    <div style={{ width: 28, height: 28, borderRadius: 8,
+                      background: `${categoryVisual(it.cat).color}1a`, border: `1px solid ${categoryVisual(it.cat).color}66`,
+                      display: "flex", alignItems: "center", justifyContent: "center" }}>
+                      <CategoryIcon cat={it.cat} size={18} color={categoryVisual(it.cat).color} strokeWidth={2.4} />
+                    </div>
                   </div>
                   <div style={{ minWidth: 0, flex: 1 }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap", marginBottom: 3 }}>
-                      <CategoryIcon cat={it.cat} size={14} color={categoryVisual(it.cat).color} strokeWidth={2.5} />
                       <span style={{ background: zoneColor, color: "#fff", border: "1.5px solid " + FT.ink,
                         borderRadius: 999, padding: "0px 7px", fontSize: 10, fontFamily: "'Jua', sans-serif", fontWeight: 700 }}>
                         {it.zone}
@@ -1525,7 +1530,7 @@ function VenueModal({ onClose, initialZone = 0, initialProgram = null, onOpenLiv
                         const loc = locParts.join(" · ");
                         return (
                           <React.Fragment>
-                            <span style={{ fontSize: 11, color: categoryVisual(it.cat).color, fontFamily: "'Jua', sans-serif", fontWeight: 700 }}>{catName}</span>
+                            <span style={{ fontSize: 11, color: FT.inkSoft, fontFamily: "'Jua', sans-serif", fontWeight: 700 }}>{catName}</span>
                             {loc && (
                               <span style={{ fontSize: 10, color: FT.inkSoft, fontFamily: "'Jua', sans-serif", fontWeight: 700,
                                 background: FT.paper, border: "1px solid " + FT.mute + "80", borderRadius: 5, padding: "1px 6px" }}>
