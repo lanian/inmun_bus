@@ -110,7 +110,7 @@
 
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef, useMemo } = React;
-const BUILD = "b303"; /* 화면 우하단 표시 — 최신 배포 확인용 */
+const BUILD = "b304"; /* 화면 우하단 표시 — 최신 배포 확인용 */
 
 /* 실시간 위치 공유용 Firebase DB 주소. 여기에 한 번 넣어두면 승객 링크가 ?view=map 만 남아 깔끔해집니다. */
 const SHARE_DB = "https://innum-bus-default-rtdb.firebaseio.com";
@@ -2622,6 +2622,8 @@ function LiveMapView({ dbUrl, onHome }) {
     { k: "🍱", t: "음식" },
   ];
   const STICKER_TTL_MS = 2 * 60 * 60 * 1000; // 2시간
+  // 본인이 등록 후 30분 이내라면 본인이 직접 삭제 가능 (DB 규칙도 동일 윈도우)
+  const STICKER_OWNER_DELETE_WINDOW_MS = 30 * 60 * 1000;
   // 도배 방지 — 간격(2.5초) + 거리(15m) + 분당 개수(8개) 제한
   const STICKER_MIN_INTERVAL_MS = 2500;
   const STICKER_MIN_DIST_M = 15;
@@ -2750,6 +2752,43 @@ function LiveMapView({ dbUrl, onHome }) {
       localStorage.setItem("shuttle:mySticker", JSON.stringify(arr));
     } catch (_) {}
   };
+  const removeMyStickerId = (id) => {
+    try {
+      const a = JSON.parse(localStorage.getItem("shuttle:mySticker") || "[]");
+      const arr = (Array.isArray(a) ? a : []).filter((x) => x !== id);
+      localStorage.setItem("shuttle:mySticker", JSON.stringify(arr));
+    } catch (_) {}
+  };
+
+  /* 본인 스티커 삭제 핸들러 — popup 의 인라인 onclick 에서 호출. 30분 이내만 익명 DELETE 허용(DB 규칙도 동일). */
+  useEffect(() => {
+    window.__mdsDelSticker = async (id) => {
+      const url = dbUrl ? dbUrl.replace(/\/+$/, "") : "";
+      if (!url) { setStickerMsg("서버 연결 정보가 없어요"); setTimeout(() => setStickerMsg(""), 2200); return; }
+      if (!window.confirm("내 스티커를 삭제할까요?")) return;
+      try {
+        const r = await fetch(`${url}/stickers/${encodeURIComponent(id)}.json`, { method: "DELETE" });
+        if (r.ok) {
+          removeMyStickerId(id);
+          setStickers((prev) => { const n = { ...(prev || {}) }; delete n[id]; return n; });
+          // 마커 즉시 제거
+          try { const layer = stickerLayersRef.current[id]; if (layer && mapRef.current) mapRef.current.removeLayer(layer); delete stickerLayersRef.current[id]; } catch (_) {}
+          setStickerMsg("스티커 삭제됨");
+          setTimeout(() => setStickerMsg(""), 1600);
+        } else if (r.status === 401 || r.status === 403) {
+          setStickerMsg("삭제 권한 없음 — 등록 후 30분 지난 스티커는 운영자만 삭제 가능");
+          setTimeout(() => setStickerMsg(""), 2800);
+        } else {
+          setStickerMsg(`삭제 실패 · HTTP ${r.status}`);
+          setTimeout(() => setStickerMsg(""), 2400);
+        }
+      } catch (e) {
+        setStickerMsg("네트워크 오류");
+        setTimeout(() => setStickerMsg(""), 2200);
+      }
+    };
+    return () => { try { delete window.__mdsDelSticker; } catch (_) {} };
+  }, [dbUrl]);
 
   /* 스티커 마커 렌더 — stickers 변경 시 재계산. 본인 마커는 청록 테두리 강조. */
   useEffect(() => {
@@ -2778,12 +2817,17 @@ function LiveMapView({ dbUrl, onHome }) {
       const ageMin = Math.floor((Date.now() - s.ts) / 60000);
       const left = Math.max(0, 120 - ageMin);
       const isMine = mine.has(id);
+      const canSelfDelete = isMine && (Date.now() - s.ts) < STICKER_OWNER_DELETE_WINDOW_MS;
       const myMark = isMine ? `<div style="font-size:9px;color:#0F786E;font-weight:700;margin-top:2px">● 내가 남긴 스티커</div>` : "";
+      const delBtn = canSelfDelete
+        ? `<button onclick="window.__mdsDelSticker && window.__mdsDelSticker('${id.replace(/'/g, "\\'")}')" style="margin-top:8px;background:#FBE0CF;border:1.5px solid #C2521D;color:#C2521D;border-radius:8px;padding:4px 10px;font-family:'Jua',sans-serif;font-size:11px;font-weight:700;cursor:pointer;box-shadow:1px 1px 0 #C2521D;">내 스티커 삭제</button>`
+        : (isMine ? `<div style="font-size:9px;color:#94a3b8;margin-top:4px">등록 후 30분 경과 — 운영자에게 요청</div>` : "");
       const popup = `<div style="font-family:'Jua',sans-serif;min-width:140px;text-align:center">`
         + `<div style="font-size:24px;line-height:1">${s.kind || "📍"}</div>`
         + (s.label ? `<div style="font-size:12px;color:#101113;margin-top:4px;font-weight:700">${s.label.replace(/</g,"&lt;")}</div>` : "")
         + `<div style="font-size:10px;color:#4A4E55;margin-top:4px">${ageMin <= 0 ? "방금" : ageMin + "분 전"} · ${left}분 후 사라짐</div>`
         + myMark
+        + delBtn
         + `</div>`;
       if (stickerLayersRef.current[id]) {
         // 위치/팝업 갱신 + 아이콘도 갱신 (본인 여부 변경 반영)
