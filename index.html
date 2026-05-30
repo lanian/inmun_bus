@@ -97,6 +97,9 @@
   .mds-input:focus { outline: none; border-color: #fbbf24;
     box-shadow: 0 0 0 3px rgba(251, 191, 36, 0.15); background: #0d0f17; }
   .mds-input:disabled { opacity: 0.5; cursor: not-allowed; }
+  /* 모바일 viewport 높이 — Android Chrome 주소창 토글로 인한 layout 튀임 방지.
+     1) 기본 100vh (모든 브라우저), 2) svh 지원하는 모던 브라우저는 100svh(가장 작은 viewport)로 항상 내용이 화면에 들어옴. */
+  .mds-app-height { height: 100vh; height: 100svh; }
 </style>
 </head>
 <body>
@@ -110,7 +113,7 @@
 
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef, useMemo } = React;
-const BUILD = "b307"; /* 화면 우하단 표시 — 최신 배포 확인용 */
+const BUILD = "b308"; /* 화면 우하단 표시 — 최신 배포 확인용 */
 
 /* 실시간 위치 공유용 Firebase DB 주소. 여기에 한 번 넣어두면 승객 링크가 ?view=map 만 남아 깔끔해집니다. */
 const SHARE_DB = "https://innum-bus-default-rtdb.firebaseio.com";
@@ -905,7 +908,7 @@ function StatsModal({ counts, dateKey, onClose, onReset, busCapacity, setBusCapa
           <div className="text-sm font-bold" style={{ color: "#22d65f", fontFamily: "'Jua', sans-serif" }}>
             오늘 승하차 통계 · {dateKey}
           </div>
-          <button onClick={onClose} className="text-slate-400 text-lg leading-none px-1">×</button>
+          <button onClick={onClose} className="text-slate-400 hover:text-amber-400 text-lg leading-none px-1" aria-label="닫기">×</button>
         </div>
         <div className="grid grid-cols-2 gap-2 text-center">
           <div className="rounded-lg p-2" style={{ background: "rgba(34,214,95,0.12)", border: "1px solid rgba(34,214,95,0.3)" }}>
@@ -2217,7 +2220,7 @@ function ZoneEditor({ onClose, dbUrl, getAuth, refreshAuth }) {
           <div className="text-sm font-bold" style={{ color: "#fbbf24", fontFamily: "'Jua', sans-serif" }}>
             🎪 행사 주요 구역 좌표
           </div>
-          <button onClick={onClose} className="text-slate-400 text-lg leading-none px-1">×</button>
+          <button onClick={onClose} className="text-slate-400 hover:text-amber-400 text-lg leading-none px-1" aria-label="닫기">×</button>
         </div>
         <div className="text-[10px] text-slate-500">
           번호(주황/녹) 마커는 구역 중심, 흰색 작은 마커는 세부장소입니다. 드래그로 이동, 아래 목록에서 추가/삭제·이름 편집. 저장 시 Firebase /zones에 업로드.
@@ -4147,7 +4150,7 @@ function PassengerView({ dbUrl, onAdmin, initialTab = "list" }) {
 
   if (tab === "map") {
     return (
-      <div style={{ height: "100dvh", display: "flex", flexDirection: "column", overflow: "hidden", background: "#000" }}>
+      <div className="mds-app-height" style={{ display: "flex", flexDirection: "column", overflow: "hidden", background: "#000" }}>
         <div style={{ flex: 1, minHeight: 0, position: "relative" }}>
           <LiveMapView dbUrl={dbUrl} onHome={() => setTab("list")} />
         </div>
@@ -4158,8 +4161,8 @@ function PassengerView({ dbUrl, onAdmin, initialTab = "list" }) {
   }
   if (tab === "venue") {
     return (
-      <div className="w-full p-3 sm:p-5 flex flex-col items-center"
-        style={{ height: "100dvh", overflow: "hidden", background: FT.paper,
+      <div className="mds-app-height w-full p-3 sm:p-5 flex flex-col items-center"
+        style={{ overflow: "hidden", background: FT.paper,
           backgroundImage: "radial-gradient(circle at 15% -10%, rgba(22,168,158,0.18), transparent 45%), radial-gradient(circle at 85% 110%, rgba(238,107,46,0.14), transparent 45%)" }}>
         <div className="w-full max-w-md flex flex-col" style={{ flex: 1, minHeight: 0 }}>
           <div className="flex flex-col" style={{ flex: 1, minHeight: 0, background: "#fff", border: "2.5px solid " + FT.ink, borderRadius: 18, boxShadow: "4px 4px 0 " + FT.ink, overflow: "hidden" }}>
@@ -4194,8 +4197,8 @@ function PassengerView({ dbUrl, onAdmin, initialTab = "list" }) {
   }
 
   return (
-    <div className="w-full p-3 sm:p-5 flex flex-col items-center"
-      style={{ height: "100dvh", overflow: "hidden", background: FT.paper,
+    <div className="mds-app-height w-full p-3 sm:p-5 flex flex-col items-center"
+      style={{ overflow: "hidden", background: FT.paper,
         backgroundImage: "radial-gradient(circle at 15% -10%, rgba(22,168,158,0.18), transparent 45%), radial-gradient(circle at 85% 110%, rgba(238,107,46,0.14), transparent 45%)" }}>
       <div className="w-full max-w-md flex flex-col" style={{ flex: 1, minHeight: 0 }}>
         <div className="flex flex-col" style={{ flex: 1, minHeight: 0, background: "#fff", border: "2.5px solid " + FT.ink, borderRadius: 18, boxShadow: "4px 4px 0 " + FT.ink, overflow: "hidden" }}>
@@ -6205,8 +6208,8 @@ function App() {
     const curSchedDiffSec = curStop ? toMin(trip[currentIdx]) * 60 - nowSecNow : null;
     const fmtMS = (sec) => { const a = Math.abs(sec); const m = Math.floor(a / 60), s = a % 60; return m > 0 ? `${m}분 ${s}초` : `${s}초`; };
     return (
-      <div className="w-full flex flex-col items-stretch"
-        style={{ height: "100dvh", overflow: "hidden",
+      <div className="mds-app-height w-full flex flex-col items-stretch"
+        style={{ overflow: "hidden",
           paddingBottom: "calc(44px + env(safe-area-inset-bottom, 0px))",
           background: "#0a0b0f",
           backgroundImage: "repeating-linear-gradient(0deg, rgba(255,255,255,0.02) 0px, rgba(255,255,255,0.02) 1px, transparent 1px, transparent 3px)" }}>
@@ -7614,7 +7617,7 @@ function App() {
               <div className="text-sm font-bold" style={{ color: "#22d65f", fontFamily: "'Jua', sans-serif" }}>
                 안내 멘트 편집·백업·복원
               </div>
-              <button onClick={() => setMentBackup(null)} className="text-slate-400 hover:text-amber-400 text-lg leading-none px-1">×</button>
+              <button onClick={() => setMentBackup(null)} className="text-slate-400 hover:text-amber-400 text-lg leading-none px-1" aria-label="닫기">×</button>
             </div>
             <div className="text-[11px] text-slate-500">
               환영·홍보·하차·프로그램(일정 포함) 멘트입니다. 문구를 직접 고친 뒤 <b>불러오기</b>를 누르면 적용·저장됩니다. 복사·파일로 다른 기기와 공유할 수 있어요.
@@ -7667,7 +7670,7 @@ function App() {
               <div className="text-sm font-bold" style={{ color: "#22d65f", fontFamily: "'Jua', sans-serif" }}>
                 정류장 좌표 백업·복원
               </div>
-              <button onClick={() => setBackup(null)} className="text-slate-400 hover:text-amber-400 text-lg leading-none px-1">×</button>
+              <button onClick={() => setBackup(null)} className="text-slate-400 hover:text-amber-400 text-lg leading-none px-1" aria-label="닫기">×</button>
             </div>
             <div className="text-[11px] text-slate-500">
               아래 좌표를 복사해 다른 기기에 붙여넣거나, 파일로 저장·불러올 수 있습니다. 붙여넣은 뒤 <b>불러오기</b>를 누르면 적용됩니다.
@@ -7721,7 +7724,7 @@ function App() {
                 {stops[editing.idx]?.name} 위치 설정
                 <span className="text-[10px] text-slate-500 ml-2">{route.label}</span>
               </div>
-              <button onClick={() => setEditing(null)} className="text-slate-400 hover:text-amber-400 text-lg leading-none px-1">×</button>
+              <button onClick={() => setEditing(null)} className="text-slate-400 hover:text-amber-400 text-lg leading-none px-1" aria-label="닫기">×</button>
             </div>
             <div className="text-[11px] text-slate-500">지도를 탭하거나 핀을 끌어 위치를 지정하세요. <span style={{ color: "#22d65f" }}>초록 원</span>은 자동 안내가 시작되는 반경({triggerRadius}m)입니다.</div>
             <MapPicker lat={parseFloat(editing.lat) || 35.130} lng={parseFloat(editing.lng) || 126.940}
