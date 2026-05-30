@@ -143,7 +143,7 @@
 
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef, useMemo } = React;
-const BUILD = "b349"; /* 화면 우하단 표시 — 최신 배포 확인용 */
+const BUILD = "b349b"; /* 화면 우하단 표시 — 최신 배포 확인용 */
 
 /* 실시간 위치 공유용 Firebase DB 주소. 여기에 한 번 넣어두면 승객 링크가 ?view=map 만 남아 깔끔해집니다. */
 const SHARE_DB = "https://innum-bus-default-rtdb.firebaseio.com";
@@ -3183,6 +3183,24 @@ function ViaEditor({ onClose, dbUrl, getAuth }) {
   const dirModeRef = useRef("auto");
   useEffect(() => { dirModeRef.current = dirMode; }, [dirMode]);
 
+  /* 경유점 배열을 (이전 정류장 → 현재 정류장) 세그먼트 진행 순서로 정렬.
+     OSRM 는 좌표 순서대로 경유하기 때문에 클릭/드래그 순서가 곧 경유 순서가 됨 —
+     사용자가 도중 점을 새로 끼우면 정렬 안된 채 우회 발생. 투영 비율 t 기준 정렬. */
+  const sortViaBySegment = (dir, stopName, viaList) => {
+    const stops = ROUTES[dir].stops;
+    const idx = stops.findIndex((s) => s.name === stopName);
+    if (idx <= 0 || !Array.isArray(viaList) || viaList.length <= 1) return viaList;
+    const prev = stops[idx - 1], cur = stops[idx];
+    if (prev.lat == null || cur.lat == null) return viaList;
+    const dx = cur.lat - prev.lat, dy = cur.lng - prev.lng;
+    const len2 = dx * dx + dy * dy;
+    if (len2 < 1e-12) return viaList;
+    return viaList
+      .map((v) => ({ v, t: ((v[0] - prev.lat) * dx + (v[1] - prev.lng) * dy) / len2 }))
+      .sort((a, b) => a.t - b.t)
+      .map((x) => x.v);
+  };
+
   // 열릴 때 Firebase 최신값 가져와서 화면에 반영 (운영자 동기화)
   useEffect(() => {
     if (!dbUrl) return;
@@ -3192,7 +3210,7 @@ function ViaEditor({ onClose, dbUrl, getAuth }) {
       .catch(() => {});
   }, [dbUrl]);
 
-  /* 방향별 시퀀스: [{kind:'stop'|'via', dir, stopName?, stopKey?, coord}] */
+  /* 방향별 시퀀스: [{kind:'stop'|'via', dir, stopName?, stopKey?, coord, viaIdx?, viaCount?}] */
   const buildSeq = (dir) => {
     const stops = ROUTES[dir].stops.filter((s) => s.lat != null);
     const seq = [];
@@ -3200,7 +3218,7 @@ function ViaEditor({ onClose, dbUrl, getAuth }) {
       if (i > 0) {
         const key = `${dir}|${s.name}`;
         const via = key in viaMap ? viaMap[key] : (Array.isArray(s.approachVia) ? s.approachVia : []);
-        via.forEach((v) => seq.push({ kind: "via", dir, stopKey: key, coord: v }));
+        via.forEach((v, vi) => seq.push({ kind: "via", dir, stopKey: key, coord: v, viaIdx: vi, viaCount: via.length }));
       }
       seq.push({ kind: "stop", dir, stopName: s.name, coord: [s.lat, s.lng] });
     });
@@ -3256,7 +3274,9 @@ function ViaEditor({ onClose, dbUrl, getAuth }) {
         adds.forEach(({ dir, toName }) => {
           const key = `${dir}|${toName}`;
           const cur = key in next ? next[key] : (ROUTES[dir].stops.find((s) => s.name === toName)?.approachVia || []);
-          next = { ...next, [key]: [...cur, click] };
+          // 끝에 append → 곧바로 세그먼트 진행 순서로 정렬(아래 OSRM 가 올바른 순서로 라우팅)
+          const merged = sortViaBySegment(dir, toName, [...cur, click]);
+          next = { ...next, [key]: merged };
         });
         return next;
       });
@@ -3309,10 +3329,12 @@ function ViaEditor({ onClose, dbUrl, getAuth }) {
             .addTo(map).bindTooltip(shared ? p.stopName : `${p.stopName} (${dir === "outbound" ? "축제장행" : "민주광장행"})`, { direction: "top" });
           layersRef.current.stops.push(m);
         } else {
+          // 라우팅 순서가 보이도록 #N 표기 (N = 이 정류장 approachVia 안에서의 1-based 순번)
+          const orderLbl = p.viaCount > 1 ? `#${p.viaIdx + 1}` : "";
           const icon = L.divIcon({
             className: "",
-            html: `<div style="background:${color};color:#fff;border:2px solid ${FT.ink};border-radius:6px;padding:1px 7px;font-family:'Jua',sans-serif;font-size:11px;font-weight:700;cursor:move;box-shadow:1.5px 1.5px 0 ${FT.ink};white-space:nowrap;">⠿ via ×</div>`,
-            iconSize: [56, 22], iconAnchor: [28, 11],
+            html: `<div style="background:${color};color:#fff;border:2px solid ${FT.ink};border-radius:6px;padding:1px 7px;font-family:'Jua',sans-serif;font-size:11px;font-weight:700;cursor:move;box-shadow:1.5px 1.5px 0 ${FT.ink};white-space:nowrap;">⠿ via${orderLbl ? " " + orderLbl : ""} ×</div>`,
+            iconSize: [orderLbl ? 70 : 56, 22], iconAnchor: [(orderLbl ? 70 : 56) / 2, 11],
           });
           const m = L.marker(p.coord, { icon, draggable: true, autoPan: true }).addTo(map);
           // 드래그 종료 시 해당 경유점 좌표 갱신
@@ -3325,7 +3347,9 @@ function ViaEditor({ onClose, dbUrl, getAuth }) {
               if (idx < 0) return prev;
               const list = cur.slice();
               list[idx] = newCoord;
-              return { ...prev, [p.stopKey]: list };
+              // 드래그 후 위치가 이전 점들 사이로 옮겨졌을 수 있으므로 재정렬
+              const stopName = p.stopKey.split("|").slice(1).join("|");
+              return { ...prev, [p.stopKey]: sortViaBySegment(p.dir, stopName, list) };
             });
           });
           // 단순 탭(드래그 없는 클릭)은 제거
@@ -3427,6 +3451,18 @@ function ViaEditor({ onClose, dbUrl, getAuth }) {
           <button onClick={pushNow}
             style={{ background: FT.teal, color: "#fff", padding: "8px 12px", borderRadius: 10,
               border: "2px solid " + FT.ink, fontFamily: "'Jua', sans-serif", fontSize: 12, boxShadow: "2px 2px 0 " + FT.ink, fontWeight: 700 }}>지금 반영</button>
+          <button onClick={() => setViaMap((prev) => {
+              const next = {};
+              Object.entries(prev).forEach(([k, list]) => {
+                if (!Array.isArray(list) || list.length <= 1) { next[k] = list; return; }
+                const [dir, ...nameParts] = k.split("|");
+                next[k] = sortViaBySegment(dir, nameParts.join("|"), list);
+              });
+              return next;
+            })}
+            title="모든 경유점을 (이전 정류장 → 도착 정류장) 진행 순서로 재정렬"
+            style={{ background: "#fff", color: FT.ink, padding: "8px 12px", borderRadius: 10,
+              border: "2px solid " + FT.ink, fontFamily: "'Jua', sans-serif", fontSize: 12, boxShadow: "2px 2px 0 " + FT.ink, fontWeight: 700 }}>정렬</button>
           <button onClick={() => { if (window.confirm("저장된 모든 경유점을 초기화할까요? (코드 기본값으로 복귀)")) setViaMap({}); }}
             style={{ background: "#fff", color: FT.ink, padding: "8px 12px", borderRadius: 10,
               border: "2px solid " + FT.ink, fontFamily: "'Jua', sans-serif", fontSize: 12, boxShadow: "2px 2px 0 " + FT.ink, fontWeight: 700 }}>초기화</button>
