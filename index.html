@@ -104,6 +104,9 @@
   .op-panel-grid { animation: opPanelUp 0.22s cubic-bezier(0.2, 0.9, 0.3, 1) both; }
   /* 내 위치 마커 — 점 주변 부드러운 펄스 (LiveMapView 내 위치 표시용) */
   @keyframes mdsMyLocPulse { 0% { transform: scale(0.6); opacity: 0.7; } 100% { transform: scale(2.4); opacity: 0; } }
+  /* 행사 구역 폴리곤 — 배너 활성 구역 강조 (부드러운 stroke-width 펄스) */
+  @keyframes zoneActivePulse { 0%, 100% { stroke-width: 4; } 50% { stroke-width: 6; } }
+  .fest-zone-active { animation: zoneActivePulse 1.6s ease-in-out infinite; filter: drop-shadow(0 0 4px rgba(0,0,0,0.18)); }
   /* 운영자 상단 플랫바 알림 — 위에서 슬라이드 다운 */
   @keyframes mdsTopBarIn {
     0% { transform: translateY(-100%); opacity: 0; }
@@ -175,7 +178,7 @@
 
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef, useMemo } = React;
-const BUILD = "b407"; /* 화면 우하단 표시 — 최신 배포 확인용 */
+const BUILD = "b408"; /* 화면 우하단 표시 — 최신 배포 확인용 */
 
 /* 실시간 위치 공유용 Firebase DB 주소. 여기에 한 번 넣어두면 승객 링크가 ?view=map 만 남아 깔끔해집니다. */
 const SHARE_DB = "https://innum-bus-default-rtdb.firebaseio.com";
@@ -3814,6 +3817,8 @@ function LiveMapView({ dbUrl, onHome, onOpenVenue }) {
   const osrmPolyRef = useRef({}); // { [dir]: [[lat,lng], ...] } — 마커 노선 스냅에 사용
   const stopLayersRef = useRef([]);
   const zoneLayersRef = useRef([]);
+  const zonePolyByNumRef = useRef({}); // { [zNum]: L.polygon } — 배너 활성 구역 강조용
+  const [activeBannerZone, setActiveBannerZone] = useState(null); // 배너 슬라이드의 현재 구역 번호
   const hasFitRef = useRef(false);
 
   /* ===== 스티커 (사용자/운영자 핀) =====
@@ -4402,6 +4407,7 @@ function LiveMapView({ dbUrl, onHome, onOpenVenue }) {
     const L = window.L;
     zoneLayersRef.current.forEach((l) => map.removeLayer(l));
     zoneLayersRef.current = [];
+    zonePolyByNumRef.current = {}; // 강조 ref 도 함께 초기화 — 새 폴리곤 만들 때 다시 채움
     const today = getNow();
     const isToday = today.getMonth() === 5 && (today.getDate() === 13 || today.getDate() === 14);
     // 행사 기간이면 그날의 일정, 아니면 day1을 기본 미리보기로
@@ -4442,11 +4448,19 @@ function LiveMapView({ dbUrl, onHome, onOpenVenue }) {
         ? zoneRingLatLngs({ points, smooth })
         : (rA > 0 && rB > 0 ? ellipsePolygon(lat, lng, rA, rB, rot) : null);
       if (ring && ring.length) {
+        const isActive = activeBannerZone === z.num;
         const poly = L.polygon(ring, {
           pane: "zonePane",
-          color: c, weight: 2, opacity: 0.85, fillColor: c, fillOpacity: 0.18, lineCap: "round", lineJoin: "round",
+          color: c,
+          weight: isActive ? 4 : 2,
+          opacity: isActive ? 1 : 0.85,
+          fillColor: c,
+          fillOpacity: isActive ? 0.35 : 0.18,
+          lineCap: "round", lineJoin: "round",
+          className: isActive ? "fest-zone-active" : "",
         }).addTo(map);
         zoneLayersRef.current.push(poly);
+        zonePolyByNumRef.current[z.num] = poly;
       }
       const badge = liveItems.length > 0 ? `<span style="display:inline-flex;align-items:center;justify-content:center;min-width:14px;height:14px;border-radius:7px;background:#dc2626;color:#fff;font-size:9px;padding:0 4px;margin-left:3px">${liveItems.length}</span>` : "";
       const html = `<div><span class="num" style="background:${c}">${z.num}</span><span>${z.title}</span>${badge}</div>`;
@@ -4494,6 +4508,27 @@ function LiveMapView({ dbUrl, onHome, onOpenVenue }) {
       });
     });
   }, [zoneOverride, _zoneTick]);
+
+  /* 배너 활성 구역 변경 시 폴리곤만 in-place style 변경 — 전체 리빌드 없이 강조 효과만 토글 */
+  useEffect(() => {
+    Object.entries(zonePolyByNumRef.current).forEach(([num, poly]) => {
+      if (!poly || !poly.setStyle) return;
+      const isActive = Number(num) === activeBannerZone;
+      try {
+        poly.setStyle({
+          weight: isActive ? 4 : 2,
+          opacity: isActive ? 1 : 0.85,
+          fillOpacity: isActive ? 0.35 : 0.18,
+        });
+        // CSS className 토글 — SVG path 에 직접 클래스 추가/제거
+        const el = poly._path;
+        if (el) {
+          if (isActive) el.classList.add("fest-zone-active");
+          else el.classList.remove("fest-zone-active");
+        }
+      } catch (_) {}
+    });
+  }, [activeBannerZone]);
 
   useEffect(() => {
     if (!dbUrl) { setStatus("공유 주소(db)가 없습니다"); return; }
@@ -4952,6 +4987,7 @@ function LiveMapView({ dbUrl, onHome, onOpenVenue }) {
           <div style={{ pointerEvents: "auto", maxWidth: 480, margin: "0 auto" }}>
             <UnifiedMapBanner
               stickers={stickers}
+              onActiveSlide={(zoneNum) => setActiveBannerZone(zoneNum)}
               onOpenVenue={(pick) => {
                 try { window.__mdsStats && window.__mdsStats.track("click_promo_map"); } catch (_) {}
                 if (typeof onOpenVenue === "function") onOpenVenue(pick);
@@ -5449,7 +5485,7 @@ function StickerListSheet({ stickers, onClose, onTap, onAddNew }) {
   );
 }
 
-function UnifiedMapBanner({ stickers, onOpenVenue, onTapSticker }) {
+function UnifiedMapBanner({ stickers, onOpenVenue, onTapSticker, onActiveSlide }) {
   // 행사 슬라이드 후보 산출 (UpcomingPromoCard 와 동일 로직)
   const d = getNow();
   const todayDay = d.getMonth() === 5 && d.getDate() === 13 ? "day1"
@@ -5520,6 +5556,16 @@ function UnifiedMapBanner({ stickers, onOpenVenue, onTapSticker }) {
     const id = setInterval(() => setIdx((i) => (i + 1) % slides.length), 5000);
     return () => clearInterval(id);
   }, [paused, slides.length]);
+  // 현재 슬라이드의 행사 구역을 부모에 통지 (지도 폴리곤 강조용). festival 슬라이드일 때만 zone, 아니면 null.
+  useEffect(() => {
+    if (!onActiveSlide) return;
+    const slide = slides[Math.min(idx, slides.length - 1)];
+    if (slide && slide.type === "festival" && slide.data?.zone != null) {
+      onActiveSlide(slide.data.zone);
+    } else {
+      onActiveSlide(null);
+    }
+  }, [idx, slides.length]);
   const touchStartX = useRef(null);
   const onTouchStart = (e) => { touchStartX.current = e.touches[0].clientX; setPaused(true); };
   const onTouchEnd = (e) => {
