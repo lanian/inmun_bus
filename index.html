@@ -175,7 +175,7 @@
 
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef, useMemo } = React;
-const BUILD = "b402"; /* 화면 우하단 표시 — 최신 배포 확인용 */
+const BUILD = "b403"; /* 화면 우하단 표시 — 최신 배포 확인용 */
 
 /* 실시간 위치 공유용 Firebase DB 주소. 여기에 한 번 넣어두면 승객 링크가 ?view=map 만 남아 깔끔해집니다. */
 const SHARE_DB = "https://innum-bus-default-rtdb.firebaseio.com";
@@ -6273,8 +6273,15 @@ function PassengerView({ dbUrl, onAdmin, initialTab = "list" }) {
                 style={{ fontSize: 18, color: FT.orange, fontFamily: "'Jua', sans-serif", fontWeight: 700, lineHeight: 1.1 }}>
                 무등생각 셔틀
               </div>
-              <div style={{ fontSize: 11, color: FT.inkSoft, fontFamily: "'Jua', sans-serif", marginTop: 2, lineHeight: 1.2 }}>
-                제4회 동구 무등산 인문축제
+              {/* 슬로건 — 브랜드 핵심. 따옴표·이탤릭으로 시적 톤. 행사 회차는 작은 따라가는 메타로 분리 */}
+              <div style={{ marginTop: 3, lineHeight: 1.25 }}>
+                <span style={{ fontSize: 11, color: FT.tealDark, fontFamily: "'Gowun Dodum', 'Jua', sans-serif",
+                  fontStyle: "italic", fontWeight: 700 }}>
+                  &ldquo;생각을 끄고, 생각을 켜다&rdquo;
+                </span>
+                <span style={{ fontSize: 9, color: FT.mute, fontFamily: "'Jua', sans-serif", marginLeft: 6, letterSpacing: 0.3 }}>
+                  4회 · 동구 무등산 인문축제
+                </span>
               </div>
             </div>
             {/* 상태 chip — 점 + 텍스트로 라이브/대기/오류 명확 표시. tooltip 의존 ↓ */}
