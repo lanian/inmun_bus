@@ -175,7 +175,7 @@
 
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef, useMemo } = React;
-const BUILD = "b401"; /* 화면 우하단 표시 — 최신 배포 확인용 */
+const BUILD = "b402"; /* 화면 우하단 표시 — 최신 배포 확인용 */
 
 /* 실시간 위치 공유용 Firebase DB 주소. 여기에 한 번 넣어두면 승객 링크가 ?view=map 만 남아 깔끔해집니다. */
 const SHARE_DB = "https://innum-bus-default-rtdb.firebaseio.com";
@@ -6374,36 +6374,6 @@ function PassengerView({ dbUrl, onAdmin, initialTab = "list" }) {
                   </button>
                 );
               })}
-            </div>
-            {/* 플랫 배너 액션 — 컨텍스트별 1차 행동 안내. 푸터 nav 와 다른 목적: 본문 흐름에서
-                자연스러운 다음 단계 제안 (지도에서 실시간 보기 / 행사장으로 이동). */}
-            <div className="grid grid-cols-2 gap-2" style={{ marginTop: 2 }}>
-              <button onClick={() => setTab("map")}
-                aria-label="지도에서 실시간 셔틀 위치 보기"
-                style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 6,
-                  padding: "10px 12px", background: FT.ink, color: "#fff",
-                  border: "1.5px solid " + FT.ink, borderRadius: 10,
-                  fontFamily: "'Jua', sans-serif", fontWeight: 700, fontSize: 12, cursor: "pointer",
-                  textAlign: "left" }}>
-                <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-                  <span aria-hidden style={{ fontSize: 14 }}>🗺️</span>
-                  지도에서 보기
-                </span>
-                <span aria-hidden style={{ fontSize: 12, opacity: 0.85 }}>→</span>
-              </button>
-              <button onClick={() => { setVenueZone(0); setVenueProgram(null); setTab("venue"); }}
-                aria-label="행사장과 프로그램 안내 보기"
-                style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 6,
-                  padding: "10px 12px", background: FT.orange, color: "#fff",
-                  border: "1.5px solid " + FT.ink, borderRadius: 10,
-                  fontFamily: "'Jua', sans-serif", fontWeight: 700, fontSize: 12, cursor: "pointer",
-                  textAlign: "left" }}>
-                <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-                  <span aria-hidden style={{ fontSize: 14 }}>🎪</span>
-                  행사장 안내
-                </span>
-                <span aria-hidden style={{ fontSize: 12, opacity: 0.85 }}>→</span>
-              </button>
             </div>
             {/* 상태 안내 — empty/schedActive 컨텍스트 (pre/post 는 위 큰 카드로 분리) */}
             {live.length === 0 && !preFestival && !postFestival && (
