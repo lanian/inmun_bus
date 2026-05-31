@@ -175,7 +175,7 @@
 
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef, useMemo } = React;
-const BUILD = "b403"; /* 화면 우하단 표시 — 최신 배포 확인용 */
+const BUILD = "b404"; /* 화면 우하단 표시 — 최신 배포 확인용 */
 
 /* 실시간 위치 공유용 Firebase DB 주소. 여기에 한 번 넣어두면 승객 링크가 ?view=map 만 남아 깔끔해집니다. */
 const SHARE_DB = "https://innum-bus-default-rtdb.firebaseio.com";
@@ -6268,7 +6268,7 @@ function PassengerView({ dbUrl, onAdmin, initialTab = "list" }) {
               style={{ background: "transparent", border: "none", padding: 0, cursor: "pointer", flexShrink: 0, lineHeight: 0 }}>
               <FestivalLogo size={40} />
             </button>
-            <div style={{ flex: 1, minWidth: 0, paddingRight: 84 }}>
+            <div style={{ flex: 1, minWidth: 0, paddingRight: 22 }}>
               <div onClick={onTitleTap} className="select-none"
                 style={{ fontSize: 18, color: FT.orange, fontFamily: "'Jua', sans-serif", fontWeight: 700, lineHeight: 1.1 }}>
                 무등생각 셔틀
@@ -6284,21 +6284,12 @@ function PassengerView({ dbUrl, onAdmin, initialTab = "list" }) {
                 </span>
               </div>
             </div>
-            {/* 상태 chip — 점 + 텍스트로 라이브/대기/오류 명확 표시. tooltip 의존 ↓ */}
-            <div role="status" aria-live="polite" aria-label={statusText}
-              style={{ position: "absolute", top: 10, right: 10,
-                display: "inline-flex", alignItems: "center", gap: 5,
-                padding: "3px 8px 3px 6px", borderRadius: 999,
-                background: conn === "error" ? "#fee2e2" : live.length > 0 ? FT.tealSoft : "#f1f5f9",
-                border: `1.5px solid ${conn === "error" ? "#B91C1C" : live.length > 0 ? FT.tealDark : FT.mute}`,
-                fontFamily: "'Jua', sans-serif", fontSize: 10, fontWeight: 700,
-                color: conn === "error" ? "#B91C1C" : live.length > 0 ? FT.tealDark : FT.inkSoft }}>
-              <span aria-hidden className={live.length > 0 ? "animate-pulse" : ""}
-                style={{ width: 8, height: 8, borderRadius: "50%",
-                  background: conn === "error" ? "#B91C1C" : live.length > 0 ? FT.teal : FT.mute,
-                  flexShrink: 0 }} />
-              <span>{conn === "error" ? "연결 오류" : live.length > 0 ? `라이브 · ${live.length}대` : "신호 없음"}</span>
-            </div>
+            {/* 상태 인디케이터 — 단순 점만. 색으로 라이브/대기/오류 구분 */}
+            <div role="status" aria-live="polite" aria-label={statusText} title={statusText}
+              className={live.length > 0 ? "animate-pulse" : ""}
+              style={{ position: "absolute", top: 14, right: 14, width: 10, height: 10, borderRadius: "50%",
+                background: conn === "error" ? "#B91C1C" : live.length > 0 ? FT.teal : FT.mute,
+                border: "1.5px solid " + FT.ink }} />
           </div>
 
 
