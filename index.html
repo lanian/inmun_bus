@@ -175,7 +175,7 @@
 
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef, useMemo } = React;
-const BUILD = "b396"; /* 화면 우하단 표시 — 최신 배포 확인용 */
+const BUILD = "b397"; /* 화면 우하단 표시 — 최신 배포 확인용 */
 
 /* 실시간 위치 공유용 Firebase DB 주소. 여기에 한 번 넣어두면 승객 링크가 ?view=map 만 남아 깔끔해집니다. */
 const SHARE_DB = "https://innum-bus-default-rtdb.firebaseio.com";
@@ -6192,6 +6192,12 @@ function PassengerView({ dbUrl, onAdmin, initialTab = "list" }) {
                 display: "flex", flexDirection: "column", alignItems: "center", gap: 2 }}>
               <span aria-hidden style={{ fontSize: 16, lineHeight: 1 }}>{b.icon}</span>
               <span style={{ fontSize: 11, lineHeight: 1 }}>{b.label}</span>
+              {active && b.key !== "timetable" && (
+                <span style={{ fontSize: 8, opacity: 0.7, fontFamily: "'IBM Plex Mono', monospace",
+                  letterSpacing: 0.5, lineHeight: 1, marginTop: 1 }}>
+                  ↺ 홈
+                </span>
+              )}
             </button>
           );
         })}
@@ -6260,8 +6266,14 @@ function PassengerView({ dbUrl, onAdmin, initialTab = "list" }) {
             <button onClick={() => { setVenueZone(0); setTab("venue"); }}
               aria-label="행사장 안내로 — 스위치 켜기"
               title="스위치 켜기 → 행사장 안내"
-              style={{ background: "transparent", border: "none", padding: 0, cursor: "pointer", flexShrink: 0, lineHeight: 0 }}>
+              style={{ background: "transparent", border: "none", padding: 0, cursor: "pointer", flexShrink: 0,
+                display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
               <FestivalLogo size={44} />
+              <span aria-hidden style={{ fontSize: 9, fontFamily: "'Jua', sans-serif", fontWeight: 700,
+                color: FT.tealDark, background: FT.tealSoft, padding: "1px 5px", borderRadius: 4,
+                border: `1px solid ${FT.tealDark}55`, lineHeight: 1.2, whiteSpace: "nowrap" }}>
+                🎪 행사장 →
+              </span>
             </button>
             <div style={{ flex: 1, minWidth: 0, paddingRight: 20 }}>
               <div style={{ fontSize: 11, color: FT.inkSoft, fontFamily: "'Jua', sans-serif" }}>생각을 끄고, 생각을 켜다</div>
@@ -6309,6 +6321,40 @@ function PassengerView({ dbUrl, onAdmin, initialTab = "list" }) {
                 </div>
               );
             })()}
+            {/* 행사 기간 외 큰 안내 카드 — D-X 또는 종료 메시지를 시각적으로 분리 */}
+            {(preFestival || postFestival) && (() => {
+              const isPre = preFestival;
+              const dDay = isPre ? Math.max(1, Math.round((day1Ts - today0) / 86400000)) : null;
+              const accent = isPre ? FT.teal : FT.mute;
+              const accentDark = isPre ? FT.tealDark : FT.inkSoft;
+              return (
+                <div style={{ background: "#fff", border: "2px solid " + FT.ink, borderRadius: 14,
+                  boxShadow: "2.5px 2.5px 0 " + FT.ink, padding: "14px 14px 12px 14px",
+                  position: "relative", overflow: "hidden", fontFamily: "'Jua', sans-serif" }}>
+                  {/* 좌상 카테고리색 액센트 라인 */}
+                  <div aria-hidden style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: 6, background: accent }} />
+                  <div style={{ paddingLeft: 6, display: "flex", alignItems: "center", gap: 10 }}>
+                    <span aria-hidden style={{ fontSize: 30, lineHeight: 1, flexShrink: 0 }}>
+                      {isPre ? "📅" : "🏁"}
+                    </span>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 9, color: accentDark, letterSpacing: 2,
+                        fontFamily: "'IBM Plex Mono', monospace", fontWeight: 700 }}>
+                        {isPre ? "COUNTDOWN" : "FINISHED"}
+                      </div>
+                      <div style={{ fontSize: 22, color: FT.ink, fontWeight: 700, lineHeight: 1.15, marginTop: 2 }}>
+                        {isPre ? `행사 시작까지 D-${dDay}` : "행사가 종료되었습니다"}
+                      </div>
+                      <div style={{ fontSize: 11, color: FT.inkSoft, marginTop: 4, lineHeight: 1.4 }}>
+                        {isPre
+                          ? "6.13(토) ~ 6.14(일) 양일간 운영 · 시간표는 미리 확인 가능"
+                          : "다음 회 운영 안내는 동구 무등산 인문축제 공식 채널을 확인해 주세요"}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
             {/* 통합 다음 출발 카드 — 라이브 유무 무관 항상 노출. 2방향 동일 패턴. */}
             <div className="grid grid-cols-2 gap-2">
               {["outbound", "inbound"].map((dir) => {
@@ -6346,13 +6392,11 @@ function PassengerView({ dbUrl, onAdmin, initialTab = "list" }) {
                 );
               })}
             </div>
-            {/* 상태 안내 — empty/preFestival/postFestival/schedActive 컨텍스트 */}
-            {live.length === 0 && (
+            {/* 상태 안내 — empty/schedActive 컨텍스트 (pre/post 는 위 큰 카드로 분리) */}
+            {live.length === 0 && !preFestival && !postFestival && (
               <div style={{ textAlign: "center", color: FT.inkSoft, fontFamily: "'Jua', sans-serif",
                 fontSize: 12, lineHeight: 1.4, padding: "4px 4px 0" }}>
                 {conn === "error" ? "연결을 확인하는 중입니다…"
-                  : postFestival ? "행사가 종료되었습니다 · 다음 회 운영 안내 예정"
-                  : preFestival ? `행사 전 · 6.13(토)~6.14(일) 운영 예정 (D-${Math.max(1, Math.round((day1Ts - today0) / 86400000))})`
                   : schedActive ? "📡 라이브 신호 없음 · 시간표 기준 운행 중"
                   : "지금은 운행 중인 셔틀이 없어요"}
               </div>
@@ -6587,9 +6631,19 @@ function PassengerView({ dbUrl, onAdmin, initialTab = "list" }) {
                           boxShadow: "1.5px 1.5px 0 " + FT.ink + "55" }} />
                     </button>
 
-                    {/* 다가올 프로그램 랜덤 홍보 — 행사 종료 후엔 숨김 */}
+                    {/* 다가올 프로그램 — 부가 정보(BusCard 보다 낮은 우선순위) 라벨로 명시 */}
                     {!ended && (
-                      <UpcomingPromoCard onOpen={(pick) => { trackStat("click_promo"); setVenueProgram(pick || null); setVenueZone(pick?.zone || 0); setTab("venue"); }} />
+                      <React.Fragment>
+                        <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 4px 2px",
+                          fontFamily: "'Jua', sans-serif" }}>
+                          <span aria-hidden style={{ fontSize: 14 }}>🎪</span>
+                          <span style={{ fontSize: 11, color: FT.inkSoft, fontWeight: 700, letterSpacing: 0.5 }}>
+                            다가올 프로그램
+                          </span>
+                          <span style={{ flex: 1, height: 1, background: FT.mute + "55", marginLeft: 4 }} />
+                        </div>
+                        <UpcomingPromoCard onOpen={(pick) => { trackStat("click_promo"); setVenueProgram(pick || null); setVenueZone(pick?.zone || 0); setTab("venue"); }} />
+                      </React.Fragment>
                     )}
                   </>
                 );
