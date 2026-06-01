@@ -178,7 +178,7 @@
 
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef, useMemo } = React;
-const BUILD = "b409"; /* 화면 우하단 표시 — 최신 배포 확인용 */
+const BUILD = "b410"; /* 화면 우하단 표시 — 최신 배포 확인용 */
 
 /* 실시간 위치 공유용 Firebase DB 주소. 여기에 한 번 넣어두면 승객 링크가 ?view=map 만 남아 깔끔해집니다. */
 const SHARE_DB = "https://innum-bus-default-rtdb.firebaseio.com";
@@ -6300,7 +6300,8 @@ function PassengerView({ dbUrl, onAdmin, initialTab = "list" }) {
                   fontStyle: "italic", fontWeight: 700 }}>
                   &ldquo;생각을 끄고, 생각을 켜다&rdquo;
                 </span>
-                <span style={{ fontSize: 9, color: FT.mute, fontFamily: "'Jua', sans-serif", marginLeft: 6, letterSpacing: 0.3 }}>
+                <span style={{ fontSize: 10, color: FT.mute, fontFamily: "'Gowun Dodum', system-ui, sans-serif",
+                  marginLeft: 6, letterSpacing: -0.1, fontWeight: 500 }}>
                   제4회 동구 무등산 인문축제
                 </span>
               </div>
@@ -6372,10 +6373,10 @@ function PassengerView({ dbUrl, onAdmin, initialTab = "list" }) {
                 );
               })}
             </div>
-            {/* 상태 안내 — empty/schedActive 컨텍스트 (pre/post 는 위 큰 카드로 분리) */}
+            {/* 상태 안내 — empty/schedActive 컨텍스트 (pre/post 는 위 큰 카드로 분리). 본문은 humanist 본문체로 가독성 ↑ */}
             {live.length === 0 && !preFestival && !postFestival && (
-              <div style={{ textAlign: "center", color: FT.inkSoft, fontFamily: "'Jua', sans-serif",
-                fontSize: 12, lineHeight: 1.4, padding: "4px 4px 0" }}>
+              <div style={{ textAlign: "center", color: FT.inkSoft, fontFamily: "'Gowun Dodum', system-ui, sans-serif",
+                fontWeight: 500, fontSize: 12.5, lineHeight: 1.5, padding: "6px 4px 2px", letterSpacing: -0.2 }}>
                 {conn === "error" ? "연결을 확인하는 중입니다…"
                   : schedActive ? "📡 라이브 신호 없음 · 시간표 기준 운행 중"
                   : "지금은 운행 중인 셔틀이 없어요"}
