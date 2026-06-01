@@ -178,7 +178,7 @@
 
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef, useMemo } = React;
-const BUILD = "b408"; /* 화면 우하단 표시 — 최신 배포 확인용 */
+const BUILD = "b409"; /* 화면 우하단 표시 — 최신 배포 확인용 */
 
 /* 실시간 위치 공유용 Firebase DB 주소. 여기에 한 번 넣어두면 승객 링크가 ?view=map 만 남아 깔끔해집니다. */
 const SHARE_DB = "https://innum-bus-default-rtdb.firebaseio.com";
@@ -5802,23 +5802,16 @@ function UpcomingPromoCard({ onOpen, compact = false }) {
   return (
     <div style={{ marginTop: compact ? 0 : 12 }}
       role="region" aria-roledescription="carousel" aria-label="다가올 프로그램 미리보기">
-      {/* 헤더 라인 — compact 모드에선 숨김(공간 절약) */}
+      {/* 헤더 라인 — compact 모드에선 숨김. 모드 라벨만 미니멀하게 */}
       {!compact && (
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
-          <div style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-            <span style={{ display: "inline-block", width: 6, height: 6, borderRadius: "50%",
-              background: slides[safeIdx].zone % 2 ? FT.orangeDark : FT.tealDark }}
-              className="animate-pulse" />
-            <span style={{ fontSize: 11, color: FT.ink, fontWeight: 700, fontFamily: "'Jua', sans-serif", letterSpacing: 0.5 }}>
-              {mode === "upcoming" ? "곧 시작해요"
-                : mode === "ongoing" ? "지금 진행 중"
-                : mode === "ended" ? "오늘 진행 종료"
-                : "행사 미리보기"}
-            </span>
-            <span style={{ fontSize: 10, color: FT.inkSoft, fontWeight: 400 }}>
-              · {safeIdx + 1}/{slides.length}
-            </span>
-          </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 5, padding: "0 2px" }}>
+          <span style={{ display: "inline-block", width: 5, height: 5, borderRadius: "50%",
+            background: slides[safeIdx].zone % 2 ? FT.orangeDark : FT.tealDark }}
+            className="animate-pulse" />
+          <span style={{ fontSize: 10, color: FT.inkSoft, fontWeight: 700, fontFamily: "'IBM Plex Mono', monospace",
+            letterSpacing: 1, textTransform: "uppercase" }}>
+            {mode === "upcoming" ? "곧 시작" : mode === "ongoing" ? "진행 중" : mode === "ended" ? "오늘 종료" : "미리보기"}
+          </span>
         </div>
       )}
       {/* 슬라이드 컨테이너 — overflow hidden + inner row translateX */}
@@ -5830,64 +5823,40 @@ function UpcomingPromoCard({ onOpen, compact = false }) {
           transition: "transform 0.35s cubic-bezier(0.2, 0.9, 0.3, 1)" }}>
           {slides.map((pick, i) => {
             const cDark = pick.zone % 2 ? FT.orangeDark : FT.tealDark;
-            const cSoft = pick.zone % 2 ? FT.orangeSoft : FT.tealSoft;
             const dayLabel = pick._day === "day2" ? "6.14 (일)" : pick._day === "day1" ? "6.13 (토)" : "";
             return (
               <button key={i} onClick={() => onOpen && onOpen(pick)}
                 aria-roledescription="slide" aria-label={`${i + 1}/${slides.length} · ${pick.title}`}
                 tabIndex={i === safeIdx ? 0 : -1}
-                style={{ flex: `0 0 ${100 / slides.length}%`, display: "flex", flexDirection: "column", gap: compact ? 3 : 5,
-                  background: compact ? "rgba(255,255,255,0.95)" : FT.paper, color: FT.ink,
+                style={{ flex: `0 0 ${100 / slides.length}%`, display: "flex", alignItems: "center", gap: 10,
+                  background: "#fff", color: FT.ink,
                   border: "1.5px solid " + FT.mute + "55", borderRadius: 10,
-                  padding: compact ? "6px 9px" : "8px 10px", boxShadow: "none",
                   borderLeft: `4px solid ${cDark}`,
-                  fontFamily: "'Jua', sans-serif", cursor: "pointer", textAlign: "left" }}>
-                {!compact && (
-                  <div style={{ display: "flex", alignItems: "center", gap: 5, flexWrap: "wrap" }}>
-                    {pick.cat && (
-                      <span style={{ padding: "1px 7px", borderRadius: 999, background: cSoft, color: cDark,
-                        fontSize: 10, fontWeight: 700, maxWidth: "70%",
-                        overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                        {pick.cat}
-                      </span>
-                    )}
-                    {pick.zone != null && (
-                      <span style={{ padding: "1px 7px", borderRadius: 999, background: "transparent", color: cDark,
-                        border: "1px solid " + cDark + "66", fontSize: 10, fontWeight: 700 }}>
-                        {pick.zone}존
-                      </span>
-                    )}
-                    {mode === "preview" && dayLabel && (
-                      <span style={{ padding: "1px 7px", borderRadius: 999, background: "#fff", color: FT.inkSoft,
-                        border: "1px solid " + FT.mute + "55", fontSize: 10, fontWeight: 700 }}>
-                        {dayLabel}
-                      </span>
-                    )}
-                  </div>
-                )}
-                <div style={{ fontSize: compact ? 12 : 13, color: FT.ink, fontWeight: 700, lineHeight: 1.25,
-                  ...(compact ? { display: "-webkit-box", WebkitLineClamp: 1, WebkitBoxOrient: "vertical", overflow: "hidden" } : {}) }}>
-                  {pick.title}
+                  padding: compact ? "8px 10px" : "10px 12px",
+                  fontFamily: "'Jua', sans-serif", cursor: "pointer", textAlign: "left", minHeight: compact ? 52 : 58 }}>
+                {/* 좌측 시간 컬럼 */}
+                <div style={{ flexShrink: 0, fontFamily: "'IBM Plex Mono', monospace",
+                  display: "flex", flexDirection: "column", alignItems: "flex-start", lineHeight: 1.1 }}>
+                  <span style={{ fontSize: 13, color: cDark, fontWeight: 700 }}>{(pick.time || "").split("~")[0]}</span>
+                  {mode === "preview" && dayLabel && (
+                    <span style={{ fontSize: 9, color: FT.mute, marginTop: 2 }}>{dayLabel.replace(/\s+/g, "")}</span>
+                  )}
                 </div>
-                {!compact && pick.desc && (
-                  <div style={{ fontSize: 11, color: FT.inkSoft, lineHeight: 1.5,
-                    display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical",
-                    overflow: "hidden", fontWeight: 400 }}>
-                    {pick.desc}
+                {/* 본문 — 타이틀 한 줄(컴팩트도 동일). 부연 desc 제거. */}
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: compact ? 12.5 : 13.5, color: FT.ink, fontWeight: 700, lineHeight: 1.25,
+                    overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    {pick.title}
                   </div>
-                )}
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 2 }}>
-                  <span style={{ fontSize: compact ? 10 : 11, color: cDark, fontFamily: "'IBM Plex Mono', monospace", fontWeight: 700,
-                    display: "inline-flex", alignItems: "center", gap: 4 }}>
-                    {pick.time}
-                    {compact && pick.zone != null && (
-                      <span style={{ fontSize: 9, color: cDark, opacity: 0.8 }}>· {pick.zone}존</span>
-                    )}
-                  </span>
-                  <span style={{ fontSize: compact ? 10 : 11, color: cDark, fontWeight: 700 }}>
-                    자세히
-                  </span>
                 </div>
+                {/* 우측 zone chip */}
+                {pick.zone != null && (
+                  <span style={{ flexShrink: 0, fontSize: 10, color: cDark, fontWeight: 700,
+                    background: "transparent", border: `1px solid ${cDark}66`,
+                    padding: "2px 7px", borderRadius: 999 }}>
+                    {pick.zone}존
+                  </span>
+                )}
               </button>
             );
           })}
