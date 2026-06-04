@@ -191,7 +191,7 @@
 
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef, useMemo } = React;
-const BUILD = "b417"; /* 화면 우하단 표시 — 최신 배포 확인용 */
+const BUILD = "b416"; /* 화면 우하단 표시 — 최신 배포 확인용 */
 
 /* 실시간 위치 공유용 Firebase DB 주소. 여기에 한 번 넣어두면 승객 링크가 ?view=map 만 남아 깔끔해집니다. */
 const SHARE_DB = "https://innum-bus-default-rtdb.firebaseio.com";
@@ -2363,79 +2363,46 @@ function UsageStatsViewer({ onClose, dbUrl, getAuth, refreshAuth }) {
     setLoading(false);
   };
   useEffect(() => { load(); }, [dateA, dateB, dbUrl]);
-  /* 비정상 세션 필터 — 익명 PUT $sid 위조/봇/오등록 의심 패턴.
-     - 너무 짧음(< 3초): 우발적 페이지 진입 또는 PUT 1회만 한 위조 흔적
-     - 너무 김(> 24시간): startedAt/ts 조작 또는 일자 잘못 들어옴
-     - 이벤트 < 2개: 정상 세션은 'view_X' + 'session_endView_X' 최소 2개
-     - flushes 비정상 다수(> 200): 봇 또는 무한 루프 PUT 의심 */
-  const SESSION_ABNORMAL_MIN_DUR_MS = 3000;
-  const SESSION_ABNORMAL_MAX_DUR_MS = 24 * 60 * 60 * 1000;
-  const SESSION_ABNORMAL_MIN_EVENTS = 2;
-  const SESSION_ABNORMAL_MAX_FLUSHES = 200;
-  /* 세션 1건 → 정상/비정상 판정 + 통계 추출 분리. flushes/legacy 양 스키마 처리. */
-  const inspectSession = (s) => {
-    if (!s || typeof s !== "object") return null;
-    let minStart = Infinity, maxTs = 0, cat = null;
-    const ev = {};
-    let flushN = 0;
-    if (s.flushes && typeof s.flushes === "object") {
-      const flushes = Object.values(s.flushes).filter(Boolean);
-      if (flushes.length === 0) return null;
-      flushN = flushes.length;
-      flushes.forEach((f) => {
-        if (typeof f.startedAt === "number") minStart = Math.min(minStart, f.startedAt);
-        if (typeof f.ts === "number") maxTs = Math.max(maxTs, f.ts);
-        if (!cat && typeof f.cat === "string") cat = f.cat;
-        Object.entries(f.ev || {}).forEach(([k, v]) => { ev[k] = (ev[k] || 0) + (Number(v) || 0); });
-      });
-    } else if (s.ev && typeof s.ev === "object") {
-      if (typeof s.startedAt === "number") minStart = s.startedAt;
-      if (typeof s.startedAt === "number" && typeof s.durMs === "number") maxTs = s.startedAt + s.durMs;
-      if (typeof s.cat === "string") cat = s.cat;
-      Object.entries(s.ev).forEach(([k, v]) => { ev[k] = (ev[k] || 0) + (Number(v) || 0); });
-    } else {
-      return null;
-    }
-    const durMs = (minStart < Infinity && maxTs > 0) ? Math.max(0, maxTs - minStart) : 0;
-    const evTotal = Object.values(ev).reduce((a, b) => a + (Number(b) || 0), 0);
-    const reasons = [];
-    if (durMs > 0 && durMs < SESSION_ABNORMAL_MIN_DUR_MS) reasons.push(`너무 짧음(${durMs}ms)`);
-    if (durMs > SESSION_ABNORMAL_MAX_DUR_MS) reasons.push(`너무 김(${(durMs / 3600000).toFixed(1)}시간)`);
-    if (evTotal < SESSION_ABNORMAL_MIN_EVENTS) reasons.push(`이벤트 ${evTotal}개`);
-    if (flushN > SESSION_ABNORMAL_MAX_FLUSHES) reasons.push(`flushes ${flushN}회`);
-    return {
-      ev, cat: cat || "unknown", startedAt: minStart < Infinity ? minStart : null,
-      durMs, flushN, evTotal, abnormal: reasons.length > 0, reasons,
-    };
-  };
-  /* 단일 일자 집계 — 새 샤드 스키마(sessions/{sid}/flushes/{flushTs}) 와 기존 직접 스키마(sessions/{sid}=ev) 모두 처리.
-     hideAbnormal 옵션 — 비정상 세션은 집계 제외(별도 카운트로 노출). */
-  const aggregate = (sessions, opts = {}) => {
+  /* 단일 일자 집계 — 새 샤드 스키마(sessions/{sid}/flushes/{flushTs}) 와 기존 직접 스키마(sessions/{sid}=ev) 모두 처리 */
+  const aggregate = (sessions) => {
     if (!sessions) return null;
-    const { hideAbnormal = false } = opts;
     const evSum = {};
     const hourly = Array(24).fill(0);
     const byCat = {};
     let durSum = 0;
     let total = 0;
-    let abnormalCount = 0;
-    const abnormalReasons = {};
     Object.values(sessions).forEach((s) => {
-      const r = inspectSession(s);
-      if (!r) return;
-      if (r.abnormal) {
-        abnormalCount++;
-        r.reasons.forEach((rs) => { abnormalReasons[rs] = (abnormalReasons[rs] || 0) + 1; });
-        if (hideAbnormal) return;
+      if (!s || typeof s !== "object") return;
+      // 새 스키마: flushes 안에 여러 sub-record. 합산.
+      if (s.flushes && typeof s.flushes === "object") {
+        const flushes = Object.values(s.flushes).filter(Boolean);
+        if (flushes.length === 0) return;
+        total++;
+        let minStart = Infinity, maxTs = 0, cat = null;
+        flushes.forEach((f) => {
+          if (typeof f.startedAt === "number") minStart = Math.min(minStart, f.startedAt);
+          if (typeof f.ts === "number") maxTs = Math.max(maxTs, f.ts);
+          if (!cat && typeof f.cat === "string") cat = f.cat;
+          Object.entries(f.ev || {}).forEach(([k, v]) => { evSum[k] = (evSum[k] || 0) + (Number(v) || 0); });
+        });
+        if (minStart < Infinity && maxTs > 0) durSum += Math.max(0, maxTs - minStart);
+        if (minStart < Infinity) {
+          const h = new Date(minStart).getHours();
+          if (h >= 0 && h < 24) hourly[h]++;
+        }
+        byCat[cat || "unknown"] = (byCat[cat || "unknown"] || 0) + 1;
+      } else if (s.ev && typeof s.ev === "object") {
+        // 기존 스키마(레거시 데이터) — 직접 ev 사용
+        total++;
+        if (typeof s.durMs === "number") durSum += s.durMs;
+        if (typeof s.startedAt === "number") {
+          const h = new Date(s.startedAt).getHours();
+          if (h >= 0 && h < 24) hourly[h]++;
+        }
+        const c = typeof s.cat === "string" ? s.cat : "unknown";
+        byCat[c] = (byCat[c] || 0) + 1;
+        Object.entries(s.ev).forEach(([k, v]) => { evSum[k] = (evSum[k] || 0) + (Number(v) || 0); });
       }
-      total++;
-      durSum += r.durMs;
-      if (r.startedAt != null) {
-        const h = new Date(r.startedAt).getHours();
-        if (h >= 0 && h < 24) hourly[h]++;
-      }
-      byCat[r.cat] = (byCat[r.cat] || 0) + 1;
-      Object.entries(r.ev).forEach(([k, v]) => { evSum[k] = (evSum[k] || 0) + (Number(v) || 0); });
     });
     const avgDurMin = total > 0 ? Math.round(durSum / total / 60000 * 10) / 10 : 0;
     // 이벤트 prefix 별 그룹화
@@ -2446,22 +2413,16 @@ function UsageStatsViewer({ onClose, dbUrl, getAuth, refreshAuth }) {
       byEvCat[cat].push([k, v]);
     });
     Object.values(byEvCat).forEach((arr) => arr.sort((a, b) => b[1] - a[1]));
-    return { total, avgDurMin, byEvCat, evSum, hourly, byDevice: byCat, abnormalCount, abnormalReasons };
+    return { total, avgDurMin, byEvCat, evSum, hourly, byDevice: byCat };
   };
-  /* 비정상 세션 숨김 토글 — LS 영속 */
-  const [hideAbnormal, setHideAbnormal] = useState(() => {
-    try { return localStorage.getItem("shuttle:hideAbnormal") === "1"; } catch (_) { return false; }
-  });
-  useEffect(() => { try { localStorage.setItem("shuttle:hideAbnormal", hideAbnormal ? "1" : "0"); } catch (_) {} }, [hideAbnormal]);
-  const aggA = aggregate(sessionsA, { hideAbnormal });
-  const aggB = aggregate(sessionsB, { hideAbnormal });
+  const aggA = aggregate(sessionsA);
+  const aggB = aggregate(sessionsB);
   const csv = () => {
     if (!aggA) return "";
     const meta = [
       `# 사용 통계 export`,
-      `# 날짜 A: ${dateA} · 총세션: ${aggA.total}${hideAbnormal && aggA.abnormalCount > 0 ? `(+비정상 ${aggA.abnormalCount} 제외)` : ""} · 평균: ${aggA.avgDurMin}분`,
-      aggB ? `# 날짜 B: ${dateB} · 총세션: ${aggB.total}${hideAbnormal && aggB.abnormalCount > 0 ? `(+비정상 ${aggB.abnormalCount} 제외)` : ""} · 평균: ${aggB.avgDurMin}분` : null,
-      `# 비정상 필터: ${hideAbnormal ? "ON (3초미만/24시간초과/이벤트<2/flushes>200 제외)" : "OFF"}`,
+      `# 날짜 A: ${dateA} · 총세션: ${aggA.total} · 평균: ${aggA.avgDurMin}분`,
+      aggB ? `# 날짜 B: ${dateB} · 총세션: ${aggB.total} · 평균: ${aggB.avgDurMin}분` : null,
       `# 생성: ${new Date().toISOString()}`,
       "category,label,key,count_A,count_B",
     ].filter(Boolean);
@@ -2648,40 +2609,6 @@ function UsageStatsViewer({ onClose, dbUrl, getAuth, refreshAuth }) {
           세션 1건 = 최소 '진입 화면 view' + '종료 직전 화면' 2 이벤트 (탭 이동·기능 사용마다 추가). 권장 보관 30일.
           <br/>v3 샤드 패턴 — 클라이언트가 신규 이벤트만 송신. 일자 삭제 시 활성 세션이 재기록 안 함.
         </div>
-        {/* 비정상 세션 필터 — 토글 + 카운트 + 사유 분포 */}
-        {(aggA?.abnormalCount > 0 || aggB?.abnormalCount > 0) && (
-          <div className="rounded-lg flex items-start gap-2 p-2"
-            style={{ background: "rgba(251,146,60,0.08)", border: "1px solid rgba(251,146,60,0.3)" }}>
-            <div className="flex-1 min-w-0">
-              <div className="text-[11px] font-bold mb-1" style={{ color: "#fb923c", fontFamily: "'Jua', sans-serif" }}>
-                ⚠ 비정상 세션 감지
-                {aggA?.abnormalCount > 0 && <span style={{ color: "#fbbf24", marginLeft: 6 }}>A: {aggA.abnormalCount}</span>}
-                {aggB?.abnormalCount > 0 && <span style={{ color: "#fb923c", marginLeft: 6 }}>B: {aggB.abnormalCount}</span>}
-              </div>
-              <div className="text-[10px] leading-snug" style={{ color: "#94a3b8" }}>
-                {(() => {
-                  const merged = {};
-                  [aggA, aggB].forEach((agg) => {
-                    if (!agg) return;
-                    Object.entries(agg.abnormalReasons || {}).forEach(([k, v]) => { merged[k] = (merged[k] || 0) + v; });
-                  });
-                  const top = Object.entries(merged).sort((a, b) => b[1] - a[1]).slice(0, 4);
-                  if (top.length === 0) return null;
-                  return top.map(([r, n]) => `${r} ${n}`).join(" · ");
-                })()}
-                <br/>판정 기준: 3초 미만 · 24시간 초과 · 이벤트 2개 미만 · flushes 200회 초과 (익명 PUT $sid 위조·봇 의심)
-              </div>
-            </div>
-            <button onClick={() => setHideAbnormal((v) => !v)}
-              className="flex-shrink-0 px-2.5 py-1 rounded text-[10px] font-bold"
-              style={{ background: hideAbnormal ? "#fb923c" : "rgba(251,146,60,0.15)",
-                color: hideAbnormal ? "#0a0b0f" : "#fb923c",
-                border: "1px solid rgba(251,146,60,0.4)", fontFamily: "'Jua', sans-serif" }}
-              title="집계에서 비정상 세션 제외(시간대·이벤트·디바이스 모두). CSV 추출도 따라감.">
-              {hideAbnormal ? "✓ 숨김 중" : "숨기기"}
-            </button>
-          </div>
-        )}
         {status && <div className="text-[11px]" style={{ color: status.startsWith("⚠") ? "#fca5a5" : status.startsWith("✅") ? "#22d65f" : "#fbbf24" }}>{status}</div>}
         {dateB ? (
           <div className="grid grid-cols-2 gap-3">
