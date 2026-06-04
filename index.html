@@ -191,7 +191,7 @@
 
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef, useMemo } = React;
-const BUILD = "b431"; /* 화면 우하단 표시 — 최신 배포 확인용 */
+const BUILD = "b432"; /* 화면 우하단 표시 — 최신 배포 확인용 */
 
 /* IS_FLAT — 평면 디자인 활성 여부. 페이지 로드 시 한 번 결정.
    우선순위: URL ?theme= (공유·비교용) > localStorage 「shuttle:theme」(사용자 선택) > 기본 false.
@@ -6276,12 +6276,13 @@ function SettingsModal({ onClose, dbUrl, getAuth }) {
       else localStorage.setItem("shuttle:theme", next);
     } catch (_) {}
     // 2) Firebase /settings/theme 게시 (모든 사용자 단말 동기화)
+    //    "flat" 또는 "default" 명시적 저장 — null 은 "미설정" 으로 sync 대상 제외.
     if (dbUrl && getAuth) {
       try {
         const base = dbUrl.replace(/\/+$/, "");
         const token = await getAuth();
         const url = `${base}/settings/theme.json` + (token ? `?auth=${encodeURIComponent(token)}` : "");
-        const body = JSON.stringify(next === "flat" ? "flat" : null); // null = 기본
+        const body = JSON.stringify(next); // "flat" | "default"
         const r = await fetch(url, { method: "PUT", body });
         if (!r.ok) throw new Error("HTTP " + r.status);
       } catch (e) {
@@ -6442,13 +6443,17 @@ function PassengerView({ dbUrl, onAdmin, initialTab = "list", theme = "default" 
   const [noticeDismissedAt, setNoticeDismissedAt] = useState(() => parseInt(LS.get("noticeDismissedAt", "0"), 10) || 0);
   const tapRef = useRef(0), tapTimeRef = useRef(0);
 
-  /* /settings/theme — 운영자가 설정한 디자인 테마를 마운트 시 1회 가져와 LS 동기화.
-     LS 와 다르면 페이지 reload 로 IS_FLAT 재평가. ?theme= URL 이 있으면 강제 우선이라 skip. */
+  /* /settings/theme — 운영자가 설정한 디자인 테마를 마운트 시 1회 가져와 LS silent sync.
+     reload 안 함 → 이번 세션은 LS 의 옛 값으로 렌더, 다음 방문(또는 사용자 수동 새로고침) 시 신규 테마 적용.
+     설계: 진입할 때마다 reload 는 UX 나빠 회피. 행사 어플 특성상 사용자가 자주 재진입 → 다음 회 적용 OK.
+     스킵 조건:
+     - URL ?theme= 이 있으면 비교용 강제 우선 (sync 무시)
+     - dbTheme 이 "flat" 또는 "default" 명시값일 때만 LS 업데이트, 그 외(null·미설정) 은 LS 보존. */
   useEffect(() => {
     if (!dbUrl) return;
     try {
       const urlTheme = new URLSearchParams(window.location.search).get("theme");
-      if (urlTheme === "flat" || urlTheme === "default") return; // URL 진입은 LS·DB 무시
+      if (urlTheme === "flat" || urlTheme === "default") return;
     } catch (_) {}
     const base = dbUrl.replace(/\/+$/, "");
     let cancelled = false;
@@ -6457,16 +6462,14 @@ function PassengerView({ dbUrl, onAdmin, initialTab = "list", theme = "default" 
         const r = await fetch(`${base}/settings/theme.json`, { cache: "no-store" });
         if (!r.ok || cancelled) return;
         const v = await r.json();
-        const dbTheme = v === "flat" ? "flat" : null; // null/없음 = 기본
+        if (v !== "flat" && v !== "default") return; // 미설정 → LS 건드리지 않음
         const lsTheme = (() => { try { return localStorage.getItem("shuttle:theme"); } catch (_) { return null; } })();
-        // 동기화 필요? LS 와 DB 가 다르면 LS 업데이트 + reload (한 번만)
-        if ((dbTheme === "flat" && lsTheme !== "flat") || (dbTheme === null && lsTheme === "flat")) {
-          try {
-            if (dbTheme === "flat") localStorage.setItem("shuttle:theme", "flat");
-            else localStorage.removeItem("shuttle:theme");
-          } catch (_) {}
-          if (!cancelled) window.location.reload();
+        if (v === "flat" && lsTheme !== "flat") {
+          try { localStorage.setItem("shuttle:theme", "flat"); } catch (_) {}
+        } else if (v === "default" && lsTheme === "flat") {
+          try { localStorage.removeItem("shuttle:theme"); } catch (_) {}
         }
+        // reload 없음 — 다음 방문 시 IS_FLAT 가 신규 LS 값 읽음
       } catch (_) {}
     })();
     return () => { cancelled = true; };
