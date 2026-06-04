@@ -191,13 +191,18 @@
 
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef, useMemo } = React;
-const BUILD = "b429"; /* 화면 우하단 표시 — 최신 배포 확인용 */
+const BUILD = "b430"; /* 화면 우하단 표시 — 최신 배포 확인용 */
 
-/* IS_FLAT — ?theme=flat URL 진입 시 페이지 전체에서 평면 디자인 활성.
-   페이지 로드 시 한 번 결정되며 변하지 않으므로 모듈 레벨 상수.
-   prop 으로 깊은 컴포넌트까지 통과시키는 대신, 어디서나 IS_FLAT 직접 참조. */
+/* IS_FLAT — 평면 디자인 활성 여부. 페이지 로드 시 한 번 결정.
+   우선순위: URL ?theme= (공유·비교용) > localStorage 「shuttle:theme」(사용자 선택) > 기본 false.
+   설정 변경 시 페이지 reload — 모듈 상수라 런타임 토글은 일부러 안 함(렌더 일관성). */
 const IS_FLAT = (() => {
-  try { return new URLSearchParams(window.location.search).get("theme") === "flat"; } catch (_) { return false; }
+  try {
+    const url = new URLSearchParams(window.location.search).get("theme");
+    if (url === "flat") return true;
+    if (url === "default") return false;
+    return localStorage.getItem("shuttle:theme") === "flat";
+  } catch (_) { return false; }
 })();
 
 /* 실시간 위치 공유용 Firebase DB 주소. 여기에 한 번 넣어두면 승객 링크가 ?view=map 만 남아 깔끔해집니다. */
@@ -6255,6 +6260,86 @@ function UpcomingPromoCard({ onOpen, compact = false }) {
   );
 }
 
+/* 설정 모달 — 디자인 테마 선택 (기본 / 평면).
+   LS 「shuttle:theme」 저장 + 페이지 reload — IS_FLAT 가 모듈 상수라 런타임 토글 안 함(렌더 일관성).
+   사용자 페이지 헤더 ⚙ 아이콘에서 진입. */
+function SettingsModal({ onClose }) {
+  const current = IS_FLAT ? "flat" : "default";
+  const apply = (next) => {
+    try {
+      if (next === "default") localStorage.removeItem("shuttle:theme");
+      else localStorage.setItem("shuttle:theme", next);
+    } catch (_) {}
+    // URL 의 ?theme= 가 있으면 LS 보다 우선이라 변경이 무시됨 → URL 정리 후 reload
+    try {
+      const url = new URL(window.location.href);
+      if (url.searchParams.has("theme")) {
+        url.searchParams.delete("theme");
+        window.history.replaceState({}, "", url.toString());
+      }
+    } catch (_) {}
+    window.location.reload();
+  };
+  const Option = ({ value, title, sub }) => {
+    const active = current === value;
+    return (
+      <button onClick={() => apply(value)}
+        style={{ width: "100%", display: "flex", alignItems: "flex-start", gap: 12, textAlign: "left",
+          background: active ? FT.tealSoft : "#fff",
+          border: IS_FLAT
+            ? `1px solid ${active ? FT.tealDark : FT.mute + "66"}`
+            : `${active ? "2.5px" : "1.5px"} solid ${active ? FT.tealDark : FT.ink}`,
+          borderRadius: 10, padding: "10px 12px", cursor: "pointer", fontFamily: "'Jua', sans-serif",
+          boxShadow: (active && !IS_FLAT) ? "2px 2px 0 " + FT.tealDark : "none" }}>
+        <span style={{ flexShrink: 0, width: 18, height: 18, borderRadius: "50%",
+          border: "2px solid " + (active ? FT.tealDark : FT.mute),
+          background: "#fff", display: "flex", alignItems: "center", justifyContent: "center" }}>
+          {active && <span style={{ width: 8, height: 8, borderRadius: "50%", background: FT.tealDark }} />}
+        </span>
+        <span style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontSize: 13, color: FT.ink, fontWeight: 700, lineHeight: 1.2 }}>{title}</div>
+          <div style={{ fontSize: 11, color: FT.inkSoft, marginTop: 3, lineHeight: 1.35, fontWeight: 400 }}>{sub}</div>
+        </span>
+      </button>
+    );
+  };
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4"
+      style={{ background: "rgba(15,15,18,0.6)" }} onClick={onClose}>
+      <div className="w-full max-w-sm space-y-3"
+        style={{ background: "#fff",
+          border: IS_FLAT ? "1px solid " + FT.mute + "88" : "2.5px solid " + FT.ink,
+          borderRadius: 14, padding: 16,
+          boxShadow: IS_FLAT ? "0 8px 24px rgba(0,0,0,0.16)" : "4px 4px 0 " + FT.ink }}
+        onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between">
+          <div style={{ fontSize: 14, color: FT.ink, fontFamily: "'Jua', sans-serif", fontWeight: 700 }}>
+            ⚙ 설정
+          </div>
+          <button onClick={onClose} aria-label="닫기"
+            style={{ width: 28, height: 28, lineHeight: 1, borderRadius: 8,
+              border: IS_FLAT ? "1px solid " + FT.mute + "66" : "2px solid " + FT.ink,
+              background: "#fff", color: FT.ink, fontWeight: 700, fontFamily: "'Jua', sans-serif" }}>×</button>
+        </div>
+        <div style={{ fontSize: 10, color: FT.mute, fontFamily: "'Jua', sans-serif", fontWeight: 700,
+          letterSpacing: 2, textTransform: "uppercase" }}>
+          디자인 테마
+        </div>
+        <div className="space-y-2">
+          <Option value="default" title="기본 (포스터)"
+            sub="두꺼운 검정 보더 + 입체 그림자. 인문축제 브랜드 톤." />
+          <Option value="flat" title="평면 (미니멀)"
+            sub="얇은 보더 + 그림자 없음. 모바일 앱 표준 느낌." />
+        </div>
+        <div style={{ fontSize: 10, color: FT.mute, fontFamily: "'Gowun Dodum', system-ui, sans-serif",
+          textAlign: "center", marginTop: 4, fontWeight: 500 }}>
+          선택 즉시 페이지가 새로고침됩니다.
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /* 승객 기본 화면 — 실시간 버스 목록(버스안내판 스타일) + 지도 탭. 제목 7번 탭하면 운영자(히든) 진입 */
 function PassengerView({ dbUrl, onAdmin, initialTab = "list", theme = "default" }) {
   const [buses, setBuses] = useState({});
@@ -6305,6 +6390,8 @@ function PassengerView({ dbUrl, onAdmin, initialTab = "list", theme = "default" 
   const [venueZone, setVenueZone] = useState(0);
   // 자세히 버튼으로 진입한 프로그램 — VenueModal 이 해당 프로그램 자동 펼침·스크롤
   const [venueProgram, setVenueProgram] = useState(null);
+  // 설정 모달 — 디자인 테마 선택. 변경 시 LS 저장 + 페이지 reload.
+  const [settingsOpen, setSettingsOpen] = useState(false);
   // 익명 사용 통계 — 행사 후 운영자가 분석. 개인정보 비수집, 카운트만.
   const statsRef = useRef(null);
   const tabRef = useRef(initialTab);
@@ -6708,6 +6795,15 @@ function PassengerView({ dbUrl, onAdmin, initialTab = "list", theme = "default" 
               className={live.length > 0 ? "animate-pulse" : ""}>
               {conn === "error" ? "×" : ""}
             </div>
+            {/* 설정 버튼 — 상태 dot 아래. 디자인 테마 등 사용자 옵션 진입. */}
+            <button onClick={() => setSettingsOpen(true)} aria-label="설정 — 디자인 테마"
+              title="설정"
+              style={{ position: "absolute", top: 32, right: 12, width: 18, height: 18,
+                background: "transparent", border: "none", padding: 0, cursor: "pointer",
+                color: FT.mute, lineHeight: 0,
+                display: "flex", alignItems: "center", justifyContent: "center" }}>
+              <Settings size={16} strokeWidth={1.8} />
+            </button>
           </div>
 
 
@@ -7036,6 +7132,7 @@ function PassengerView({ dbUrl, onAdmin, initialTab = "list", theme = "default" 
         </div>
       </div>
       {showTimetable && <TimetableModal tripsToday={tripsToday} onClose={closeTable} focusTrip={tableFocus} />}
+      {settingsOpen && <SettingsModal onClose={() => setSettingsOpen(false)} />}
       {/* showVenue 모달은 더 이상 사용 안 함 — tab === 'venue' 일 때 pageMode 로 전환됨 */}
     </div>
   );
