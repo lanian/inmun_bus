@@ -178,7 +178,7 @@
 
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef, useMemo } = React;
-const BUILD = "b411"; /* 화면 우하단 표시 — 최신 배포 확인용 */
+const BUILD = "b412"; /* 화면 우하단 표시 — 최신 배포 확인용 */
 
 /* 실시간 위치 공유용 Firebase DB 주소. 여기에 한 번 넣어두면 승객 링크가 ?view=map 만 남아 깔끔해집니다. */
 const SHARE_DB = "https://innum-bus-default-rtdb.firebaseio.com";
@@ -3835,8 +3835,10 @@ function LiveMapView({ dbUrl, onHome, onOpenVenue }) {
     { k: "🚻", t: "화장실" },
     { k: "🍱", t: "음식" },
   ];
-  // 본인이 등록 후 30분 이내라면 본인이 직접 삭제 가능 (DB 규칙도 동일 윈도우)
-  const STICKER_OWNER_DELETE_WINDOW_MS = 30 * 60 * 1000;
+  // 본인이 등록 후 10분 이내라면 본인이 직접 삭제 가능 (DB 규칙도 동일 윈도우).
+  // 이전 30분 → 10분으로 축소(b411) — 익명 DELETE 가 sticker ID 만 알면 누구나 실행 가능한
+  // 잠재적 사보타지 공격 윈도우 ↓. 정상 사용자 오등록 정정엔 충분.
+  const STICKER_OWNER_DELETE_WINDOW_MS = 10 * 60 * 1000;
   // 도배 방지 — 간격(2.5초) + 거리(15m) + 분당 개수(8개) 제한
   const STICKER_MIN_INTERVAL_MS = 2500;
   const STICKER_MIN_DIST_M = 15;
@@ -4069,7 +4071,7 @@ function LiveMapView({ dbUrl, onHome, onOpenVenue }) {
     } catch (_) {}
   };
 
-  /* 본인 스티커 삭제 핸들러 — popup 의 인라인 onclick 에서 호출. 30분 이내만 익명 DELETE 허용(DB 규칙도 동일). */
+  /* 본인 스티커 삭제 핸들러 — popup 의 인라인 onclick 에서 호출. 10분 이내만 익명 DELETE 허용(DB 규칙도 동일). */
   useEffect(() => {
     window.__mdsDelSticker = async (id) => {
       const url = dbUrl ? dbUrl.replace(/\/+$/, "") : "";
@@ -4133,7 +4135,7 @@ function LiveMapView({ dbUrl, onHome, onOpenVenue }) {
         : "";
       const delBtn = canSelfDelete
         ? `<button onclick="window.__mdsDelSticker && window.__mdsDelSticker('${id.replace(/'/g, "\\'")}')" style="margin-top:8px;background:#FBE0CF;border:1.5px solid #C2521D;color:#C2521D;border-radius:8px;padding:4px 10px;font-family:'Jua',sans-serif;font-size:11px;font-weight:700;cursor:pointer;box-shadow:1px 1px 0 #C2521D;">내 스티커 삭제</button>`
-        : (isMine ? `<div style="font-size:9px;color:#94a3b8;margin-top:4px">등록 후 30분 경과 — 운영자에게 요청</div>` : "");
+        : (isMine ? `<div style="font-size:9px;color:#94a3b8;margin-top:4px">등록 후 10분 경과 — 운영자에게 요청</div>` : "");
       const popup = `<div style="font-family:'Jua',sans-serif;min-width:140px;text-align:center">`
         + `<div style="line-height:1;display:flex;justify-content:center">${stickerSvgHtml(s.kind, 30)}</div>`
         + (s.label ? `<div style="font-size:12px;color:#101113;margin-top:4px;font-weight:700">${s.label.replace(/</g,"&lt;")}</div>` : "")
@@ -5983,7 +5985,7 @@ function PassengerView({ dbUrl, onAdmin, initialTab = "list" }) {
   };
   /* 공지 표시 정책:
      - 신규 ts (운영자가 새 공지 발송) > 사용자가 마지막 dismiss 한 ts → 다시 노출 (= 새 공지)
-     - 위험(danger) 레벨은 dismiss 후 30분 경과 시 자동 재노출 (안전 우선)
+     - 위험(danger) 레벨은 dismiss 후 10분 경과 시 자동 재노출 (안전 우선)
      - info/warn 은 같은 ts 면 dismiss 영구 유지 */
   const NOTICE_DANGER_REDISPLAY_MS = 30 * 60 * 1000;
   const showNotice = !!notice && (
