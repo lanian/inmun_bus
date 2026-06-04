@@ -191,7 +191,7 @@
 
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef, useMemo } = React;
-const BUILD = "b422"; /* 화면 우하단 표시 — 최신 배포 확인용 */
+const BUILD = "b423"; /* 화면 우하단 표시 — 최신 배포 확인용 */
 
 /* 실시간 위치 공유용 Firebase DB 주소. 여기에 한 번 넣어두면 승객 링크가 ?view=map 만 남아 깔끔해집니다. */
 const SHARE_DB = "https://innum-bus-default-rtdb.firebaseio.com";
@@ -6217,17 +6217,20 @@ function UpcomingPromoCard({ onOpen, compact = false }) {
 function PassengerView({ dbUrl, onAdmin, initialTab = "list", theme = "default" }) {
   const [buses, setBuses] = useState({});
   const [tab, setTab] = useState(initialTab);
-  // 평면 테마 토큰 — 보더 얇게, 그림자 제거, 동일 컬러 팔레트 유지. ?theme=flat 진입 시만 활성.
+  // 평면 테마 토큰 — 외곽 카드 제거 + paper 배경 위에 콘텐츠. 내부 카드만 얇은 보더 유지.
+  // 행사 컬러 팔레트(orange/teal/ink/paper) 100% 보존 — 정체성은 그대로.
   const isFlat = theme === "flat";
   const ts = {
-    outerBorder: isFlat ? "1px solid " + FT.mute + "55" : "2.5px solid " + FT.ink,
+    outerBorder: isFlat ? "none" : "2.5px solid " + FT.ink,
     outerShadow: isFlat ? "none" : "4px 4px 0 " + FT.ink,
-    outerRadius: isFlat ? 14 : 18,
-    cardBorder: isFlat ? "1px solid " + FT.mute + "44" : "2px solid " + FT.ink,
+    outerRadius: isFlat ? 0 : 18,
+    outerBg: isFlat ? "transparent" : "#fff",
+    cardBorder: isFlat ? "1px solid " + FT.mute + "55" : "2px solid " + FT.ink,
     cardShadow: isFlat ? "none" : "2px 2px 0 " + FT.ink,
     cardShadowMute: isFlat ? "none" : "1.5px 1.5px 0 " + FT.mute,
     cardRadius: isFlat ? 10 : 12,
-    headerBorder: isFlat ? "1px solid " + FT.mute + "44" : "2px solid " + FT.ink,
+    headerBorder: isFlat ? "1px solid " + FT.mute + "33" : "2px solid " + FT.ink,
+    headerBg: isFlat ? "transparent" : "#fff",
     accentBorderTop: (color) => isFlat ? `3px solid ${color}` : `5px solid ${color}`,
   };
   // 탭 변경 시 통계 — view.{tab} + 펀넬용 transition.{from}_to_{to}
@@ -6627,9 +6630,9 @@ function PassengerView({ dbUrl, onAdmin, initialTab = "list", theme = "default" 
       style={{ overflow: "hidden", background: FT.paper,
         backgroundImage: "radial-gradient(circle at 15% -10%, rgba(22,168,158,0.18), transparent 45%), radial-gradient(circle at 85% 110%, rgba(238,107,46,0.14), transparent 45%)" }}>
       <div className="w-full max-w-md flex flex-col" style={{ flex: 1, minHeight: 0 }}>
-        <div className="flex flex-col" style={{ flex: 1, minHeight: 0, background: "#fff", border: ts.outerBorder, borderRadius: ts.outerRadius, boxShadow: ts.outerShadow, overflow: "hidden" }}>
+        <div className="flex flex-col" style={{ flex: 1, minHeight: 0, background: ts.outerBg, border: ts.outerBorder, borderRadius: ts.outerRadius, boxShadow: ts.outerShadow, overflow: "hidden" }}>
           {/* header — 2단 압축 (메인 타이틀 + 부제). 슬로건은 인트로에서만 노출, 본 화면에선 생략 */}
-          <div style={{ padding: "12px 16px", borderBottom: ts.headerBorder, background: "#fff", display: "flex", gap: 12, alignItems: "center", position: "relative" }}>
+          <div style={{ padding: "12px 16px", borderBottom: ts.headerBorder, background: ts.headerBg, display: "flex", gap: 12, alignItems: "center", position: "relative" }}>
             <button onClick={() => { setVenueZone(0); setTab("venue"); }}
               aria-label="행사장 안내로 — 스위치 켜기"
               title="스위치 켜기 → 행사장 안내"
