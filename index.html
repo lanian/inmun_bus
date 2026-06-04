@@ -191,7 +191,7 @@
 
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef, useMemo } = React;
-const BUILD = "b424"; /* 화면 우하단 표시 — 최신 배포 확인용 */
+const BUILD = "b425"; /* 화면 우하단 표시 — 최신 배포 확인용 */
 
 /* 실시간 위치 공유용 Firebase DB 주소. 여기에 한 번 넣어두면 승객 링크가 ?view=map 만 남아 깔끔해집니다. */
 const SHARE_DB = "https://innum-bus-default-rtdb.firebaseio.com";
@@ -5411,7 +5411,7 @@ function inferWaiting(bus, nowMin, tripsToday) {
 /* 승객 화면 버스 카드 — 진행바를 현재 정류장으로 자동 스크롤, 다음 정류장·도착예정 표시.
    React.memo 로 감싸 부모 PassengerView 재렌더(buses 폴링·_tick 인터벌)마다 모든 BusCard 가
    재렌더되는 것 방지. agoText 함수 참조는 부모에서 매번 생성되므로 prop 비교에서 동일 시점만 검증. */
-function BusCardImpl({ id, bus, agoText, nowMin, tripsToday, departedInfo }) {
+function BusCardImpl({ id, bus, agoText, nowMin, tripsToday, departedInfo, isFlat = false }) {
   const stripRef = useRef(null), activeRef = useRef(null);
   const dir = bus.dir === "inbound" ? "inbound" : "outbound";
   const route = ROUTES[dir];
@@ -5445,7 +5445,11 @@ function BusCardImpl({ id, bus, agoText, nowMin, tripsToday, departedInfo }) {
     if (el && c) c.scrollTo({ left: el.offsetLeft - c.clientWidth / 2 + el.clientWidth / 2, behavior: "smooth" });
   }, [ci, waitInfo]);
   return (
-    <div style={{ background: "#fff", border: "2.5px solid " + FT.ink, borderRadius: 12, boxShadow: "3px 3px 0 " + FT.ink, padding: 10 }}>
+    <div style={{ background: "#fff",
+      border: isFlat ? "1px solid " + FT.mute + "55" : "2.5px solid " + FT.ink,
+      borderRadius: isFlat ? 10 : 12,
+      boxShadow: isFlat ? "none" : "3px 3px 0 " + FT.ink,
+      padding: 10 }}>
       <div className="flex items-center justify-between" style={{ marginBottom: 6 }}>
         <div className="flex items-center gap-2 min-w-0">
           <span style={{ fontSize: 20 }}>🚌</span>
@@ -5602,7 +5606,8 @@ const BusCard = React.memo(BusCardImpl, (prev, next) =>
   prev.bus === next.bus &&
   prev.nowMin === next.nowMin &&
   prev.tripsToday === next.tripsToday &&
-  prev.departedInfo === next.departedInfo
+  prev.departedInfo === next.departedInfo &&
+  prev.isFlat === next.isFlat
 );
 
 /* 다가올 프로그램 슬라이드 배너 — 행사 전·당일에만 노출 (종료 후엔 숨김).
@@ -6578,13 +6583,13 @@ function PassengerView({ dbUrl, onAdmin, initialTab = "list", theme = "default" 
   }
   if (tab === "venue") {
     return (
-      <div className="mds-app-height w-full p-3 sm:p-5 flex flex-col items-center"
+      <div className={"mds-app-height w-full flex flex-col items-center" + (isFlat ? "" : " p-3 sm:p-5")}
         style={{ overflow: "hidden", background: FT.paper,
           backgroundImage: "radial-gradient(circle at 15% -10%, rgba(22,168,158,0.18), transparent 45%), radial-gradient(circle at 85% 110%, rgba(238,107,46,0.14), transparent 45%)" }}>
         <div className="w-full max-w-md flex flex-col" style={{ flex: 1, minHeight: 0 }}>
-          <div className="flex flex-col" style={{ flex: 1, minHeight: 0, background: "#fff", border: "2.5px solid " + FT.ink, borderRadius: 18, boxShadow: "4px 4px 0 " + FT.ink, overflow: "hidden" }}>
+          <div className="flex flex-col" style={{ flex: 1, minHeight: 0, background: ts.outerBg, border: ts.outerBorder, borderRadius: ts.outerRadius, boxShadow: ts.outerShadow, overflow: "hidden" }}>
             {/* header — 메인과 동일 패턴: 타이틀 + 슬로건+행사명 한 줄. 영역 전체 탭하면 홈으로 */}
-            <div style={{ padding: "12px 16px", borderBottom: "2px solid " + FT.ink, background: "#fff" }}>
+            <div style={{ padding: "12px 16px", borderBottom: ts.headerBorder, background: ts.headerBg }}>
               <button onClick={() => setTab("list")} aria-label="홈으로 돌아가기"
                 title="탭하면 홈으로 돌아갑니다"
                 style={{ display: "flex", alignItems: "center", gap: 12, width: "100%",
@@ -6678,9 +6683,9 @@ function PassengerView({ dbUrl, onAdmin, initialTab = "list", theme = "default" 
               const ic = lv === "danger" ? "⛔" : lv === "warn" ? "⚠" : "ⓘ";
               return (
                 <div role="alert" aria-live="assertive"
-                  style={{ background: bg, color: "#fff", border: "2px solid " + FT.ink, borderRadius: 10,
+                  style={{ background: bg, color: "#fff", border: isFlat ? "none" : "2px solid " + FT.ink, borderRadius: 10,
                     padding: "9px 12px", display: "flex", alignItems: "flex-start", gap: 8,
-                    boxShadow: "2px 2px 0 " + FT.ink, fontFamily: "'Jua', sans-serif" }}>
+                    boxShadow: ts.cardShadow, fontFamily: "'Jua', sans-serif" }}>
                   <span style={{ fontSize: 18, lineHeight: "20px", flexShrink: 0 }}>{ic}</span>
                   <div style={{ fontSize: 13, fontWeight: 700, flex: 1, lineHeight: 1.35, whiteSpace: "pre-wrap" }}>{notice.message}</div>
                   <button onClick={dismissNotice} aria-label="공지 닫기"
@@ -6745,7 +6750,7 @@ function PassengerView({ dbUrl, onAdmin, initialTab = "list", theme = "default" 
                   <span className="animate-pulse" style={{ width: 6, height: 6, borderRadius: "50%", background: FT.teal }} />
                   LIVE · {live.length}대
                 </div>
-                {live.map(([id, b]) => <BusCard key={id} id={id} bus={b} agoText={agoText} nowMin={nowMin} tripsToday={tripsToday} departedInfo={getDepartedInfo(id, b)} />)}
+                {live.map(([id, b]) => <BusCard key={id} id={id} bus={b} agoText={agoText} nowMin={nowMin} tripsToday={tripsToday} departedInfo={getDepartedInfo(id, b)} isFlat={isFlat} />)}
               </React.Fragment>
             )}
 
