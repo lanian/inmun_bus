@@ -191,7 +191,7 @@
 
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef, useMemo } = React;
-const BUILD = "b418"; /* 화면 우하단 표시 — 최신 배포 확인용 */
+const BUILD = "b417"; /* 화면 우하단 표시 — 최신 배포 확인용 */
 
 /* 실시간 위치 공유용 Firebase DB 주소. 여기에 한 번 넣어두면 승객 링크가 ?view=map 만 남아 깔끔해집니다. */
 const SHARE_DB = "https://innum-bus-default-rtdb.firebaseio.com";
@@ -2210,197 +2210,6 @@ function NoticeEditor({ onClose, dbUrl, getAuth, refreshAuth }) {
             발송
           </button>
         </div>
-      </div>
-    </div>
-  );
-}
-
-/* 다중 운영자 핸드오프 — /handoff 노드에 현재 운행 상태 게시 후 다른 단말이 인계 받음.
-   기본 흐름: A 단말 「내 운행 상태 게시」 → 위치 공유 OFF → B 단말 「인계 받기」 → 상태 복원·위치 공유 ON.
-   busId 동일 시 무중단 셔틀 추적(승객 지도에서 끊김 없이 계속 같은 마커). */
-const HANDOFF_STALE_MS = 30 * 60 * 1000; // 30분 지난 게시는 흐리게 표시
-function HandoffModal({ onClose, dbUrl, getAuth, refreshAuth, getCurrent, applyState }) {
-  const [pending, setPending] = useState(null);
-  const [status, setStatus] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [note, setNote] = useState("");
-  const load = async () => {
-    if (!dbUrl) { setStatus("⚠ DB 주소 없음"); return; }
-    setLoading(true);
-    try {
-      const base = dbUrl.replace(/\/+$/, "");
-      const r = await fetch(`${base}/handoff.json`, { cache: "no-store" });
-      if (r.ok) {
-        const d = await r.json();
-        setPending(d && typeof d === "object" && typeof d.busId === "string" ? d : null);
-      } else if (r.status === 404) setPending(null);
-    } catch (_) { setStatus("⚠ 네트워크 오류"); }
-    setLoading(false);
-  };
-  useEffect(() => { load(); }, [dbUrl]);
-  const withAuth = async (doFn) => {
-    const t0 = getAuth && getAuth();
-    if (!t0 && !refreshAuth) { setStatus("⚠ 쓰기 인증 없음 — 연결 탭 기사 로그인 필요"); return null; }
-    let r = await doFn(t0);
-    if ((r.status === 401 || r.status === 403) && refreshAuth) {
-      setStatus("인증 갱신 중…");
-      const t1 = await refreshAuth();
-      if (t1) r = await doFn(t1);
-    }
-    return r;
-  };
-  const publish = async () => {
-    const cur = getCurrent && getCurrent();
-    if (!cur || !cur.busId) { setStatus("⚠ 운행 상태 정보 부족 — busId 확인"); return; }
-    const body = { ...cur, note: note.trim() || undefined, ts: Date.now() };
-    if (!dbUrl) { setStatus("⚠ DB 주소 없음"); return; }
-    setStatus("게시 중…");
-    const base = dbUrl.replace(/\/+$/, "");
-    const r = await withAuth((tok) => fetch(`${base}/handoff.json${tok ? `?auth=${encodeURIComponent(tok)}` : ""}`,
-      { method: "PUT", body: JSON.stringify(body) }));
-    if (!r) return;
-    if (r.ok) { setStatus("✅ 게시 완료 — 다른 단말에서 인계 받기"); load(); }
-    else if (r.status === 401 || r.status === 403) setStatus(`⚠ 권한 없음 (HTTP ${r.status}) — driver/admin UID 등록 확인`);
-    else setStatus(`⚠ 실패 (HTTP ${r.status})`);
-  };
-  const accept = () => {
-    if (!pending) return;
-    const dirLabel = pending.dir === "outbound" ? "축제장 방향" : "민주광장 방향";
-    const stopLbl = pending.curStop ? ` · 현재 ${pending.curStop}` : "";
-    if (!window.confirm(
-      `인계 받기:\n\n` +
-      `버스: ${pending.busId}\n` +
-      `방향: ${dirLabel}\n` +
-      `회차: ${(pending.tripIdx || 0) + 1}회차\n` +
-      `정류장: ${(pending.currentIdx || 0) + 1}번째${stopLbl}\n` +
-      (pending.note ? `\n메모: ${pending.note}\n` : "") +
-      `\n이 상태를 내 단말에 적용할까요?\n(현재 단말 설정은 덮어쓰여요)`
-    )) return;
-    applyState && applyState(pending);
-    setStatus("✅ 인계 적용 완료 — 연결 탭에서 위치 공유 켜기");
-    const base = dbUrl.replace(/\/+$/, "");
-    withAuth((tok) => fetch(`${base}/handoff.json${tok ? `?auth=${encodeURIComponent(tok)}` : ""}`,
-      { method: "DELETE" })).then(() => { setPending(null); }).catch(() => {});
-    setTimeout(onClose, 1200);
-  };
-  const clear = async () => {
-    if (!window.confirm("게시된 인계 데이터를 삭제할까요?")) return;
-    if (!dbUrl) return;
-    const base = dbUrl.replace(/\/+$/, "");
-    setStatus("삭제 중…");
-    const r = await withAuth((tok) => fetch(`${base}/handoff.json${tok ? `?auth=${encodeURIComponent(tok)}` : ""}`,
-      { method: "DELETE" }));
-    if (!r) return;
-    if (r.ok) { setStatus("✅ 삭제 완료"); setPending(null); }
-    else setStatus(`⚠ 실패 (HTTP ${r.status})`);
-  };
-  const cur = getCurrent && getCurrent();
-  const isStale = pending && pending.ts && (Date.now() - pending.ts > HANDOFF_STALE_MS);
-  const sameBus = pending && cur && pending.busId === cur.busId;
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
-      style={{ background: "rgba(0,0,0,0.7)" }} onClick={onClose}>
-      <div className="w-full max-w-md rounded-2xl border-2 p-4 space-y-3 max-h-[92vh] overflow-y-auto"
-        style={{ background: "#13151c", borderColor: "#3a3f54" }} onClick={(e) => e.stopPropagation()}>
-        <div className="flex items-center justify-between">
-          <div className="text-sm font-bold" style={{ color: "#60a5fa", fontFamily: "'Jua', sans-serif" }}>
-            🔄 운영자 핸드오프
-          </div>
-          <button onClick={onClose} className="text-slate-400 text-lg leading-none px-1" aria-label="닫기">×</button>
-        </div>
-        <div className="text-[10px] leading-relaxed" style={{ color: "#94a3b8" }}>
-          단말 교체 시 운행 상태(버스 번호·방향·회차·정류장)를 다른 단말로 인계해요.
-          A 단말 「게시」 → 위치 공유 OFF → B 단말 「인계 받기」 → 위치 공유 ON 순으로 진행하세요.
-        </div>
-
-        {/* 대기 중인 인계 */}
-        {pending ? (
-          <div className="rounded-lg p-3 space-y-2"
-            style={{ background: isStale ? "rgba(100,116,139,0.08)" : "rgba(96,165,250,0.08)",
-              border: `1px solid ${isStale ? "#3a3f54" : "rgba(96,165,250,0.4)"}`, opacity: isStale ? 0.7 : 1 }}>
-            <div className="flex items-center justify-between">
-              <div className="text-[11px] font-bold" style={{ color: isStale ? "#94a3b8" : "#60a5fa", fontFamily: "'Jua', sans-serif" }}>
-                {isStale ? "⌛ 오래된 인계 (30분 초과)" : "📥 인계 대기 중"}
-              </div>
-              <div className="text-[10px]" style={{ color: "#64748b", fontFamily: "'IBM Plex Mono', monospace" }}>
-                {pending.ts ? `${Math.round((Date.now() - pending.ts) / 60000)}분 전` : ""}
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-[11px]" style={{ fontFamily: "'Jua', sans-serif" }}>
-              <div><span style={{ color: "#64748b" }}>버스:</span> <b style={{ color: "#cbd5e1" }}>{pending.busId}</b>
-                {sameBus && <span style={{ color: "#22d65f", marginLeft: 4 }}>(같음)</span>}</div>
-              <div><span style={{ color: "#64748b" }}>방향:</span> <b style={{ color: pending.dir === "outbound" ? "#fb923c" : "#5eead4" }}>
-                {pending.dir === "outbound" ? "축제장" : "민주광장"}</b></div>
-              <div><span style={{ color: "#64748b" }}>회차:</span> <b style={{ color: "#fbbf24" }}>{(pending.tripIdx || 0) + 1}회차</b></div>
-              <div><span style={{ color: "#64748b" }}>정류장:</span> <b style={{ color: "#cbd5e1" }}>
-                {pending.curStop || `${(pending.currentIdx || 0) + 1}번째`}</b></div>
-            </div>
-            {pending.note && (
-              <div className="text-[11px] pt-1" style={{ color: "#cbd5e1", fontFamily: "'Jua', sans-serif" }}>
-                📝 {pending.note}
-              </div>
-            )}
-            <div className="grid grid-cols-2 gap-2 pt-1">
-              <button onClick={accept}
-                className="px-3 py-2 rounded-lg text-xs font-bold"
-                style={{ background: "#60a5fa", color: "#0a0b0f", fontFamily: "'Jua', sans-serif" }}>
-                ⬇ 인계 받기
-              </button>
-              <button onClick={clear}
-                className="px-3 py-2 rounded-lg text-xs font-bold"
-                style={{ background: "rgba(239,68,68,0.12)", color: "#fca5a5",
-                  border: "1px solid rgba(239,68,68,0.3)", fontFamily: "'Jua', sans-serif" }}>
-                삭제
-              </button>
-            </div>
-          </div>
-        ) : (
-          <div className="rounded-lg p-3 text-[11px] text-center" style={{ color: "#64748b",
-            background: "rgba(100,116,139,0.06)", border: "1px solid #3a3f54", fontFamily: "'Jua', sans-serif" }}>
-            대기 중인 인계 없음
-          </div>
-        )}
-
-        {/* 내 상태 게시 */}
-        <div className="rounded-lg p-3 space-y-2"
-          style={{ background: "rgba(34,214,95,0.06)", border: "1px solid rgba(34,214,95,0.25)" }}>
-          <div className="text-[11px] font-bold" style={{ color: "#22d65f", fontFamily: "'Jua', sans-serif" }}>
-            📤 내 운행 상태 게시
-          </div>
-          {cur ? (
-            <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-[11px]" style={{ fontFamily: "'Jua', sans-serif" }}>
-              <div><span style={{ color: "#64748b" }}>버스:</span> <b style={{ color: "#cbd5e1" }}>{cur.busId}</b></div>
-              <div><span style={{ color: "#64748b" }}>방향:</span> <b style={{ color: cur.dir === "outbound" ? "#fb923c" : "#5eead4" }}>
-                {cur.dir === "outbound" ? "축제장" : "민주광장"}</b></div>
-              <div><span style={{ color: "#64748b" }}>회차:</span> <b style={{ color: "#fbbf24" }}>{(cur.tripIdx || 0) + 1}회차</b></div>
-              <div><span style={{ color: "#64748b" }}>정류장:</span> <b style={{ color: "#cbd5e1" }}>
-                {cur.curStop || `${(cur.currentIdx || 0) + 1}번째`}</b></div>
-            </div>
-          ) : (
-            <div className="text-[10px]" style={{ color: "#94a3b8" }}>운행 상태 정보 없음</div>
-          )}
-          <input type="text" value={note} onChange={(e) => setNote(e.target.value)}
-            placeholder="메모(선택) — 예: 학동 도착 직후 인계"
-            className="mds-input" style={{ fontFamily: "'Jua', sans-serif", fontSize: 11 }} maxLength={80} />
-          <button onClick={publish}
-            className="w-full px-3 py-2 rounded-lg text-xs font-bold"
-            style={{ background: "#22d65f", color: "#0a0b0f", fontFamily: "'Jua', sans-serif" }}>
-            ⬆ 인계 게시 (위치 공유는 별도로 OFF 하세요)
-          </button>
-        </div>
-
-        {status && (
-          <div className="text-[11px]" style={{
-            color: status.startsWith("✅") ? "#22d65f" : status.startsWith("⚠") ? "#fca5a5" : "#fbbf24" }}>
-            {status}
-          </div>
-        )}
-        <button onClick={load} disabled={loading}
-          className="w-full px-3 py-1.5 rounded text-[11px]"
-          style={{ background: "rgba(100,116,139,0.12)", color: "#94a3b8",
-            border: "1px solid #3a3f54", fontFamily: "'Jua', sans-serif" }}>
-          {loading ? "로드 중…" : "🔄 새로고침"}
-        </button>
       </div>
     </div>
   );
@@ -8067,34 +7876,6 @@ function App() {
   const [showUsageStats, setShowUsageStats] = useState(false);
   const [showDemoMode, setShowDemoMode] = useState(false);
   const [showBackup, setShowBackup] = useState(false);
-  const [showHandoff, setShowHandoff] = useState(false);
-  /* 핸드오프 — 신규 게시 polling 으로 다른 운영자가 게시한 인계 대기 알림 (다른 단말이 이미 게시했음을 감지) */
-  const [handoffPending, setHandoffPending] = useState(null);
-  const lastSeenHandoffTsRef = useRef(0);
-  useEffect(() => {
-    if (!shareUrl) return;
-    let stopped = false;
-    const base = shareUrl.replace(/\/+$/, "");
-    const poll = async () => {
-      try {
-        const r = await fetch(`${base}/handoff.json`, { cache: "no-store" });
-        if (!r.ok || stopped) return;
-        const d = await r.json();
-        if (d && typeof d === "object" && typeof d.busId === "string" && typeof d.ts === "number") {
-          if (d.ts > (lastSeenHandoffTsRef.current || 0) && Date.now() - d.ts < HANDOFF_STALE_MS) {
-            setHandoffPending(d);
-          } else if (Date.now() - d.ts >= HANDOFF_STALE_MS) {
-            setHandoffPending(null);
-          }
-        } else {
-          setHandoffPending(null);
-        }
-      } catch (_) {}
-    };
-    poll();
-    const id = setInterval(poll, 30000);
-    return () => { stopped = true; clearInterval(id); };
-  }, [shareUrl]);
   const openMentBackup = () => { setMentMsg(""); setMentBackup(JSON.stringify(ments, null, 2)); };
   const copyMent = () => {
     try { navigator.clipboard.writeText(mentBackup); setMentMsg("클립보드에 복사했어요"); }
@@ -10435,11 +10216,6 @@ function App() {
                 label="🧪 시연·테스트 모드"
                 sub={FAKE ? "활성 중 — 가짜 시각 실행" : "시각 가속·6.13 시뮬레이션 · 행사 당일엔 해제"}
                 onClick={() => setShowDemoMode(true)} />
-              <ActBtn Icon={ArrowLeftRight} color="#60a5fa"
-                label="운영자 핸드오프"
-                sub={handoffPending ? `📥 대기 중 — ${handoffPending.busId} ${(handoffPending.tripIdx || 0) + 1}회차` : "단말 교체 시 운행 상태 인계"}
-                badge={handoffPending ? 1 : 0}
-                onClick={() => setShowHandoff(true)} />
               <ActBtn Icon={Archive} color="#fbbf24"
                 label="전체 수정사항 백업·복원" sub="좌표·멘트·구역·설정 JSON 일괄"
                 onClick={() => setShowBackup(true)} />
@@ -10628,19 +10404,6 @@ function App() {
       {showUsageStats && <UsageStatsViewer onClose={() => setShowUsageStats(false)} dbUrl={shareUrl} getAuth={() => authTokenRef.current}
         refreshAuth={async () => { try { const d = await firebaseSignIn(); if (d && d.idToken) { authTokenRef.current = d.idToken; tokenIssuedAtRef.current = Date.now(); return d.idToken; } } catch (_) {} return null; }} />}
       {showDemoMode && <DemoModeEditor onClose={() => setShowDemoMode(false)} />}
-      {showHandoff && <HandoffModal onClose={() => setShowHandoff(false)} dbUrl={shareUrl}
-        getAuth={() => authTokenRef.current}
-        refreshAuth={async () => { try { const d = await firebaseSignIn(); if (d && d.idToken) { authTokenRef.current = d.idToken; tokenIssuedAtRef.current = Date.now(); return d.idToken; } } catch (_) {} return null; }}
-        getCurrent={() => ({ busId, dir: direction, tripIdx, currentIdx, curStop: curStop?.name || "" })}
-        applyState={(s) => {
-          if (typeof s.busId === "string") { setBusId(s.busId); LS.set("busid", s.busId); }
-          if (s.dir === "outbound" || s.dir === "inbound") setDirection(s.dir);
-          if (typeof s.tripIdx === "number") setTripIdx(Math.max(0, s.tripIdx | 0));
-          if (typeof s.currentIdx === "number") setCurrentIdx(Math.max(0, s.currentIdx | 0));
-          announcedRef.current = new Set(); // 인계 후 안내 큐 초기화
-          lastSeenHandoffTsRef.current = (s.ts || 0) + 1;
-          setHandoffPending(null);
-        }} />}
       {showBackup && <BackupModal onClose={() => setShowBackup(false)} counts={counts} dateKey={dateKey} />}
 
       {/* 멘트 편집·백업·복원 모달 */}
