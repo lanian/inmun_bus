@@ -191,7 +191,7 @@
 
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef, useMemo } = React;
-const BUILD = "b425"; /* 화면 우하단 표시 — 최신 배포 확인용 */
+const BUILD = "b426"; /* 화면 우하단 표시 — 최신 배포 확인용 */
 
 /* 실시간 위치 공유용 Firebase DB 주소. 여기에 한 번 넣어두면 승객 링크가 ?view=map 만 남아 깔끔해집니다. */
 const SHARE_DB = "https://innum-bus-default-rtdb.firebaseio.com";
@@ -6832,9 +6832,11 @@ function PassengerView({ dbUrl, onAdmin, initialTab = "list", theme = "default" 
                       if (it.kind === "resting") {
                         return (
                           <div key={`rest|${it.dir}|${it.ti}`}
-                            style={{ background: "#fff", border: "2px dashed " + FT.ink, borderRadius: 12,
-                              padding: "9px 11px 9px 13px", borderLeft: "8px solid " + FT.mute,
-                              boxShadow: "1.5px 1.5px 0 " + FT.ink, opacity: 0.95 }}>
+                            style={{ background: "#fff",
+                              border: isFlat ? "1px dashed " + FT.mute + "88" : "2px dashed " + FT.ink, borderRadius: 12,
+                              padding: "9px 11px 9px 13px",
+                              borderLeft: (isFlat ? "4px solid " : "8px solid ") + FT.mute,
+                              boxShadow: isFlat ? "none" : "1.5px 1.5px 0 " + FT.ink, opacity: 0.95 }}>
                             <div className="flex items-center gap-2" style={{ marginBottom: 4 }}>
                               <span style={{ fontSize: 10, padding: "1px 6px", borderRadius: 4, background: FT.mute, color: "#fff",
                                 fontFamily: "'Jua', sans-serif", fontWeight: 700 }}>🅿 휴식</span>
@@ -6856,9 +6858,11 @@ function PassengerView({ dbUrl, onAdmin, initialTab = "list", theme = "default" 
                       }
                       return (
                         <div key={`${it.dir}|${it.ti}`}
-                          style={{ background: "#fff", border: "2px dashed " + FT.ink, borderRadius: 12,
-                            padding: "9px 11px 9px 13px", borderLeft: "8px solid " + c,
-                            boxShadow: "1.5px 1.5px 0 " + FT.ink }}>
+                          style={{ background: "#fff",
+                            border: isFlat ? "1px dashed " + FT.mute + "88" : "2px dashed " + FT.ink, borderRadius: 12,
+                            padding: "9px 11px 9px 13px",
+                            borderLeft: (isFlat ? "4px solid " : "8px solid ") + c,
+                            boxShadow: isFlat ? "none" : "1.5px 1.5px 0 " + FT.ink }}>
                           <div className="flex items-center gap-2" style={{ marginBottom: 4 }}>
                             <span style={{ fontSize: 10, padding: "1px 6px", borderRadius: 4, background: c, color: "#fff",
                               fontFamily: "'Jua', sans-serif", fontWeight: 700 }}>예정</span>
@@ -6924,9 +6928,9 @@ function PassengerView({ dbUrl, onAdmin, initialTab = "list", theme = "default" 
                     {liveProgs.length > 0 && (
                       <button onClick={() => { setVenueZone(0); setTab("venue"); }}
                         style={{ width: "100%", display: "flex", alignItems: "center", gap: 8, marginBottom: 10,
-                          background: FT.orangeSoft, border: "2px solid " + FT.orangeDark, borderRadius: 10,
+                          background: FT.orangeSoft, border: isFlat ? "1px solid " + FT.orangeDark + "55" : "2px solid " + FT.orangeDark, borderRadius: 10,
                           padding: "8px 11px", cursor: "pointer", textAlign: "left",
-                          boxShadow: "1.5px 1.5px 0 " + FT.orangeDark }}>
+                          boxShadow: isFlat ? "none" : "1.5px 1.5px 0 " + FT.orangeDark }}>
                         <span style={{ display: "inline-block", width: 8, height: 8, borderRadius: "50%", background: "#dc2626", flexShrink: 0 }}
                           className="animate-pulse" />
                         <span style={{ fontSize: 12, color: FT.orangeDark, fontFamily: "'Jua', sans-serif", fontWeight: 700, flexShrink: 0 }}>
@@ -6945,15 +6949,15 @@ function PassengerView({ dbUrl, onAdmin, initialTab = "list", theme = "default" 
                     <button onClick={() => { trackStat("click_banner_festival"); setVenueZone(0); setTab("venue"); }}
                       style={{ width: "100%", display: "flex", alignItems: "center", gap: 12,
                         background: bgGradient, color: "#fff",
-                        border: "2.5px solid " + FT.ink, borderRadius: 12,
-                        padding: "12px 14px", boxShadow: "3px 3px 0 " + FT.ink,
+                        border: isFlat ? "none" : "2.5px solid " + FT.ink, borderRadius: 12,
+                        padding: "12px 14px", boxShadow: isFlat ? "none" : "3px 3px 0 " + FT.ink,
                         fontFamily: "'Jua', sans-serif", fontWeight: 700, cursor: "pointer", textAlign: "left" }}>
                       {/* 좌측 D-day 배지 */}
                       <span style={{ flexShrink: 0, display: "inline-flex", alignItems: "center", justifyContent: "center",
                         minWidth: 58, height: 56, padding: "0 10px", borderRadius: 10,
                         background: "#fff", color: urgent ? "#dc2626" : ended ? "#64748b" : FT.orangeDark,
-                        border: "2px solid " + FT.ink, fontSize: badgeText.length > 4 ? 13 : 18,
-                        fontWeight: 700, lineHeight: 1, boxShadow: "1.5px 1.5px 0 " + FT.ink + "55" }}>
+                        border: isFlat ? "none" : "2px solid " + FT.ink, fontSize: badgeText.length > 4 ? 13 : 18,
+                        fontWeight: 700, lineHeight: 1, boxShadow: isFlat ? "none" : "1.5px 1.5px 0 " + FT.ink + "55" }}>
                         {badgeText}
                       </span>
                       {/* 중앙 텍스트 */}
@@ -6970,8 +6974,8 @@ function PassengerView({ dbUrl, onAdmin, initialTab = "list", theme = "default" 
                         loading="lazy" decoding="async"
                         style={{ flexShrink: 0, width: 56, height: 56, borderRadius: 10,
                           objectFit: "cover", background: "#fff",
-                          border: "2px solid " + FT.ink,
-                          boxShadow: "1.5px 1.5px 0 " + FT.ink + "55" }} />
+                          border: isFlat ? "1px solid rgba(255,255,255,0.4)" : "2px solid " + FT.ink,
+                          boxShadow: isFlat ? "none" : "1.5px 1.5px 0 " + FT.ink + "55" }} />
                     </button>
 
                     {/* 다가올 프로그램 — 미니 라벨로 우선순위만 표시(이모지·구분선 생략) */}
