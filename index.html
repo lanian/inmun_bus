@@ -191,7 +191,7 @@
 
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef, useMemo } = React;
-const BUILD = "b419"; /* 화면 우하단 표시 — 최신 배포 확인용 */
+const BUILD = "b420"; /* 화면 우하단 표시 — 최신 배포 확인용 */
 
 /* 실시간 위치 공유용 Firebase DB 주소. 여기에 한 번 넣어두면 승객 링크가 ?view=map 만 남아 깔끔해집니다. */
 const SHARE_DB = "https://innum-bus-default-rtdb.firebaseio.com";
@@ -6070,10 +6070,6 @@ function PassengerView({ dbUrl, onAdmin, initialTab = "list" }) {
 
   const now = Date.now();
   const agoText = (ts) => { if (!ts) return ""; const s = Math.round((now - ts) / 1000); return s < 5 ? "방금" : s < 60 ? `${s}초 전` : `${Math.floor(s / 60)}분 전`; };
-  // live 목록 — buses 변경 또는 nowMin(분 단위) 변경 시만 재계산. _tick 초 단위 갱신엔 영향 없음.
-  const live = useMemo(() => Object.entries(buses)
-    .filter(([, b]) => b && (b.lat != null || b.stop) && (!b.ts || Date.now() - b.ts < 60000))
-    .sort((a, b) => a[0].localeCompare(b[0], undefined, { numeric: true })), [buses, nowMin]);
 
   // 이탈 정보 — 운영자가 departedFrom/departedAt을 직접 송신하면 우선 사용, 없으면 폴백 추적
   const prevArrivedRef = useRef({});
@@ -6102,6 +6098,10 @@ function PassengerView({ dbUrl, onAdmin, initialTab = "list" }) {
   const d = getNow();
   const tripsToday = d.getMonth() === 5 && d.getDate() === 14 ? 5 : ROUTES.outbound.trips.length;
   const nowMin = d.getHours() * 60 + d.getMinutes();
+  // live 목록 — buses 변경 또는 nowMin(분 단위) 변경 시만 재계산. _tick 초 단위 갱신엔 영향 없음.
+  const live = useMemo(() => Object.entries(buses)
+    .filter(([, b]) => b && (b.lat != null || b.stop) && (!b.ts || Date.now() - b.ts < 60000))
+    .sort((a, b) => a[0].localeCompare(b[0], undefined, { numeric: true })), [buses, nowMin]);
   // 행사일 판정 — 6.13(토)/6.14(일) 만 실제 운행. 그 외 날짜는 시간표 미리보기/안내만 노출
   const fDay = d.getMonth() === 5 ? d.getDate() : -1;
   const isFestivalDay = fDay === 13 || fDay === 14;
