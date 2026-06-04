@@ -178,7 +178,7 @@
 
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef, useMemo } = React;
-const BUILD = "b410"; /* 화면 우하단 표시 — 최신 배포 확인용 */
+const BUILD = "b411"; /* 화면 우하단 표시 — 최신 배포 확인용 */
 
 /* 실시간 위치 공유용 Firebase DB 주소. 여기에 한 번 넣어두면 승객 링크가 ?view=map 만 남아 깔끔해집니다. */
 const SHARE_DB = "https://innum-bus-default-rtdb.firebaseio.com";
@@ -1416,7 +1416,8 @@ function VenueModal({ onClose, initialZone = 0, initialProgram = null, onOpenLiv
         <button onClick={() => setExpandedImg("venue.png")} aria-label="지도 크게 보기"
           style={{ width: "100%", background: FT.paper, border: "2px solid " + FT.ink, borderRadius: 10,
             padding: 6, cursor: "zoom-in" }}>
-          <img src="venue.png" alt="행사장 지도" style={{ display: "block", width: "100%", borderRadius: 6 }} />
+          <img src="venue.png" alt="행사장 지도" loading="lazy" decoding="async"
+            style={{ display: "block", width: "100%", borderRadius: 6 }} />
           <div style={{ fontSize: 10, color: FT.inkSoft, fontFamily: "'Jua', sans-serif", marginTop: 4 }}>탭하여 크게 보기</div>
         </button>
 
@@ -8354,6 +8355,16 @@ function App() {
   const toggleSharing = () => {
     if (!shareUrl) { setGpsError("먼저 DB 주소를 입력하세요(고급)"); setMode("advanced"); return; }
     if (sharing) { setSharing(false); return; }
+    // P0-3 가드: FAKE_GPS 시연 모드에서 위치 공유 켜면 가짜 좌표가 라이브 /buses 로 송신되어
+    // 승객 화면에 가짜 셔틀로 노출됨. 사고 방지 — 명시 확인 없으면 차단.
+    if (FAKE_GPS) {
+      if (!window.confirm(
+        "⚠ 시연 모드(FAKE GPS) 활성 중\n\n" +
+        "위치 공유를 켜면 시뮬레이션 좌표가 승객 지도에 실제 셔틀처럼 노출됩니다.\n" +
+        "시연·테스트 의도가 명확한 경우만 계속하세요. (행사 당일 사고 위험)\n\n" +
+        "계속할까요?"
+      )) { setGpsError("⚠ 시연 모드에서는 위치 공유 차단됨 — 자료 탭에서 시연 모드 해제 후 다시 시도"); return; }
+    }
     if (driverEmail && driverPass) {
       setGpsError("로그인 확인 중…");
       authTokenRef.current = "";
