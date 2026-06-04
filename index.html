@@ -191,7 +191,7 @@
 
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef, useMemo } = React;
-const BUILD = "b414"; /* 화면 우하단 표시 — 최신 배포 확인용 */
+const BUILD = "b415"; /* 화면 우하단 표시 — 최신 배포 확인용 */
 
 /* 실시간 위치 공유용 Firebase DB 주소. 여기에 한 번 넣어두면 승객 링크가 ?view=map 만 남아 깔끔해집니다. */
 const SHARE_DB = "https://innum-bus-default-rtdb.firebaseio.com";
@@ -460,6 +460,58 @@ const buildProgramText = (m, dayKey, refMin) => {
 };
 
 /* localStorage helpers — survive across reloads */
+/* OSRM 도로 폴리라인 fetch 헬퍼 — LiveMapView·ViaEditor·FAKE_GPS 3곳에서 공통 사용.
+   행사 당일 동시 50+ 사용자 진입 시 무료 OSRM 엔드포인트(600 req/min) rate-limit 위험 →
+   per-key in-flight 데듀프 + 429/네트워크 오류 시 지수 백오프 (최대 3회 재시도) + LS 캐시 우선.
+   결과: road 폴리라인 배열 [[lat,lng], ...] 또는 null. cacheKey 는 호출자가 'osrm:dir:path' 형식 권장. */
+const osrmInflightRef = {}; // { [cacheKey]: Promise }
+const osrmLastFailAtRef = {}; // { [cacheKey]: ts } — 최근 실패 키는 짧은 쿨다운 후 재시도
+async function fetchOsrmRoadPoly(cacheKey, path, opts = {}) {
+  const { maxRetries = 3, cooldownAfterFailMs = 30000 } = opts;
+  // 1) LS 캐시 우선 — 같은 path 이미 받은 적 있으면 즉시 반환
+  try {
+    const cached = LS.getJSON(cacheKey, null);
+    if (Array.isArray(cached) && cached.length) return cached;
+  } catch (_) {}
+  // 2) 같은 키 in-flight 면 그 Promise 공유 (네트워크 중복 fetch 방지)
+  if (osrmInflightRef[cacheKey]) return osrmInflightRef[cacheKey];
+  // 3) 최근 실패 키는 cooldown 동안 시도 안 함 (rate-limit 누적 방지)
+  const lastFail = osrmLastFailAtRef[cacheKey] || 0;
+  if (lastFail && Date.now() - lastFail < cooldownAfterFailMs) return null;
+  // 4) 새 fetch + 백오프 재시도
+  const p = (async () => {
+    let delay = 800;
+    for (let attempt = 0; attempt < maxRetries; attempt++) {
+      try {
+        const r = await fetch(`https://router.project-osrm.org/route/v1/driving/${path}?overview=full&geometries=geojson&continue_straight=false`);
+        if (r.status === 429 || (r.status >= 500 && r.status < 600)) {
+          // 일시적 오류 — 백오프 후 재시도
+          await new Promise((res) => setTimeout(res, delay));
+          delay = Math.min(delay * 2, 8000);
+          continue;
+        }
+        if (!r.ok) throw new Error("HTTP " + r.status);
+        const d = await r.json();
+        if (!d || d.code !== "Ok" || !d.routes || !d.routes[0]) throw new Error("OSRM bad response");
+        const road = d.routes[0].geometry.coordinates.map(([ln, la]) => [la, ln]);
+        try { LS.setJSON(cacheKey, road); } catch (_) {}
+        return road;
+      } catch (e) {
+        if (attempt === maxRetries - 1) {
+          osrmLastFailAtRef[cacheKey] = Date.now();
+          return null;
+        }
+        await new Promise((res) => setTimeout(res, delay));
+        delay = Math.min(delay * 2, 8000);
+      }
+    }
+    return null;
+  })();
+  osrmInflightRef[cacheKey] = p;
+  p.finally(() => { delete osrmInflightRef[cacheKey]; });
+  return p;
+}
+
 const LS = {
   get: (k, d) => { try { const v = localStorage.getItem("shuttle:" + k); return v == null ? d : v; } catch (_) { return d; } },
   getJSON: (k, d) => { try { const v = localStorage.getItem("shuttle:" + k); return v == null ? d : JSON.parse(v); } catch (_) { return d; } },
@@ -3635,17 +3687,13 @@ function ViaEditor({ onClose, dbUrl, getAuth }) {
         // 직선 가이드(연하게) — OSRM 도착 전에도 시퀀스를 확인할 수 있게
         const line = L.polyline(lineCoords, { color, weight: 3, opacity: 0.35, dashArray: "4,6", lineCap: "round" }).addTo(map);
         layersRef.current.lines.push(line);
-        // OSRM 도로 미리보기 — 승객 지도에 보일 실제 경로
+        // OSRM 도로 미리보기 — 승객 지도에 보일 실제 경로 (캐시·rate-limit 백오프 통합)
         const path = lineCoords.map(([la, ln]) => `${ln},${la}`).join(";");
-        fetch(`https://router.project-osrm.org/route/v1/driving/${path}?overview=full&geometries=geojson&continue_straight=false`)
-          .then((r) => r.ok ? r.json() : null)
-          .then((d) => {
-            if (!d || d.code !== "Ok" || !d.routes || !d.routes[0]) return;
-            const road = d.routes[0].geometry.coordinates.map(([ln, la]) => [la, ln]);
-            if (layersRef.current.roads[dir]) map.removeLayer(layersRef.current.roads[dir]);
-            layersRef.current.roads[dir] = L.polyline(road, { color, weight: 5, opacity: 0.9, dashArray: dir === "inbound" ? "10,8" : null, lineCap: "round", lineJoin: "round" }).addTo(map);
-          })
-          .catch(() => {});
+        fetchOsrmRoadPoly(`osrm:via:${dir}:${path}`, path).then((road) => {
+          if (!road || !road.length) return;
+          if (layersRef.current.roads[dir]) map.removeLayer(layersRef.current.roads[dir]);
+          layersRef.current.roads[dir] = L.polyline(road, { color, weight: 5, opacity: 0.9, dashArray: dir === "inbound" ? "10,8" : null, lineCap: "round", lineJoin: "round" }).addTo(map);
+        });
       }
       seq.forEach((p) => {
         if (p.kind === "stop") {
@@ -4399,17 +4447,10 @@ function LiveMapView({ dbUrl, onHome, onOpenVenue }) {
         lineRefsRef.current[dir] = L.polyline(road, { pane: "routePane", color: dirColor, weight: 5, opacity: 0.85, dashArray: dash, lineCap: "round", lineJoin: "round" }).addTo(map);
         osrmPolyRef.current[dir] = road; // 마커 곡선 스냅용
       };
-      const cached = LS.getJSON(cacheKey, null);
-      if (Array.isArray(cached) && cached.length) drawRoad(cached); // 즉시 캐시로 그림
-      fetch(`https://router.project-osrm.org/route/v1/driving/${path}?overview=full&geometries=geojson&continue_straight=false`)
-        .then((r) => r.ok ? r.json() : null)
-        .then((d) => {
-          if (!d || d.code !== "Ok" || !d.routes || !d.routes[0]) return;
-          const road = d.routes[0].geometry.coordinates.map(([ln, la]) => [la, ln]);
-          LS.setJSON(cacheKey, road);
-          drawRoad(road);
-        })
-        .catch(() => {});
+      // 캐시·rate-limit 백오프 통합 헬퍼 사용 — 헬퍼가 LS 캐시 hit 즉시 반환, 미스 시 fetch+재시도
+      fetchOsrmRoadPoly(cacheKey, path).then((road) => {
+        if (road && road.length) drawRoad(road);
+      });
     });
     if (!hasFitRef.current && allCoords.length) {
       map.fitBounds(allCoords, { padding: [80, 30] });
@@ -7871,20 +7912,9 @@ function App() {
       if (fakeOsrmPolys[dir]) return; // 이미 로드
       const path = buildPath(dir);
       const cacheKey = `osrm:${dir}:${path}`;
-      const cached = LS.getJSON(cacheKey, null);
-      if (Array.isArray(cached) && cached.length) {
-        if (alive) setFakeOsrmPolys((p) => ({ ...p, [dir]: cached }));
-        return;
-      }
-      try {
-        const r = await fetch(`https://router.project-osrm.org/route/v1/driving/${path}?overview=full&geometries=geojson&continue_straight=false`);
-        if (!r.ok) return;
-        const d = await r.json();
-        if (!d || d.code !== "Ok" || !d.routes || !d.routes[0]) return;
-        const road = d.routes[0].geometry.coordinates.map(([ln, la]) => [la, ln]);
-        LS.setJSON(cacheKey, road);
-        if (alive) setFakeOsrmPolys((p) => ({ ...p, [dir]: road }));
-      } catch (_) {}
+      // 캐시·rate-limit 백오프 통합 헬퍼 사용 — LiveMapView 와 같은 cacheKey 라 캐시 공유.
+      const road = await fetchOsrmRoadPoly(cacheKey, path);
+      if (alive && road && road.length) setFakeOsrmPolys((p) => ({ ...p, [dir]: road }));
     };
     // 현재 direction 우선 로드, 그 다음 반대 방향(미리 받아두기 — 회차 전환 즉시 사용)
     loadDir(direction);
