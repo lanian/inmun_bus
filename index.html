@@ -191,7 +191,7 @@
 
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef, useMemo } = React;
-const BUILD = "b432"; /* 화면 우하단 표시 — 최신 배포 확인용 */
+const BUILD = "b433"; /* 화면 우하단 표시 — 최신 배포 확인용 */
 
 /* IS_FLAT — 평면 디자인 활성 여부. 페이지 로드 시 한 번 결정.
    우선순위: URL ?theme= (공유·비교용) > localStorage 「shuttle:theme」(사용자 선택) > 기본 false.
@@ -6263,8 +6263,9 @@ function UpcomingPromoCard({ onOpen, compact = false }) {
 /* 설정 모달 — 디자인 테마 선택 (기본 / 평면).
    운영자만 진입(자료 탭). dbUrl + getAuth 받으면 Firebase /settings/theme 에도 게시 →
    모든 사용자 페이지가 mount 시 가져가 동일 테마 적용.
-   동시에 운영자 단말 LS 「shuttle:theme」 저장 + reload — 운영자 본인도 즉시 미리보기. */
-function SettingsModal({ onClose, dbUrl, getAuth }) {
+   동시에 운영자 단말 LS 「shuttle:theme」 저장 + reload — 운영자 본인도 즉시 미리보기.
+   refreshAuth 제공 시 401(만료) 1회 자동 재시도. */
+function SettingsModal({ onClose, dbUrl, getAuth, refreshAuth }) {
   const current = IS_FLAT ? "flat" : "default";
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
@@ -6276,20 +6277,38 @@ function SettingsModal({ onClose, dbUrl, getAuth }) {
       else localStorage.setItem("shuttle:theme", next);
     } catch (_) {}
     // 2) Firebase /settings/theme 게시 (모든 사용자 단말 동기화)
-    //    "flat" 또는 "default" 명시적 저장 — null 은 "미설정" 으로 sync 대상 제외.
+    //    "flat" 또는 "default" 명시 문자열 저장 — null/미설정은 sync 대상 제외.
+    //    401 받으면 refreshAuth 로 1회 재시도 (토큰 만료 대비).
     if (dbUrl && getAuth) {
-      try {
-        const base = dbUrl.replace(/\/+$/, "");
-        const token = await getAuth();
+      const base = dbUrl.replace(/\/+$/, "");
+      const body = JSON.stringify(next); // "flat" | "default"
+      const putWith = async (token) => {
         const url = `${base}/settings/theme.json` + (token ? `?auth=${encodeURIComponent(token)}` : "");
-        const body = JSON.stringify(next); // "flat" | "default"
-        const r = await fetch(url, { method: "PUT", body });
-        if (!r.ok) throw new Error("HTTP " + r.status);
+        return fetch(url, { method: "PUT", body });
+      };
+      try {
+        let token = getAuth();
+        if (typeof token === "object" && token && typeof token.then === "function") token = await token;
+        let r = await putWith(token);
+        if (r.status === 401 && refreshAuth) {
+          const fresh = await refreshAuth();
+          if (fresh) r = await putWith(fresh);
+        }
+        if (!r.ok) {
+          const txt = await r.text().catch(() => "");
+          throw new Error(`HTTP ${r.status}` + (txt ? ` — ${txt.slice(0, 120)}` : ""));
+        }
       } catch (e) {
         setBusy(false);
-        setErr("Firebase 게시 실패 — 본인 단말만 적용됩니다. " + (e.message || ""));
-        // 본인 단말 reload 는 진행
-        setTimeout(() => { try { const u = new URL(window.location.href); if (u.searchParams.has("theme")) { u.searchParams.delete("theme"); window.history.replaceState({}, "", u.toString()); } } catch (_) {} window.location.reload(); }, 1500);
+        const msg = (e.message || "").includes("401") || (e.message || "").toLowerCase().includes("permission")
+          ? "Firebase 게시 실패 — 로그인 만료 또는 /settings rule 미게시. 본인 단말만 적용됩니다."
+          : "Firebase 게시 실패 — " + (e.message || "네트워크 오류") + ". 본인 단말만 적용됩니다.";
+        setErr(msg);
+        // 본인 단말 reload 는 3초 후 진행 (사용자가 메시지 읽을 시간)
+        setTimeout(() => {
+          try { const u = new URL(window.location.href); if (u.searchParams.has("theme")) { u.searchParams.delete("theme"); window.history.replaceState({}, "", u.toString()); } } catch (_) {}
+          window.location.reload();
+        }, 3000);
         return;
       }
     }
@@ -10859,7 +10878,8 @@ function App() {
         }} />}
       {showBackup && <BackupModal onClose={() => setShowBackup(false)} counts={counts} dateKey={dateKey} />}
       {showThemeSettings && <SettingsModal onClose={() => setShowThemeSettings(false)}
-        dbUrl={shareUrl} getAuth={() => authTokenRef.current} />}
+        dbUrl={shareUrl} getAuth={() => authTokenRef.current}
+        refreshAuth={async () => { try { const d = await firebaseSignIn(); if (d && d.idToken) { authTokenRef.current = d.idToken; tokenIssuedAtRef.current = Date.now(); return d.idToken; } } catch (_) {} return null; }} />}
 
       {/* 멘트 편집·백업·복원 모달 */}
       {mentBackup !== null && (
