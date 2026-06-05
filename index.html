@@ -191,12 +191,12 @@
 
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef, useMemo } = React;
-const BUILD = "b434"; /* 화면 우하단 표시 — 최신 배포 확인용 */
+const BUILD = "b435"; /* 화면 우하단 표시 — 최신 배포 확인용 */
 
-/* IS_FLAT — 평면 디자인 활성 여부. 페이지 로드 시 한 번 결정.
+/* IS_FLAT — 평면 디자인 활성 여부. 페이지 로드 시 결정.
    우선순위: URL ?theme= (공유·비교용) > localStorage 「shuttle:theme」(사용자 선택) > 기본 false.
-   설정 변경 시 페이지 reload — 모듈 상수라 런타임 토글은 일부러 안 함(렌더 일관성). */
-const IS_FLAT = (() => {
+   let 로 선언 — Root() Intro 단계에서 Firebase /settings/theme 가져와 갱신 가능. */
+let IS_FLAT = (() => {
   try {
     const url = new URLSearchParams(window.location.search).get("theme");
     if (url === "flat") return true;
@@ -6462,39 +6462,8 @@ function PassengerView({ dbUrl, onAdmin, initialTab = "list", theme = "default" 
   const [noticeDismissedAt, setNoticeDismissedAt] = useState(() => parseInt(LS.get("noticeDismissedAt", "0"), 10) || 0);
   const tapRef = useRef(0), tapTimeRef = useRef(0);
 
-  /* /settings/theme — 운영자가 설정한 디자인 테마를 마운트 시 1회 가져와 LS 동기화.
-     LS≠DB 이고 DB 가 명시값("flat"/"default") 일 때만 LS 업데이트 + 1회 reload (IS_FLAT 재평가용).
-     ?theme= URL 진입은 강제 우선이라 sync skip.
-     주의: 운영자가 b431 이전에 ?theme=flat 으로 진입해 LS 가 'flat' 인데 DB 는 미설정/null 이면
-     reload 안 함 (b432 의 "매번 깜박" 회피). DB 가 "default" 로 명시 게시된 경우엔 reload 로 정리됨. */
-  useEffect(() => {
-    if (!dbUrl) return;
-    try {
-      const urlTheme = new URLSearchParams(window.location.search).get("theme");
-      if (urlTheme === "flat" || urlTheme === "default") return;
-    } catch (_) {}
-    const base = dbUrl.replace(/\/+$/, "");
-    let cancelled = false;
-    (async () => {
-      try {
-        const r = await fetch(`${base}/settings/theme.json`, { cache: "no-store" });
-        if (!r.ok || cancelled) return;
-        const v = await r.json();
-        if (v !== "flat" && v !== "default") return; // 미설정 → LS 건드리지 않음
-        const lsTheme = (() => { try { return localStorage.getItem("shuttle:theme"); } catch (_) { return null; } })();
-        const needSync = (v === "flat" && lsTheme !== "flat") || (v === "default" && lsTheme === "flat");
-        if (!needSync) return;
-        try {
-          if (v === "flat") localStorage.setItem("shuttle:theme", "flat");
-          else localStorage.removeItem("shuttle:theme");
-        } catch (_) {}
-        // 1회 reload — IS_FLAT 모듈 상수 재평가 → 신규 테마 적용.
-        // LS 업데이트 후엔 다음 mount 부턴 needSync=false 라 추가 reload 없음.
-        if (!cancelled) window.location.reload();
-      } catch (_) {}
-    })();
-    return () => { cancelled = true; };
-  }, [dbUrl]);
+  /* /settings/theme 동기화 — Root() Intro 단계에서 이미 처리됨 (b435).
+     IS_FLAT 가 첫 렌더 전 갱신되므로 여기서 추가 작업 불필요. */
 
   useEffect(() => {
     if (!dbUrl) { setConn("error"); return; }
@@ -11063,7 +11032,34 @@ function Root() {
   const params = new URLSearchParams(window.location.search);
   const [admin, setAdmin] = useState(params.get("admin") === "1");
   const [ready, setReady] = useState(false);
-  useEffect(() => { const t = setTimeout(() => setReady(true), 2000); return () => clearTimeout(t); }, []);
+  /* Intro 2초 동안 Firebase /settings/theme 동시 fetch — 운영자가 게시한 테마를
+     IS_FLAT(let) 에 갱신 후 setReady. PassengerView/BusCard/Venue/Map 등이
+     첫 렌더부터 신규 테마로 그려짐 → reload 불필요. URL ?theme= 이 있으면 강제 우선이라 skip. */
+  useEffect(() => {
+    let cancelled = false;
+    const dbUrl = params.get("db") || SHARE_DB;
+    const urlTheme = params.get("theme");
+    const skipFetch = urlTheme === "flat" || urlTheme === "default" || !dbUrl;
+    const finish = () => { if (!cancelled) setReady(true); };
+    const t = setTimeout(finish, 2000); // 페치 실패해도 최대 2초 후 진입
+    if (skipFetch) return () => { cancelled = true; clearTimeout(t); };
+    (async () => {
+      try {
+        const base = dbUrl.replace(/\/+$/, "");
+        const r = await fetch(`${base}/settings/theme.json`, { cache: "no-store" });
+        if (!r.ok || cancelled) return;
+        const v = await r.json();
+        if (v !== "flat" && v !== "default") return; // 미설정 → IS_FLAT 보존
+        try {
+          if (v === "flat") localStorage.setItem("shuttle:theme", "flat");
+          else localStorage.removeItem("shuttle:theme");
+        } catch (_) {}
+        // 모듈 상수 IS_FLAT 갱신 — setReady 전이라 첫 렌더부터 적용
+        IS_FLAT = (v === "flat");
+      } catch (_) {}
+    })().finally(() => { clearTimeout(t); finish(); });
+    return () => { cancelled = true; clearTimeout(t); };
+  }, []);
   if (!ready) return <Intro admin={admin} />;
   // P2-3: ?view=ops — 운영자 본부 대시보드 (Intro 끝난 뒤 즉시 진입)
   if (params.get("view") === "ops") return (<><FakeTimeIndicator /><OpsDashboard dbUrl={params.get("db") || SHARE_DB} /></>);
