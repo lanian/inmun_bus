@@ -191,7 +191,7 @@
 
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef, useMemo } = React;
-const BUILD = "b437"; /* 화면 우하단 표시 — 최신 배포 확인용 */
+const BUILD = "b438"; /* 화면 우하단 표시 — 최신 배포 확인용 */
 
 /* IS_FLAT — 평면 디자인 활성 여부. 페이지 로드 시 결정.
    우선순위: URL ?theme= (공유·비교용) > localStorage 「shuttle:theme」(사용자 선택) > 기본 false.
@@ -5246,8 +5246,12 @@ function LiveMapView({ dbUrl, onHome, onOpenVenue, isFlat = false }) {
             width: 44, height: 44, borderRadius: "50%", zIndex: 1100,
             background: locStatus === "active" ? "#3b82f6" : "#fff",
             color: locStatus === "active" ? "#fff" : locStatus === "denied" || locStatus === "error" ? "#94a3b8" : FT.ink,
-            border: "2px solid " + (locStatus === "active" ? "#1e40af" : FT.ink),
-            boxShadow: "3px 3px 0 " + (locStatus === "active" ? "#1e40af" : FT.ink),
+            border: isFlat
+              ? "1px solid " + (locStatus === "active" ? "#1e40af" : FT.mute + "88")
+              : "2px solid " + (locStatus === "active" ? "#1e40af" : FT.ink),
+            boxShadow: isFlat
+              ? "0 1px 3px rgba(0,0,0,0.16)"
+              : "3px 3px 0 " + (locStatus === "active" ? "#1e40af" : FT.ink),
             cursor: "pointer", display: "inline-flex", alignItems: "center", justifyContent: "center",
             padding: 0 }}>
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
@@ -5296,7 +5300,8 @@ function LiveMapView({ dbUrl, onHome, onOpenVenue, isFlat = false }) {
                 placeholder="예: 여기 사진 잘 나와요"
                 autoComplete="off" autoCapitalize="off"
                 style={{ width: "100%", padding: "8px 10px", borderRadius: 8, marginBottom: 8,
-                  background: FT.paper, border: "1.5px solid " + FT.ink, color: FT.ink,
+                  background: FT.paper,
+                  border: isFlat ? "1px solid " + FT.mute + "66" : "1.5px solid " + FT.ink, color: FT.ink,
                   fontSize: 13, fontFamily: "'Jua', sans-serif", outline: "none" }} />
               {stickerLabel && (
                 <div style={{ fontSize: 10, color: FT.inkSoft, textAlign: "right", marginTop: -6, marginBottom: 6 }}>
@@ -5318,7 +5323,10 @@ function LiveMapView({ dbUrl, onHome, onOpenVenue, isFlat = false }) {
                       onClick={() => { setStickerKind(s.k); setPaletteOpen(false); }}
                       style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 3,
                         padding: "9px 0", background: active ? FT.tealSoft : FT.paper,
-                        border: "1.5px solid " + (active ? FT.tealDark : FT.ink), borderRadius: 10,
+                        border: isFlat
+                          ? "1px solid " + (active ? FT.tealDark : FT.mute + "66")
+                          : "1.5px solid " + (active ? FT.tealDark : FT.ink),
+                        borderRadius: 10,
                         cursor: "pointer", fontFamily: "'Jua', sans-serif" }}>
                       <StickerIcon kind={s.k} size={26} />
                       <span style={{ fontSize: 9, color: active ? FT.tealDark : FT.inkSoft, fontWeight: 700 }}>{s.t}</span>
@@ -5339,7 +5347,7 @@ function LiveMapView({ dbUrl, onHome, onOpenVenue, isFlat = false }) {
           opacity: stickerMsg ? 1 : 0, transition: "opacity 0.18s",
           background: FT.ink, color: "#fff", padding: stickerMsg ? "8px 14px" : 0, borderRadius: 999,
           fontFamily: "'Jua', sans-serif", fontSize: 12, fontWeight: 700,
-          boxShadow: stickerMsg ? "2px 2px 0 " + FT.ink : "none" }}>
+          boxShadow: stickerMsg ? (isFlat ? "0 2px 6px rgba(0,0,0,0.2)" : "2px 2px 0 " + FT.ink) : "none" }}>
         {stickerMsg}
       </div>
 
@@ -5419,7 +5427,8 @@ function LiveMapView({ dbUrl, onHome, onOpenVenue, isFlat = false }) {
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 2 }}>
           <span style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: 16, height: 16, borderRadius: 4,
-            background: FT.orange, color: "#fff", fontSize: 10, fontFamily: "'Jua', sans-serif", fontWeight: 700, border: "1.5px solid " + FT.ink }}>1</span>
+            background: FT.orange, color: "#fff", fontSize: 10, fontFamily: "'Jua', sans-serif", fontWeight: 700,
+            border: isFlat ? "none" : "1.5px solid " + FT.ink }}>1</span>
           행사 주요 구역
         </div>
       </div>
@@ -5975,8 +5984,9 @@ function UnifiedMapBanner({ stickers, onOpenVenue, onTapSticker, onActiveSlide }
           tabIndex={i === safeIdx ? 0 : -1}
           style={{ flex: `0 0 ${100 / slides.length}%`, display: "flex", alignItems: "center", gap: 10,
             background: "rgba(255,255,255,0.97)", color: FT.ink,
-            border: "1.5px solid " + FT.ink, borderRadius: 12,
-            padding: "8px 10px", boxShadow: `1.5px 1.5px 0 ${FT.ink}33`,
+            border: IS_FLAT ? "1px solid " + FT.mute + "88" : "1.5px solid " + FT.ink, borderRadius: 12,
+            padding: "8px 10px",
+            boxShadow: IS_FLAT ? "0 2px 6px rgba(0,0,0,0.12)" : `1.5px 1.5px 0 ${FT.ink}33`,
             fontFamily: "'Jua', sans-serif", cursor: "pointer", textAlign: "left",
             minHeight: 56 }}>
           {/* 카테고리 아이콘 박스 */}
@@ -6028,8 +6038,9 @@ function UnifiedMapBanner({ stickers, onOpenVenue, onTapSticker, onActiveSlide }
           tabIndex={i === safeIdx ? 0 : -1}
           style={{ flex: `0 0 ${100 / slides.length}%`, display: "flex", alignItems: "center", gap: 10,
             background: "rgba(255,255,255,0.97)", color: FT.ink,
-            border: "1.5px solid " + FT.ink, borderRadius: 12,
-            padding: "8px 10px", boxShadow: `1.5px 1.5px 0 ${FT.ink}33`,
+            border: IS_FLAT ? "1px solid " + FT.mute + "88" : "1.5px solid " + FT.ink, borderRadius: 12,
+            padding: "8px 10px",
+            boxShadow: IS_FLAT ? "0 2px 6px rgba(0,0,0,0.12)" : `1.5px 1.5px 0 ${FT.ink}33`,
             fontFamily: "'Jua', sans-serif", cursor: "pointer", textAlign: "left",
             minHeight: 56 }}>
           <span style={{ flexShrink: 0, width: 34, height: 34, borderRadius: 9,
