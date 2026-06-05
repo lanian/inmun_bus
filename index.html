@@ -199,7 +199,7 @@
 
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef, useMemo } = React;
-const BUILD = "b441"; /* 화면 우하단 표시 — 최신 배포 확인용 */
+const BUILD = "b442"; /* 화면 우하단 표시 — 최신 배포 확인용 */
 
 /* IS_FLAT — 평면 디자인 활성 여부. 페이지 로드 시 결정.
    우선순위: URL ?theme= (공유·비교용) > localStorage 「shuttle:theme」(사용자 선택) > 기본 false.
@@ -6750,7 +6750,7 @@ function PassengerView({ dbUrl, onAdmin, initialTab = "list", theme = "default" 
       if (key === "venue") { setVenueZone(0); setVenueProgram(null); }
       setTab(key);
     };
-    // 평면 모드 — 모던 모바일 nav 패턴: 버튼 개별 보더/그림자 없음. 활성은 색·하단 인디케이터.
+    // 평면 모드 — 모던 모바일 nav 패턴: 활성 시 아이콘 뒤 라운드 pill (Material 3 패턴 변형).
     // 기본 모드 — 기존 brutalist 카드형 버튼 유지.
     if (isFlat) {
       return (
@@ -6765,20 +6765,23 @@ function PassengerView({ dbUrl, onAdmin, initialTab = "list", theme = "default" 
             return (
               <button key={b.key} onClick={() => handle(b.key)}
                 title={active ? "다시 누르면 홈으로 돌아갑니다" : undefined}
-                style={{ background: "transparent", border: "none", cursor: "pointer", padding: "10px 6px 4px",
-                  fontFamily: "'Jua', sans-serif", fontWeight: 700,
-                  color: active ? FT.ink : FT.mute,
+                style={{ background: "transparent", border: "none", cursor: "pointer", padding: "6px 6px 4px",
+                  fontFamily: "'Jua', sans-serif",
                   display: "flex", flexDirection: "column", alignItems: "center", gap: 3,
-                  position: "relative", transition: "color 0.15s" }}>
-                <span aria-hidden style={{ fontSize: 19, lineHeight: 1,
-                  filter: active ? "none" : "grayscale(0.6) opacity(0.75)",
-                  transition: "filter 0.15s, transform 0.15s",
-                  transform: active ? "scale(1.05)" : "scale(1)" }}>{b.icon}</span>
-                <span style={{ fontSize: 10.5, lineHeight: 1, letterSpacing: 0.2 }}>{b.label}</span>
-                {/* 활성 인디케이터 — 4px 청록 dot, 텍스트 아래 미세 떨어짐 */}
-                <span aria-hidden style={{ width: 4, height: 4, borderRadius: 999,
-                  background: active ? FT.teal : "transparent",
-                  marginTop: 2, transition: "background 0.15s" }} />
+                  position: "relative" }}>
+                {/* 아이콘 컨테이너 — 활성 시 라운드 pill bg, 비활성 시 투명. icon 크기 자체는 동일. */}
+                <span aria-hidden style={{ display: "inline-flex", alignItems: "center", justifyContent: "center",
+                  width: 56, height: 28, borderRadius: 999,
+                  background: active ? FT.tealSoft : "transparent",
+                  transition: "background 0.18s ease",
+                  fontSize: 20, lineHeight: 1,
+                  filter: active ? "none" : "grayscale(0.5) opacity(0.7)" }}>
+                  {b.icon}
+                </span>
+                <span style={{ fontSize: 11, lineHeight: 1, letterSpacing: 0.1,
+                  color: active ? FT.tealDark : FT.mute,
+                  fontWeight: active ? 700 : 500,
+                  transition: "color 0.18s ease" }}>{b.label}</span>
               </button>
             );
           })}
