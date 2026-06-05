@@ -191,7 +191,7 @@
 
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef, useMemo } = React;
-const BUILD = "b433"; /* 화면 우하단 표시 — 최신 배포 확인용 */
+const BUILD = "b434"; /* 화면 우하단 표시 — 최신 배포 확인용 */
 
 /* IS_FLAT — 평면 디자인 활성 여부. 페이지 로드 시 한 번 결정.
    우선순위: URL ?theme= (공유·비교용) > localStorage 「shuttle:theme」(사용자 선택) > 기본 false.
@@ -6462,12 +6462,11 @@ function PassengerView({ dbUrl, onAdmin, initialTab = "list", theme = "default" 
   const [noticeDismissedAt, setNoticeDismissedAt] = useState(() => parseInt(LS.get("noticeDismissedAt", "0"), 10) || 0);
   const tapRef = useRef(0), tapTimeRef = useRef(0);
 
-  /* /settings/theme — 운영자가 설정한 디자인 테마를 마운트 시 1회 가져와 LS silent sync.
-     reload 안 함 → 이번 세션은 LS 의 옛 값으로 렌더, 다음 방문(또는 사용자 수동 새로고침) 시 신규 테마 적용.
-     설계: 진입할 때마다 reload 는 UX 나빠 회피. 행사 어플 특성상 사용자가 자주 재진입 → 다음 회 적용 OK.
-     스킵 조건:
-     - URL ?theme= 이 있으면 비교용 강제 우선 (sync 무시)
-     - dbTheme 이 "flat" 또는 "default" 명시값일 때만 LS 업데이트, 그 외(null·미설정) 은 LS 보존. */
+  /* /settings/theme — 운영자가 설정한 디자인 테마를 마운트 시 1회 가져와 LS 동기화.
+     LS≠DB 이고 DB 가 명시값("flat"/"default") 일 때만 LS 업데이트 + 1회 reload (IS_FLAT 재평가용).
+     ?theme= URL 진입은 강제 우선이라 sync skip.
+     주의: 운영자가 b431 이전에 ?theme=flat 으로 진입해 LS 가 'flat' 인데 DB 는 미설정/null 이면
+     reload 안 함 (b432 의 "매번 깜박" 회피). DB 가 "default" 로 명시 게시된 경우엔 reload 로 정리됨. */
   useEffect(() => {
     if (!dbUrl) return;
     try {
@@ -6483,12 +6482,15 @@ function PassengerView({ dbUrl, onAdmin, initialTab = "list", theme = "default" 
         const v = await r.json();
         if (v !== "flat" && v !== "default") return; // 미설정 → LS 건드리지 않음
         const lsTheme = (() => { try { return localStorage.getItem("shuttle:theme"); } catch (_) { return null; } })();
-        if (v === "flat" && lsTheme !== "flat") {
-          try { localStorage.setItem("shuttle:theme", "flat"); } catch (_) {}
-        } else if (v === "default" && lsTheme === "flat") {
-          try { localStorage.removeItem("shuttle:theme"); } catch (_) {}
-        }
-        // reload 없음 — 다음 방문 시 IS_FLAT 가 신규 LS 값 읽음
+        const needSync = (v === "flat" && lsTheme !== "flat") || (v === "default" && lsTheme === "flat");
+        if (!needSync) return;
+        try {
+          if (v === "flat") localStorage.setItem("shuttle:theme", "flat");
+          else localStorage.removeItem("shuttle:theme");
+        } catch (_) {}
+        // 1회 reload — IS_FLAT 모듈 상수 재평가 → 신규 테마 적용.
+        // LS 업데이트 후엔 다음 mount 부턴 needSync=false 라 추가 reload 없음.
+        if (!cancelled) window.location.reload();
       } catch (_) {}
     })();
     return () => { cancelled = true; };
