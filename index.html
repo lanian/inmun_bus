@@ -191,7 +191,7 @@
 
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef, useMemo } = React;
-const BUILD = "b435"; /* 화면 우하단 표시 — 최신 배포 확인용 */
+const BUILD = "b436"; /* 화면 우하단 표시 — 최신 배포 확인용 */
 
 /* IS_FLAT — 평면 디자인 활성 여부. 페이지 로드 시 결정.
    우선순위: URL ?theme= (공유·비교용) > localStorage 「shuttle:theme」(사용자 선택) > 기본 false.
@@ -204,6 +204,8 @@ let IS_FLAT = (() => {
     return localStorage.getItem("shuttle:theme") === "flat";
   } catch (_) { return false; }
 })();
+/* 진단용 — ?debugTheme=1 로 진입 시 좌하단 작은 칩에 IS_FLAT 결정 경로 표시. */
+let THEME_DEBUG = "";
 
 /* 실시간 위치 공유용 Firebase DB 주소. 여기에 한 번 넣어두면 승객 링크가 ?view=map 만 남아 깔끔해집니다. */
 const SHARE_DB = "https://innum-bus-default-rtdb.firebaseio.com";
@@ -7174,6 +7176,14 @@ function PassengerView({ dbUrl, onAdmin, initialTab = "list", theme = "default" 
         </div>
       </div>
       {showTimetable && <TimetableModal tripsToday={tripsToday} onClose={closeTable} focusTrip={tableFocus} />}
+      {/* 진단 칩 — ?debugTheme=1 진입 시만 노출. IS_FLAT 결정 경로 확인용 */}
+      {(() => { try { return new URLSearchParams(window.location.search).get("debugTheme") === "1"; } catch (_) { return false; } })() && (
+        <div style={{ position: "fixed", left: 6, bottom: 6, zIndex: 9999, maxWidth: "92vw",
+          background: "rgba(0,0,0,0.78)", color: "#fff", padding: "4px 8px", borderRadius: 6,
+          fontSize: 9, fontFamily: "monospace", lineHeight: 1.35, whiteSpace: "pre-wrap", wordBreak: "break-all" }}>
+          IS_FLAT={String(IS_FLAT)} LS={String((() => { try { return localStorage.getItem("shuttle:theme"); } catch (_) { return "err"; } })())} {THEME_DEBUG}
+        </div>
+      )}
       {/* showVenue 모달은 더 이상 사용 안 함 — tab === 'venue' 일 때 pageMode 로 전환됨 */}
     </div>
   );
@@ -11032,9 +11042,12 @@ function Root() {
   const params = new URLSearchParams(window.location.search);
   const [admin, setAdmin] = useState(params.get("admin") === "1");
   const [ready, setReady] = useState(false);
+  /* themeNonce — 페치가 2초 timeout 보다 늦게 끝나 IS_FLAT 가 setReady 이후 갱신될 때
+     자식 컴포넌트 강제 remount 용. 페치 빠르면 0 유지 → 추가 remount 없음. */
+  const [themeNonce, setThemeNonce] = useState(0);
   /* Intro 2초 동안 Firebase /settings/theme 동시 fetch — 운영자가 게시한 테마를
      IS_FLAT(let) 에 갱신 후 setReady. PassengerView/BusCard/Venue/Map 등이
-     첫 렌더부터 신규 테마로 그려짐 → reload 불필요. URL ?theme= 이 있으면 강제 우선이라 skip. */
+     첫 렌더부터 신규 테마로 그려짐. URL ?theme= 이 있으면 강제 우선이라 skip. */
   useEffect(() => {
     let cancelled = false;
     const dbUrl = params.get("db") || SHARE_DB;
@@ -11043,31 +11056,44 @@ function Root() {
     const finish = () => { if (!cancelled) setReady(true); };
     const t = setTimeout(finish, 2000); // 페치 실패해도 최대 2초 후 진입
     if (skipFetch) return () => { cancelled = true; clearTimeout(t); };
+    const wasReadyAtUpdate = { v: false };
     (async () => {
       try {
         const base = dbUrl.replace(/\/+$/, "");
         const r = await fetch(`${base}/settings/theme.json`, { cache: "no-store" });
+        THEME_DEBUG = `db_status=${r.status}`;
         if (!r.ok || cancelled) return;
         const v = await r.json();
+        THEME_DEBUG += ` db_val=${JSON.stringify(v)}`;
         if (v !== "flat" && v !== "default") return; // 미설정 → IS_FLAT 보존
         try {
           if (v === "flat") localStorage.setItem("shuttle:theme", "flat");
           else localStorage.removeItem("shuttle:theme");
         } catch (_) {}
-        // 모듈 상수 IS_FLAT 갱신 — setReady 전이라 첫 렌더부터 적용
+        const prev = IS_FLAT;
         IS_FLAT = (v === "flat");
-      } catch (_) {}
-    })().finally(() => { clearTimeout(t); finish(); });
+        THEME_DEBUG += ` is_flat=${IS_FLAT}`;
+        // 이미 ready 면 (timeout 먼저 fire) → nonce 증가로 자식 remount → IS_FLAT 신규값 반영
+        if (!cancelled && prev !== IS_FLAT) wasReadyAtUpdate.v = true;
+      } catch (e) {
+        THEME_DEBUG = `err=${(e && e.message) || "fetch_fail"}`;
+      }
+    })().finally(() => {
+      clearTimeout(t);
+      finish();
+      // setReady 가 이미 호출됐고 IS_FLAT 가 갱신됐다면 remount 로 강제 재렌더
+      if (!cancelled && wasReadyAtUpdate.v) setThemeNonce((n) => n + 1);
+    });
     return () => { cancelled = true; clearTimeout(t); };
   }, []);
   if (!ready) return <Intro admin={admin} />;
   // P2-3: ?view=ops — 운영자 본부 대시보드 (Intro 끝난 뒤 즉시 진입)
-  if (params.get("view") === "ops") return (<><FakeTimeIndicator /><OpsDashboard dbUrl={params.get("db") || SHARE_DB} /></>);
-  if (admin) return (<><FakeTimeIndicator /><App /></>);
+  if (params.get("view") === "ops") return (<><FakeTimeIndicator /><OpsDashboard key={`ops-${themeNonce}`} dbUrl={params.get("db") || SHARE_DB} /></>);
+  if (admin) return (<><FakeTimeIndicator /><App key={`app-${themeNonce}`} /></>);
   const initialTab = params.get("view") === "map" ? "map" : "list";
   // ?theme=flat — 보더·그림자 약화한 평면 디자인 (A/B 비교용, list 탭만 적용)
   const theme = params.get("theme") === "flat" ? "flat" : "default";
-  return (<><FakeTimeIndicator /><PassengerView dbUrl={params.get("db") || SHARE_DB} onAdmin={() => setAdmin(true)} initialTab={initialTab} theme={theme} /></>);
+  return (<><FakeTimeIndicator /><PassengerView key={`pv-${themeNonce}`} dbUrl={params.get("db") || SHARE_DB} onAdmin={() => setAdmin(true)} initialTab={initialTab} theme={theme} /></>);
 }
 
 /* 테스트 모드 인디케이터 — FAKE 활성 시 상단 중앙에 호박색 chip 으로 가짜 시각 + 해제 버튼 노출.
