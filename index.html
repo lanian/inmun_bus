@@ -122,6 +122,14 @@
   .leaflet-tooltip.fest-stop::before { display: none; }
   .leaflet-tooltip.fest-stop.dir-out { border-color: #EE6B2E; box-shadow: 1.5px 1.5px 0 #EE6B2E; color: #C2521D; }
   .leaflet-tooltip.fest-stop.dir-in  { border-color: #16A89E; box-shadow: 1.5px 1.5px 0 #16A89E; color: #0F786E; }
+  /* 평면 테마 overrides — body.is-flat 활성 시 정류장 라벨·팝업 brutalist 그림자/굵은 보더 약화 */
+  body.is-flat .leaflet-tooltip.fest-stop { border-width: 1px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.18); border-color: #cbd5e1; }
+  body.is-flat .leaflet-tooltip.fest-stop.dir-out { border-color: #EE6B2E80; box-shadow: 0 1px 3px rgba(238,107,46,0.25); }
+  body.is-flat .leaflet-tooltip.fest-stop.dir-in  { border-color: #16A89E80; box-shadow: 0 1px 3px rgba(22,168,158,0.25); }
+  body.is-flat .leaflet-popup-content-wrapper { border-radius: 10px;
+    box-shadow: 0 4px 14px rgba(0,0,0,0.16); border: 1px solid rgba(0,0,0,0.06); }
+  body.is-flat .leaflet-popup-tip { box-shadow: 0 2px 6px rgba(0,0,0,0.12); }
   /* 운영자 폼 입력 — 포커스/호버 상태 일관화 */
   .mds-input { width: 100%; min-height: 44px; padding: 10px 12px; border-radius: 8px;
     background: #0a0b0f; color: #cbd5e1; border: 1px solid #3a3f54;
@@ -191,7 +199,7 @@
 
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef, useMemo } = React;
-const BUILD = "b438"; /* 화면 우하단 표시 — 최신 배포 확인용 */
+const BUILD = "b439"; /* 화면 우하단 표시 — 최신 배포 확인용 */
 
 /* IS_FLAT — 평면 디자인 활성 여부. 페이지 로드 시 결정.
    우선순위: URL ?theme= (공유·비교용) > localStorage 「shuttle:theme」(사용자 선택) > 기본 false.
@@ -204,6 +212,11 @@ let IS_FLAT = (() => {
     return localStorage.getItem("shuttle:theme") === "flat";
   } catch (_) { return false; }
 })();
+/* body 에 is-flat 클래스 토글 — Leaflet popup·tooltip 등 React 외부 DOM 의 CSS override 진입로. */
+function applyFlatBodyClass() {
+  try { if (document && document.body) document.body.classList.toggle("is-flat", !!IS_FLAT); } catch (_) {}
+}
+applyFlatBodyClass();
 /* 진단용 — ?debugTheme=1 로 진입 시 좌하단 작은 칩에 IS_FLAT 결정 경로 표시. */
 let THEME_DEBUG = "";
 
@@ -11084,6 +11097,7 @@ function Root() {
         } catch (_) {}
         const prev = IS_FLAT;
         IS_FLAT = (v === "flat");
+        applyFlatBodyClass();
         THEME_DEBUG += ` is_flat=${IS_FLAT}`;
         // 이미 ready 면 (timeout 먼저 fire) → nonce 증가로 자식 remount → IS_FLAT 신규값 반영
         if (!cancelled && prev !== IS_FLAT) wasReadyAtUpdate.v = true;
