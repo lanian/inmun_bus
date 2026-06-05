@@ -199,7 +199,7 @@
 
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef, useMemo } = React;
-const BUILD = "b439"; /* 화면 우하단 표시 — 최신 배포 확인용 */
+const BUILD = "b440"; /* 화면 우하단 표시 — 최신 배포 확인용 */
 
 /* IS_FLAT — 평면 디자인 활성 여부. 페이지 로드 시 결정.
    우선순위: URL ?theme= (공유·비교용) > localStorage 「shuttle:theme」(사용자 선택) > 기본 false.
@@ -6429,13 +6429,17 @@ function PassengerView({ dbUrl, onAdmin, initialTab = "list", theme = "default" 
     outerShadow: isFlat ? "none" : "4px 4px 0 " + FT.ink,
     outerRadius: isFlat ? 0 : 18,
     outerBg: isFlat ? "transparent" : "#fff",
-    cardBorder: isFlat ? "1px solid " + FT.mute + "55" : "2px solid " + FT.ink,
-    cardShadow: isFlat ? "none" : "2px 2px 0 " + FT.ink,
+    // 내부 카드 — 평면에선 매우 옅은 회색 보더 + 미세 drop-shadow(보더만으로는 평면이 너무 풀려 보이는 느낌 보강)
+    cardBorder: isFlat ? "1px solid " + FT.mute + "44" : "2px solid " + FT.ink,
+    cardShadow: isFlat ? "0 1px 2px rgba(16,17,19,0.04)" : "2px 2px 0 " + FT.ink,
     cardShadowMute: isFlat ? "none" : "1.5px 1.5px 0 " + FT.mute,
-    cardRadius: isFlat ? 10 : 12,
+    cardRadius: isFlat ? 12 : 12,
     headerBorder: isFlat ? "1px solid " + FT.mute + "33" : "2px solid " + FT.ink,
     headerBg: isFlat ? "transparent" : "#fff",
     accentBorderTop: (color) => isFlat ? `3px solid ${color}` : `5px solid ${color}`,
+    // 평면일 때 body 패딩 약간 ↑ — 외곽 카드 없어 시각 호흡 확보 필요
+    bodyPadding: isFlat ? "14px 14px 16px" : "10px 12px 12px",
+    bodySpace: isFlat ? "space-y-3" : "space-y-2.5",
   };
   // 탭 변경 시 통계 — view.{tab} + 펀넬용 transition.{from}_to_{to}
   const prevTabRef = useRef(null);
@@ -6876,8 +6880,8 @@ function PassengerView({ dbUrl, onAdmin, initialTab = "list", theme = "default" 
           </div>
 
 
-          {/* body — 일관 vertical rhythm(10px), 외곽 컨테이너 그림자만 강조, 내부 카드는 가볍게 */}
-          <div className="space-y-2.5" style={{ background: FT.paper, padding: "10px 12px 12px", flex: 1, minHeight: 0, overflowY: "auto" }}>
+          {/* body — 일관 vertical rhythm(10px·기본 / 12px·평면), 외곽 컨테이너 그림자만 강조, 내부 카드는 가볍게 */}
+          <div className={ts.bodySpace} style={{ background: FT.paper, padding: ts.bodyPadding, flex: 1, minHeight: 0, overflowY: "auto" }}>
             {/* P1-2: 운영자 공지/재난 띠 — 새 공지가 오면 상단에 빨간/노란 배너 */}
             {showNotice && (() => {
               const lv = notice.level || "info";
@@ -6937,7 +6941,12 @@ function PassengerView({ dbUrl, onAdmin, initialTab = "list", theme = "default" 
             {/* 상태 안내 — empty/schedActive 컨텍스트 (pre/post 는 위 큰 카드로 분리). 본문은 humanist 본문체로 가독성 ↑ */}
             {live.length === 0 && !preFestival && !postFestival && (
               <div style={{ textAlign: "center", color: FT.inkSoft, fontFamily: "'Gowun Dodum', system-ui, sans-serif",
-                fontWeight: 500, fontSize: 12.5, lineHeight: 1.5, padding: "6px 4px 2px", letterSpacing: -0.2 }}>
+                fontWeight: 500, fontSize: 12.5, lineHeight: 1.5,
+                padding: isFlat ? "12px 14px" : "6px 4px 2px",
+                letterSpacing: -0.2,
+                background: isFlat ? "rgba(255,255,255,0.55)" : "transparent",
+                border: isFlat ? "1px solid " + FT.mute + "33" : "none",
+                borderRadius: isFlat ? 10 : 0 }}>
                 {conn === "error" ? "연결을 확인하는 중입니다…"
                   : schedActive ? "📡 라이브 신호 없음 · 시간표 기준 운행 중"
                   : "지금은 운행 중인 셔틀이 없어요"}
@@ -7151,8 +7160,9 @@ function PassengerView({ dbUrl, onAdmin, initialTab = "list", theme = "default" 
                     <button onClick={() => { trackStat("click_banner_festival"); setVenueZone(0); setTab("venue"); }}
                       style={{ width: "100%", display: "flex", alignItems: "center", gap: 12,
                         background: bgGradient, color: "#fff",
-                        border: isFlat ? "none" : "2.5px solid " + FT.ink, borderRadius: 12,
-                        padding: "12px 14px", boxShadow: isFlat ? "none" : "3px 3px 0 " + FT.ink,
+                        border: isFlat ? "none" : "2.5px solid " + FT.ink, borderRadius: isFlat ? 14 : 12,
+                        padding: "13px 14px",
+                        boxShadow: isFlat ? "0 4px 14px rgba(238,107,46,0.22), 0 1px 3px rgba(0,0,0,0.08)" : "3px 3px 0 " + FT.ink,
                         fontFamily: "'Jua', sans-serif", fontWeight: 700, cursor: "pointer", textAlign: "left" }}>
                       {/* 좌측 D-day 배지 */}
                       <span style={{ flexShrink: 0, display: "inline-flex", alignItems: "center", justifyContent: "center",
