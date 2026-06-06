@@ -2166,8 +2166,8 @@ function NoticeEditor({ onClose, dbUrl, getAuth, refreshAuth }) {
   }, [dbUrl]);
   const put = async (tok, body) => {
     const base = dbUrl.replace(/\/+$/, "");
-    const auth = tok ? `?auth=${encodeURIComponent(tok)}` : "";
-    return fetch(`${base}/notice.json${auth}`, { method: "PUT", body: JSON.stringify(body) });
+    const headers = tok ? { "Authorization": `Bearer ${tok}` } : {};
+    return fetch(`${base}/notice.json`, { method: "PUT", body: JSON.stringify(body), headers });
   };
   const save = async (publish) => {
     const body = { message: text.trim(), level, active: !!publish, ts: Date.now() };
@@ -2308,8 +2308,8 @@ function HandoffModal({ onClose, dbUrl, getAuth, refreshAuth, getCurrent, applyS
     if (!dbUrl) { setStatus("⚠ DB 주소 없음"); return; }
     setStatus("게시 중…");
     const base = dbUrl.replace(/\/+$/, "");
-    const r = await withAuth((tok) => fetch(`${base}/handoff.json${tok ? `?auth=${encodeURIComponent(tok)}` : ""}`,
-      { method: "PUT", body: JSON.stringify(body) }));
+    const r = await withAuth((tok) => fetch(`${base}/handoff.json`,
+      { method: "PUT", body: JSON.stringify(body), headers: tok ? { "Authorization": `Bearer ${tok}` } : {} }));
     if (!r) return;
     if (r.ok) { setStatus("✅ 게시 완료 — 다른 단말에서 인계 받기"); load(); }
     else if (r.status === 401 || r.status === 403) setStatus(`⚠ 권한 없음 (HTTP ${r.status}) — driver/admin UID 등록 확인`);
@@ -2331,8 +2331,8 @@ function HandoffModal({ onClose, dbUrl, getAuth, refreshAuth, getCurrent, applyS
     applyState && applyState(pending);
     setStatus("✅ 인계 적용 완료 — 연결 탭에서 위치 공유 켜기");
     const base = dbUrl.replace(/\/+$/, "");
-    withAuth((tok) => fetch(`${base}/handoff.json${tok ? `?auth=${encodeURIComponent(tok)}` : ""}`,
-      { method: "DELETE" })).then(() => { setPending(null); }).catch(() => {});
+    withAuth((tok) => fetch(`${base}/handoff.json`,
+      { method: "DELETE", headers: tok ? { "Authorization": `Bearer ${tok}` } : {} })).then(() => { setPending(null); }).catch(() => {});
     setTimeout(onClose, 1200);
   };
   const clear = async () => {
@@ -2340,8 +2340,8 @@ function HandoffModal({ onClose, dbUrl, getAuth, refreshAuth, getCurrent, applyS
     if (!dbUrl) return;
     const base = dbUrl.replace(/\/+$/, "");
     setStatus("삭제 중…");
-    const r = await withAuth((tok) => fetch(`${base}/handoff.json${tok ? `?auth=${encodeURIComponent(tok)}` : ""}`,
-      { method: "DELETE" }));
+    const r = await withAuth((tok) => fetch(`${base}/handoff.json`,
+      { method: "DELETE", headers: tok ? { "Authorization": `Bearer ${tok}` } : {} }));
     if (!r) return;
     if (r.ok) { setStatus("✅ 삭제 완료"); setPending(null); }
     else setStatus(`⚠ 실패 (HTTP ${r.status})`);
@@ -2576,8 +2576,8 @@ function UsageStatsViewer({ onClose, dbUrl, getAuth, refreshAuth }) {
     if (!d) return null;
     const base = dbUrl.replace(/\/+$/, "");
     const tryFetch = async (tok) => {
-      const auth = tok ? `?auth=${encodeURIComponent(tok)}` : "";
-      return fetch(`${base}/stats/${encodeURIComponent(d)}/sessions.json${auth}`, { cache: "no-store" });
+      const headers = tok ? { "Authorization": `Bearer ${tok}` } : {};
+      return fetch(`${base}/stats/${encodeURIComponent(d)}/sessions.json`, { cache: "no-store", headers });
     };
     const t0 = getAuth && getAuth();
     let r = await tryFetch(t0);
@@ -2730,8 +2730,8 @@ function UsageStatsViewer({ onClose, dbUrl, getAuth, refreshAuth }) {
     setStatus("삭제 중…");
     const base = dbUrl.replace(/\/+$/, "");
     const tryDel = async (tok) => {
-      const auth = tok ? `?auth=${encodeURIComponent(tok)}` : "";
-      return fetch(`${base}/stats/${encodeURIComponent(dateA)}.json${auth}`, { method: "DELETE" });
+      const headers = tok ? { "Authorization": `Bearer ${tok}` } : {};
+      return fetch(`${base}/stats/${encodeURIComponent(dateA)}.json`, { method: "DELETE", headers });
     };
     try {
       const t0 = getAuth && getAuth();
@@ -3218,8 +3218,8 @@ function StickerEditor({ onClose, dbUrl, getAuth, refreshAuth }) {
     const base = dbUrl.replace(/\/+$/, "");
     const tok0 = getAuth && getAuth();
     const tryOnce = (tok) => {
-      const auth = tok ? `?auth=${encodeURIComponent(tok)}` : "";
-      return fetch(`${base}${path}.json${auth}`, { method: "DELETE" });
+      const headers = tok ? { "Authorization": `Bearer ${tok}` } : {};
+      return fetch(`${base}${path}.json`, { method: "DELETE", headers });
     };
     if (!tok0 && !refreshAuth) return { ok: false, status: 401, body: "인증 토큰 없음" };
     let r = await tryOnce(tok0);
@@ -3549,8 +3549,8 @@ function ZoneEditor({ onClose, dbUrl, getAuth, refreshAuth }) {
   }, [zones]);
   const putZones = async (tok, payload) => {
     const base = dbUrl.replace(/\/+$/, "");
-    const auth = tok ? `?auth=${encodeURIComponent(tok)}` : "";
-    return fetch(`${base}/zones.json${auth}`, { method: "PUT", body: JSON.stringify(payload || zones) });
+    const headers = tok ? { "Authorization": `Bearer ${tok}` } : {};
+    return fetch(`${base}/zones.json`, { method: "PUT", body: JSON.stringify(payload || zones), headers });
   };
   const cleaned = () => {
     const out = {};
@@ -4089,8 +4089,9 @@ function ViaEditor({ onClose, dbUrl, getAuth }) {
     const auth = await ensureToken();
     if (!auth) { setSyncStatus("local"); setSyncDetail("로그인 정보(이메일/비밀번호/API 키)가 없거나 로그인 실패"); return; }
     try {
-      const r = await fetch(`${dbUrl.replace(/\/+$/, "")}/viapoints.json?auth=${encodeURIComponent(auth)}`, {
+      const r = await fetch(`${dbUrl.replace(/\/+$/, "")}/viapoints.json`, {
         method: "PUT", body: JSON.stringify(viaMap),
+        headers: { "Authorization": `Bearer ${auth}` },
       });
       if (r.ok) { setSyncStatus("synced"); setSyncDetail(""); }
       else {
@@ -6355,8 +6356,8 @@ function SettingsModal({ onClose, dbUrl, getAuth, refreshAuth }) {
       const base = dbUrl.replace(/\/+$/, "");
       const body = JSON.stringify(next); // "flat" | "default"
       const putWith = async (token) => {
-        const url = `${base}/settings/theme.json` + (token ? `?auth=${encodeURIComponent(token)}` : "");
-        return fetch(url, { method: "PUT", body });
+        const headers = token ? { "Authorization": `Bearer ${token}` } : {};
+        return fetch(`${base}/settings/theme.json`, { method: "PUT", body, headers });
       };
       try {
         let token = getAuth();
@@ -7747,8 +7748,9 @@ function App() {
     if (!shareUrl) return;
     const auth = authTokenRef.current;
     if (!auth) return; // 로그인 안 됨 → 로컬만 저장. 위치 공유를 한 번 켜면 토큰 발급되어 다음 수정부터 동기화
-    fetch(`${shareUrl.replace(/\/+$/, "")}/coords.json?auth=${encodeURIComponent(auth)}`, {
+    fetch(`${shareUrl.replace(/\/+$/, "")}/coords.json`, {
       method: "PUT", body: JSON.stringify(coords),
+      headers: { "Authorization": `Bearer ${auth}` },
     }).catch(() => {});
   }, [coords, shareUrl]);
   useEffect(() => LS.set("rate", String(rate)), [rate]);
@@ -7816,7 +7818,7 @@ function App() {
     try {
       if (!shareUrl || !busId) return;
       const base = shareUrl.replace(/\/+$/, "");
-      const auth = authTokenRef.current ? `?auth=${encodeURIComponent(authTokenRef.current)}` : "";
+      const authHeaders = authTokenRef.current ? { "Authorization": `Bearer ${authTokenRef.current}` } : {};
       const tripPrefix = `${wasDir}|${wasTrip + 1}|`;
       let board = 0, alight = 0;
       Object.entries(countsRef.current || {}).forEach(([k, v]) => {
@@ -7838,8 +7840,8 @@ function App() {
         counts: { board, alight, onboard: Math.max(0, board - alight) },
         broadcastFails: broadcastStats?.failCount || 0,
       };
-      fetch(`${base}/journal/${dateKey}/${encodeURIComponent(busId)}/${wasDir}-${wasTrip + 1}.json${auth}`, {
-        method: "PUT", body: JSON.stringify(entry), keepalive: true,
+      fetch(`${base}/journal/${dateKey}/${encodeURIComponent(busId)}/${wasDir}-${wasTrip + 1}.json`, {
+        method: "PUT", body: JSON.stringify(entry), keepalive: true, headers: authHeaders,
       }).catch(() => {});
     } catch (_) {}
   };
@@ -8892,10 +8894,10 @@ function App() {
     if (!shareUrl) return;
     const [dir, trip, stop] = key.split("|");
     const base = shareUrl.replace(/\/+$/, "");
-    const auth = authTokenRef.current ? `?auth=${encodeURIComponent(authTokenRef.current)}` : "";
-    const path = `${base}/counts/${dateKey}/${dir}/${trip}/${encodeURIComponent(stop)}.json${auth}`;
+    const authHeaders = authTokenRef.current ? { "Authorization": `Bearer ${authTokenRef.current}` } : {};
+    const path = `${base}/counts/${dateKey}/${dir}/${trip}/${encodeURIComponent(stop)}.json`;
     // P1-5: keepalive=true — pagehide/탭 종료 직전 호출돼도 OS가 살려 보냄
-    fetch(path, { method: "PUT", body: JSON.stringify(data), keepalive: true }).catch(() => {});
+    fetch(path, { method: "PUT", body: JSON.stringify(data), keepalive: true, headers: authHeaders }).catch(() => {});
   };
 
   /* 이전 정류장(현 정류장 제외)까지의 누적 (탑승 합 − 하차 합) = 도착 시점 탑승 인원. 음수 0 캡. */
@@ -8966,8 +8968,8 @@ function App() {
     // Firebase 해당 회차 삭제
     if (shareUrl) {
       const base = shareUrl.replace(/\/+$/, "");
-      const auth = authTokenRef.current ? `?auth=${encodeURIComponent(authTokenRef.current)}` : "";
-      fetch(`${base}/counts/${dateKey}/${direction}/${tripIdx + 1}.json${auth}`, { method: "DELETE" }).catch(() => {});
+      const authHeaders = authTokenRef.current ? { "Authorization": `Bearer ${authTokenRef.current}` } : {};
+      fetch(`${base}/counts/${dateKey}/${direction}/${tripIdx + 1}.json`, { method: "DELETE", headers: authHeaders }).catch(() => {});
     }
     // 해당 회차 디바운스 큐도 비움
     const tk = countsWriteTimerRef.current;
@@ -8980,8 +8982,8 @@ function App() {
     try { LS.setJSON(`counts:${dateKey}`, {}); } catch (_) {}
     if (shareUrl) {
       const base = shareUrl.replace(/\/+$/, "");
-      const auth = authTokenRef.current ? `?auth=${encodeURIComponent(authTokenRef.current)}` : "";
-      fetch(`${base}/counts/${dateKey}.json${auth}`, { method: "DELETE" }).catch(() => {});
+      const authHeaders = authTokenRef.current ? { "Authorization": `Bearer ${authTokenRef.current}` } : {};
+      fetch(`${base}/counts/${dateKey}.json`, { method: "DELETE", headers: authHeaders }).catch(() => {});
     }
     // 디바운스 큐도 비움
     const tk = countsWriteTimerRef.current;
@@ -9160,7 +9162,7 @@ function App() {
     if (now - lastShareRef.current < minGap) return;
     lastShareRef.current = now;
     const base = shareUrl.replace(/\/+$/, "");
-    const auth = authTokenRef.current ? `?auth=${encodeURIComponent(authTokenRef.current)}` : "";
+    const authHeaders = authTokenRef.current ? { "Authorization": `Bearer ${authTokenRef.current}` } : {};
     // 좌표는 locShare ON 이고 GPS userPos가 있을 때만 첨부. 운행 정보는 항상 송신.
     const hasGps = locShare && userPos;
     // arrived/이탈 히스테리시스 — distanceMode 설정 따라 노선/직선 선택
@@ -9219,7 +9221,7 @@ function App() {
       ...(arrivedNow ? { arrived: true } : {}),
       ...(departedInfo ? { departedFrom: departedInfo.stop, departedAt: departedInfo.at } : {}),
     });
-    fetch(`${base}/buses/${encodeURIComponent(busId || "1")}.json${auth}`, { method: "PUT", body })
+    fetch(`${base}/buses/${encodeURIComponent(busId || "1")}.json`, { method: "PUT", body, headers: authHeaders })
       .then((r) => {
         if ((r.status === 401 || r.status === 403) && driverEmail && driverPass) {
           // 인증 토큰 만료/거부 — 1분에 1회로 제한해 재로그인 시도(중복 호출 방지)
@@ -9257,8 +9259,8 @@ function App() {
     if (!wasSharingRef.current || !shareUrl) return;
     wasSharingRef.current = false;
     const base = shareUrl.replace(/\/+$/, "");
-    const auth = authTokenRef.current ? `?auth=${encodeURIComponent(authTokenRef.current)}` : "";
-    fetch(`${base}/buses/${encodeURIComponent(busId || "1")}.json${auth}`, { method: "DELETE" }).catch(() => {});
+    const authHeaders = authTokenRef.current ? { "Authorization": `Bearer ${authTokenRef.current}` } : {};
+    fetch(`${base}/buses/${encodeURIComponent(busId || "1")}.json`, { method: "DELETE", headers: authHeaders }).catch(() => {});
   }, [sharing]);
 
   /* --- Trip status (출발 전/운행 중/지연/종료) — 지연 운행을 '종료'로 오표시하지 않음 --- */
