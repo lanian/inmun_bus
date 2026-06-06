@@ -1,5 +1,4 @@
 {
-  "//SECURITY-PATCH-v2": "P0+P1 룰 점검 (2026-06-06 update). v1(2026-06-06): /stickers bbox+ts validate + /stats 익명 차단. v2 추가: (3) 루트 .read:true → .read:false. Firebase 룰은 shallower-overrides-deeper 이므로 루트가 true 면 /drivers·/admins UID 리스트, /stats 분석 등이 모두 노출됨. 자식 .read 규칙은 부모가 허용하면 무시됨. 따라서 루트는 deny, 각 공개 노드(buses·coords·viapoints·zones·notice·counts·handoff·settings·journal·stickers)에 명시 .read:true. (4) /handoff·/settings/theme·/notice 등에 구조 validate 추가 (운영자 토큰 탈취 시 데이터 위변조 방지). 클라이언트 영향 없음 — 정상 접근 경로는 모두 유지. MANUAL CONSOLE: Firebase Console > Realtime Database > Rules 게시. 게시 후 검증 (a) 비로그인 passenger 가 /buses·/notice 등 정상 read; (b) 비로그인 GET /drivers.json·/admins.json → 401; (c) 운영자 모든 write 정상.",
   "rules": {
     ".read": false,
     ".write": false,
