@@ -46,13 +46,9 @@
     "handoff": {
       ".read": true,
       ".write": "auth != null && (root.child('drivers').child(auth.uid).exists() || root.child('admins').child(auth.uid).exists())",
-      ".validate": "newData.hasChildren(['busId','dir','tripIdx','currentIdx','ts','by']) || newData.val() == null",
+      ".validate": "(newData.hasChild('busId') && newData.hasChild('ts')) || newData.val() == null",
       "busId":      { ".validate": "newData.isString() && newData.val().length <= 32" },
-      "dir":        { ".validate": "newData.isString() && newData.val().matches(/^(outbound|inbound)$/)" },
-      "tripIdx":    { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 20" },
-      "currentIdx": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 50" },
-      "ts":         { ".validate": "newData.isNumber()" },
-      "by":         { ".validate": "newData.isString() && newData.val().length <= 64" }
+      "ts":         { ".validate": "newData.isNumber()" }
     },
 
     "settings": {
