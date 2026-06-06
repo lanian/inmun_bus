@@ -212,7 +212,7 @@
 
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef, useMemo } = React;
-const BUILD = "b448"; /* 화면 우하단 표시 — 최신 배포 확인용 */
+const BUILD = "b449"; /* 화면 우하단 표시 — 최신 배포 확인용 */
 
 /* IS_FLAT — 평면 디자인 활성 여부. 페이지 로드 시 결정.
    우선순위: URL ?theme= (공유·비교용) > localStorage 「shuttle:theme」(사용자 선택) > 기본 false.
@@ -11285,17 +11285,31 @@ function Root() {
   /* themeNonce — 페치가 2초 timeout 보다 늦게 끝나 IS_FLAT 가 setReady 이후 갱신될 때
      자식 컴포넌트 강제 remount 용. 페치 빠르면 0 유지 → 추가 remount 없음. */
   const [themeNonce, setThemeNonce] = useState(0);
-  /* Intro 2초 동안 Firebase /settings/theme 동시 fetch — 운영자가 게시한 테마를
-     IS_FLAT(let) 에 갱신 후 setReady. PassengerView/BusCard/Venue/Map 등이
-     첫 렌더부터 신규 테마로 그려짐. URL ?theme= 이 있으면 강제 우선이라 skip. */
+  /* Intro 최소·최대 시간 — 인트로 스위치 애니메이션(1.6s) 이 잘리지 않도록 최소 1.7s 보장.
+     Firebase 페치가 빨라도 setReady 는 최소 1.7s 이후. 페치 실패해도 최대 2.4s 후 강제 진입.
+     URL ?theme= 이 있으면 강제 우선이라 skip. */
   useEffect(() => {
     let cancelled = false;
+    const MIN_INTRO_MS = 1700;
+    const MAX_INTRO_MS = 2400;
+    const startTime = Date.now();
     const dbUrl = params.get("db") || SHARE_DB;
     const urlTheme = params.get("theme");
     const skipFetch = urlTheme === "flat" || urlTheme === "default" || !dbUrl;
-    const finish = () => { if (!cancelled) setReady(true); };
-    const t = setTimeout(finish, 2000); // 페치 실패해도 최대 2초 후 진입
-    if (skipFetch) return () => { cancelled = true; clearTimeout(t); };
+    const proceed = () => { if (!cancelled) setReady(true); };
+    // 최소 진입 시각 보장 — 페치가 빠르게 끝나도 인트로 애니메이션 끝까지 노출
+    const proceedAfterMinIntro = () => {
+      const elapsed = Date.now() - startTime;
+      if (elapsed >= MIN_INTRO_MS) proceed();
+      else setTimeout(proceed, MIN_INTRO_MS - elapsed);
+    };
+    // 강제 진입 — 페치 실패/지연 시 MAX 도달하면 진입
+    const hardTimer = setTimeout(proceed, MAX_INTRO_MS);
+    if (skipFetch) {
+      // skip 이라도 MIN 보장
+      const t = setTimeout(proceed, MIN_INTRO_MS);
+      return () => { cancelled = true; clearTimeout(t); clearTimeout(hardTimer); };
+    }
     const wasReadyAtUpdate = { v: false };
     (async () => {
       try {
@@ -11314,18 +11328,18 @@ function Root() {
         IS_FLAT = (v === "flat");
         applyFlatBodyClass();
         THEME_DEBUG += ` is_flat=${IS_FLAT}`;
-        // 이미 ready 면 (timeout 먼저 fire) → nonce 증가로 자식 remount → IS_FLAT 신규값 반영
+        // 이미 ready 면 (MAX timer 먼저 fire) → nonce 증가로 자식 remount → IS_FLAT 신규값 반영
         if (!cancelled && prev !== IS_FLAT) wasReadyAtUpdate.v = true;
       } catch (e) {
         THEME_DEBUG = `err=${(e && e.message) || "fetch_fail"}`;
       }
     })().finally(() => {
-      clearTimeout(t);
-      finish();
+      clearTimeout(hardTimer);
+      proceedAfterMinIntro();
       // setReady 가 이미 호출됐고 IS_FLAT 가 갱신됐다면 remount 로 강제 재렌더
       if (!cancelled && wasReadyAtUpdate.v) setThemeNonce((n) => n + 1);
     });
-    return () => { cancelled = true; clearTimeout(t); };
+    return () => { cancelled = true; clearTimeout(hardTimer); };
   }, []);
   if (!ready) return <Intro admin={admin} />;
   // P2-3: ?view=ops — 운영자 본부 대시보드 (Intro 끝난 뒤 즉시 진입)
