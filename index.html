@@ -1498,7 +1498,7 @@ function VenueModal({ onClose, initialZone = 0, initialProgram = null, onOpenLiv
         {!pageMode && (
           <div className="flex items-center justify-between sticky"
             style={{ top: -16, marginLeft: -16, marginRight: -16, marginTop: -16, paddingLeft: 16, paddingRight: 16, paddingTop: 12, paddingBottom: 10,
-              background: "#fff", borderBottom: "1.5px solid " + FT.mute + "55", zIndex: 5 }}>
+              background: "#fff", borderBottom: isFlat ? "1px solid " + FT.mute + "33" : "1.5px solid " + FT.mute + "55", zIndex: 5 }}>
             <div>
               <div style={{ fontSize: 11, color: FT.inkSoft, fontFamily: "'Jua', sans-serif" }}>Festival Map · Program</div>
               <div style={{ color: FT.ink, fontFamily: "'Jua', sans-serif", fontWeight: 700, fontSize: 16 }}>
@@ -5567,7 +5567,7 @@ function BusCardImpl({ id, bus, agoText, nowMin, tripsToday, departedInfo, isFla
           <span style={{ fontSize: 20 }}>🚌</span>
           <span className="flex-shrink-0" style={{ color: FT.ink, fontFamily: "'Jua', sans-serif", fontWeight: 700 }}>{id}</span>
           <span className="truncate" style={{ background: dir === "outbound" ? FT.orange : FT.teal, color: "#fff",
-            border: IS_FLAT ? "none" : "1.5px solid " + FT.ink, padding: "2px 8px", borderRadius: 999,
+            border: IS_FLAT ? "1px solid " + FT.mute + "33" : "1.5px solid " + FT.ink, padding: "2px 8px", borderRadius: 999,
             fontSize: 11, fontFamily: "'Jua', sans-serif", display: "inline-flex", alignItems: "center", gap: 4 }}
             aria-label={`${route.label} ${bus.trip || "-"}회차`}>
             <span aria-hidden style={{ fontSize: 9 }}>{dir === "outbound" ? "▶" : "◀"}</span>
@@ -7028,9 +7028,9 @@ function PassengerView({ dbUrl, onAdmin, initialTab = "list", theme = "default" 
                 fontWeight: 500, fontSize: 12.5, lineHeight: 1.5,
                 padding: isFlat ? "12px 14px" : "6px 4px 2px",
                 letterSpacing: -0.2,
-                background: isFlat ? "rgba(255,255,255,0.55)" : "transparent",
-                border: isFlat ? "1px solid " + FT.mute + "33" : "none",
-                borderRadius: isFlat ? 10 : 0 }}>
+                background: "transparent",
+                border: "none",
+                borderRadius: 0 }}>
                 {conn === "error" ? "연결을 확인하는 중입니다…"
                   : schedActive ? "📡 라이브 신호 없음 · 시간표 기준 운행 중"
                   : "지금은 운행 중인 셔틀이 없어요"}
@@ -7130,7 +7130,7 @@ function PassengerView({ dbUrl, onAdmin, initialTab = "list", theme = "default" 
                             style={{ background: "#fff",
                               border: isFlat ? "1px dashed " + FT.mute + "88" : "2px dashed " + FT.ink, borderRadius: 12,
                               padding: "9px 11px 9px 13px",
-                              borderLeft: (isFlat ? "4px solid " : "8px solid ") + FT.mute,
+                              borderLeft: (isFlat ? "3px solid " : "8px solid ") + FT.mute,
                               boxShadow: isFlat ? "none" : "1.5px 1.5px 0 " + FT.ink, opacity: 0.95 }}>
                             <div className="flex items-center gap-2" style={{ marginBottom: 4 }}>
                               <span style={{ fontSize: 10, padding: "1px 6px", borderRadius: 4, background: FT.mute, color: "#fff",
@@ -7156,7 +7156,7 @@ function PassengerView({ dbUrl, onAdmin, initialTab = "list", theme = "default" 
                           style={{ background: "#fff",
                             border: isFlat ? "1px dashed " + FT.mute + "88" : "2px dashed " + FT.ink, borderRadius: 12,
                             padding: "9px 11px 9px 13px",
-                            borderLeft: (isFlat ? "4px solid " : "8px solid ") + c,
+                            borderLeft: (isFlat ? "3px solid " : "8px solid ") + c,
                             boxShadow: isFlat ? "none" : "1.5px 1.5px 0 " + FT.ink }}>
                           <div className="flex items-center gap-2" style={{ marginBottom: 4 }}>
                             <span style={{ fontSize: 10, padding: "1px 6px", borderRadius: 4, background: c, color: "#fff",
