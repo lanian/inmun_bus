@@ -208,7 +208,7 @@
 
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef, useMemo } = React;
-const BUILD = "b445"; /* 화면 우하단 표시 — 최신 배포 확인용 */
+const BUILD = "b446"; /* 화면 우하단 표시 — 최신 배포 확인용 */
 
 /* IS_FLAT — 평면 디자인 활성 여부. 페이지 로드 시 결정.
    우선순위: URL ?theme= (공유·비교용) > localStorage 「shuttle:theme」(사용자 선택) > 기본 false.
@@ -5235,17 +5235,20 @@ function LiveMapView({ dbUrl, onHome, onOpenVenue, isFlat = false }) {
       {/* P0: 라이브 신호 지연 배너 — 모든 차량이 60초 이상 보고 끊겼을 때 정제된 알림.
           상단 우측 칩이 이미 15s+ stale 처리하므로 배너는 60s+ 만 노출, 시각 강도 ↓.
           흰 pill + 옐로 액센트 + 펄싱 dot — 모던 모바일 알림 톤.
-          stickerKind 활성 시 sticker 상단바와 겹치므로 숨김. busSeenCount=0 / latestBusTs=0 일 땐
-          기존 '운행 중이 아닙니다' 가 처리하므로 표시하지 않음. fresh(<60s) 갱신 시 자동 사라짐. */}
+          위치 — UnifiedMapBanner(top:60) 가린다는 보고로 그 아래(top:138)로 내림.
+          상한 — 10분 이상 stale 은 운전자 단말 종료/방치 가능성. 잘못된 안심 유도 피하려 배너 자동 숨김
+          (대신 우측 칩의 '신호 약함' 표시는 유지). stickerKind 활성 시 sticker 상단바와 겹치므로 숨김.
+          busSeenCount=0 / latestBusTs=0 일 땐 기존 '운행 중이 아닙니다' 가 처리하므로 표시하지 않음. */}
       {(() => {
         if (stickerKind) return null;
         if (busSeenCount <= 0 || latestBusTs <= 0) return null;
         const ageMs = Date.now() - latestBusTs;
-        if (ageMs <= 60000) return null;
+        if (ageMs <= 60000) return null; // fresh — 표시 안 함
+        if (ageMs > 600000) return null; // 10분+ — 방치된 entry 일 가능성, 잘못된 시각 유도 피함
         const mins = Math.max(1, Math.ceil(ageMs / 60000));
         return (
           <div role="alert" aria-live="polite"
-            style={{ position: "fixed", left: "50%", top: "calc(58px + env(safe-area-inset-top, 0px))",
+            style={{ position: "fixed", left: "50%", top: "calc(138px + env(safe-area-inset-top, 0px))",
               transform: "translateX(-50%)", zIndex: 1150, pointerEvents: "none",
               maxWidth: "calc(100vw - 20px)" }}>
             <div style={{ pointerEvents: "auto", display: "inline-flex", alignItems: "center", gap: 9,
