@@ -7630,6 +7630,13 @@ function App() {
   const [broadcastStatus, setBroadcastStatus] = useState("ok"); // ok | failing
   const [lastBroadcastStatus, setLastBroadcastStatus] = useState(null); // 마지막 실패 코드/메시지
   const [broadcastStats, setBroadcastStats] = useState({ lastAt: 0, count: 0, failCount: 0 });
+  // P0 sticky banner: 연속 실패 ≥3회 또는 마지막 성공 ≥30초 경과 시 운영자 상단에 빨간 배너.
+  // lastBroadcastOkRef: 마지막 성공 timestamp. 0 이면 아직 한 번도 성공 안 함(공유 시작 직후).
+  // bannerDismissedAtRef: 사용자가 배너 닫은 시각. 60초간 재표시 억제. 성공 시 0으로 리셋.
+  // _bannerTick: 5초 간격으로 재렌더 트리거 — Date.now() 기반 조건 평가용.
+  const lastBroadcastOkRef = useRef(0);
+  const bannerDismissedAtRef = useRef(0);
+  const [_bannerTick, _setBannerTick] = useState(0);
   const [_statsTick, _setStatsTick] = useState(0); // "N초 전" 갱신용 1초 tick — sharing 선언 이후에 effect 등록
   const [driverEmail, setDriverEmail] = useState(() => LS.get("driveremail", "")); // 기사 쓰기 로그인(이 기기에만 저장)
   const [driverPass, setDriverPass] = useState(() => LS.get("driverpass", ""));
@@ -9137,6 +9144,13 @@ function App() {
     const id = setInterval(() => _setShareTick((t) => t + 1), 5000);
     return () => clearInterval(id);
   }, [sharing]);
+  /* P0 sticky banner: 5초 tick. sharing 켜진 동안 broadcast 실패 조건을
+     매 5초 평가해 sticky 빨간 배너 표시 여부를 갱신. */
+  useEffect(() => {
+    if (!sharing) return;
+    const id = setInterval(() => _setBannerTick((t) => t + 1), 5000);
+    return () => clearInterval(id);
+  }, [sharing]);
   useEffect(() => {
     if (!sharing || !shareUrl) return;
     const now = Date.now();
@@ -9218,6 +9232,9 @@ function App() {
         }
         if (!r.ok) throw new Error(String(r.status));
         if (broadcastFailRef.current !== 0) { broadcastFailRef.current = 0; setBroadcastStatus("ok"); setLastBroadcastStatus(null); }
+        // P0 sticky banner: 성공 → 마지막 성공 시각 갱신, 사용자 닫음 상태도 해제.
+        lastBroadcastOkRef.current = Date.now();
+        bannerDismissedAtRef.current = 0;
         setBroadcastStats((p) => ({ lastAt: Date.now(), count: p.count + 1, failCount: 0 }));
       })
       .catch((err) => {
@@ -9361,6 +9378,60 @@ function App() {
     <StickerEditor onClose={() => setShowStickerEditor(false)} dbUrl={shareUrl} getAuth={() => authTokenRef.current}
       refreshAuth={async () => { try { const d = await firebaseSignIn(); if (d && d.idToken) { authTokenRef.current = d.idToken; tokenIssuedAtRef.current = Date.now(); return d.idToken; } } catch (_) {} return null; }} />
   ) : null;
+  /* P0 sticky banner — 운영자(?admin=1) 화면 최상단에 broadcast 실패 시 빨간 배너.
+     조건: sharing ON 이고 (연속 실패 ≥3회 또는 마지막 성공 ≥30초 경과) 이고
+           사용자가 60초 내에 닫지 않은 경우.
+     성공 시(success path) lastBroadcastOkRef 갱신·bannerDismissedAtRef 0 으로 자동 해제. */
+  const broadcastFailBanner = (() => {
+    if (!sharing) return null;
+    void _bannerTick; // tick 의존성 — 5초마다 재평가
+    const now = Date.now();
+    const fails = broadcastFailRef.current || 0;
+    const lastOk = lastBroadcastOkRef.current || 0;
+    const secsSinceOk = lastOk ? Math.floor((now - lastOk) / 1000) : null;
+    // 한 번도 성공 못한 상태에서는 실패 카운트만으로 판정. 성공 이력 있으면 둘 중 하나라도 충족.
+    const failHit = fails >= 3;
+    const timeHit = lastOk > 0 && secsSinceOk >= 30;
+    if (!failHit && !timeHit) return null;
+    const dismissedAt = bannerDismissedAtRef.current || 0;
+    if (dismissedAt && now - dismissedAt < 60000) return null;
+    const xText = secsSinceOk != null ? `${secsSinceOk}초` : "—";
+    return (
+      <div role="alert" aria-live="assertive"
+        style={{ position: "fixed", top: 0, left: 0, right: 0,
+          zIndex: 10000, pointerEvents: "auto",
+          background: "#dc2626", color: "#fff",
+          borderBottom: "2px solid #fff",
+          padding: "calc(8px + env(safe-area-inset-top, 0px)) 12px 8px 12px",
+          fontFamily: "'Jua', sans-serif", fontWeight: 700,
+          display: "flex", alignItems: "center", justifyContent: "space-between",
+          gap: 8, fontSize: 13, lineHeight: 1.35,
+          boxShadow: "0 3px 10px rgba(0,0,0,0.45)" }}>
+        <button onClick={() => { bannerDismissedAtRef.current = Date.now(); _setBannerTick((t) => t + 1); }}
+          aria-label="배너 닫기 (60초간 다시 표시 안 함)"
+          style={{ flex: 1, minWidth: 0, textAlign: "left",
+            background: "transparent", border: "none", color: "#fff",
+            font: "inherit", cursor: "pointer", padding: 0 }}>
+          <span style={{ whiteSpace: "normal" }}>
+            ⛔ 위치 송신 실패 — {fails}회 연속 / 마지막 성공 {xText} 전. 재로그인·네트워크 확인
+          </span>
+        </button>
+        <button onClick={() => {
+            // 기존 경고 배너의 '재로그인' 와 동일 로직 — 토큰 무효화 후 firebaseSignIn 재시도.
+            authTokenRef.current = ""; authRetryAtRef.current = 0;
+            firebaseSignIn().then((d) => {
+              if (d && d.idToken) { authTokenRef.current = d.idToken; tokenIssuedAtRef.current = Date.now(); }
+            }).catch(() => {});
+          }}
+          style={{ flexShrink: 0, padding: "6px 12px", borderRadius: 6,
+            background: "#fff", color: "#dc2626", border: "1.5px solid #fff",
+            fontFamily: "'Jua', sans-serif", fontWeight: 700, fontSize: 12,
+            cursor: "pointer" }}>
+          재로그인
+        </button>
+      </div>
+    );
+  })();
   if (mode === "simple") {
     const arrivalDistText = distToNext != null ? fmtDist(distToNext) : null;
     // 시간표상 다음 정류장 예정 시각까지 남은 시간(초). +면 여유, -면 지연. FAKE 모드도 따라감.
@@ -9376,6 +9447,7 @@ function App() {
           paddingBottom: "calc(44px + env(safe-area-inset-bottom, 0px))",
           background: "#0a0b0f",
           backgroundImage: "repeating-linear-gradient(0deg, rgba(255,255,255,0.02) 0px, rgba(255,255,255,0.02) 1px, transparent 1px, transparent 3px)" }}>
+        {broadcastFailBanner}
         {topNotifStack}
         <div className="w-full max-w-2xl mx-auto flex flex-col" style={{ flex: 1, minHeight: 0 }}>
 
@@ -9976,6 +10048,7 @@ function App() {
   return (
     <div className="min-h-screen w-full flex flex-col items-stretch"
       style={{ background: "radial-gradient(ellipse at top, #1a1d29 0%, #0a0b10 60%, #050608 100%)" }}>
+      {broadcastFailBanner}
       {topNotifStack}
       <div className="w-full max-w-2xl mx-auto flex flex-col" style={{ flex: 1 }}>
 
