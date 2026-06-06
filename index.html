@@ -2185,20 +2185,22 @@ function NoticeEditor({ onClose, dbUrl, getAuth, refreshAuth }) {
         setStatus("인증 갱신 중…");
         const tok = await refreshAuth();
         if (tok) r = await put(tok, body);
-        else { setStatus("⚠ 쓰기 로그인 실패 — 기사 이메일·비밀번호 확인 후 다시 시도하세요"); return; }
+        else { console.warn("NoticeEditor PUT failed: refreshAuth returned no token"); setStatus("⚠ 쓰기 로그인 실패 — 기사 이메일·비밀번호 확인 후 다시 시도하세요"); return; }
       }
       if (r.ok) { setStatus(publish ? "✅ 공지 발송 — 전 승객 화면 상단에 표시됨" : "✅ 공지 해제됨"); setCur(body); setActive(!!publish); }
       else if (r.status === 401 || r.status === 403) {
         let detail = "";
         try { const j = await r.json(); detail = j && j.error ? " · " + j.error : ""; } catch (_) {}
+        console.warn(`NoticeEditor PUT failed: ${r.status} after refresh${detail}`);
         setStatus(`⚠ 권한 없음 (HTTP ${r.status})${detail} — RTDB rules 에 /notice 쓰기 권한이 있는 UID(/admins 또는 driver) 인지 확인하세요`);
       }
       else {
         let body2 = "";
         try { body2 = await r.text(); } catch (_) {}
+        console.warn(`NoticeEditor PUT failed: HTTP ${r.status}${body2 ? " · " + body2.slice(0, 120) : ""}`);
         setStatus(`⚠ Firebase 응답 ${r.status}${body2 ? " · " + body2.slice(0, 80) : ""}`);
       }
-    } catch (e) { setStatus(`⚠ 네트워크 오류 · ${e && e.message ? e.message : ""}`); }
+    } catch (e) { console.warn("NoticeEditor PUT network error:", e && e.message ? e.message : e); setStatus(`⚠ 네트워크 오류 · ${e && e.message ? e.message : ""}`); }
   };
   const presets = [
     { label: "🌧 우천 지연", lv: "warn", t: "우천으로 셔틀 운행이 지연되고 있습니다. 잠시만 기다려 주세요." },
@@ -3235,8 +3237,8 @@ function StickerEditor({ onClose, dbUrl, getAuth, refreshAuth }) {
     try {
       const r = await callDelete(`/stickers/${encodeURIComponent(id)}`);
       if (r.ok) { setStatus("✅ 삭제 완료"); reload(); }
-      else { setStatus(`⚠ 삭제 실패 (HTTP ${r.status})`); }
-    } catch (e) { setStatus(`⚠ ${e && e.message ? e.message : "네트워크 오류"}`); }
+      else { try { console.warn(`StickerEditor DELETE failed: HTTP ${r.status}${refreshAuth ? " after refresh" : ""}`); } catch (_) {} setStatus(`⚠ 삭제 실패 (HTTP ${r.status})`); }
+    } catch (e) { try { console.warn("StickerEditor DELETE network error:", e && e.message ? e.message : e); } catch (_) {} setStatus(`⚠ ${e && e.message ? e.message : "네트워크 오류"}`); }
   };
   const sweepExpired = async () => {
     // 행사 종료 후에만 'expired' 일괄 삭제 — 행사 중엔 sweep 무의미(개별 TTL 폐기)
@@ -3259,8 +3261,8 @@ function StickerEditor({ onClose, dbUrl, getAuth, refreshAuth }) {
     try {
       const r = await callDelete(`/stickers`);
       if (r.ok) { setStatus("✅ 전체 삭제 완료"); reload(); }
-      else { setStatus(`⚠ 실패 (HTTP ${r.status})`); }
-    } catch (e) { setStatus(`⚠ ${e && e.message ? e.message : "네트워크 오류"}`); }
+      else { try { console.warn(`StickerEditor DELETE-all failed: HTTP ${r.status}${refreshAuth ? " after refresh" : ""}`); } catch (_) {} setStatus(`⚠ 실패 (HTTP ${r.status})`); }
+    } catch (e) { try { console.warn("StickerEditor DELETE-all network error:", e && e.message ? e.message : e); } catch (_) {} setStatus(`⚠ ${e && e.message ? e.message : "네트워크 오류"}`); }
   };
   const now = Date.now();
   const expiredCount = now >= STICKER_EXPIRY_MS ? items.length : 0;
@@ -3657,9 +3659,9 @@ function ZoneEditor({ onClose, dbUrl, getAuth, refreshAuth }) {
         if (newTok) r = await putZones(newTok, data);
       }
       if (r.ok) setMsg("✅ 저장 완료 — 승객 지도 새로고침 시 반영");
-      else if (r.status === 401 || r.status === 403) setMsg("⚠ 인증 실패 (HTTP " + r.status + ") — 고급 설정에서 기사 로그인 확인");
-      else setMsg("⚠ Firebase 응답 " + r.status + " — 로컬만 저장됨");
-    } catch (_) { setMsg("⚠ 네트워크 오류 — 로컬만 저장됨"); }
+      else if (r.status === 401 || r.status === 403) { console.warn(`ZoneEditor PUT failed: ${r.status} after refresh`); setMsg("⚠ 인증 실패 (HTTP " + r.status + ") — 고급 설정에서 기사 로그인 확인"); }
+      else { console.warn(`ZoneEditor PUT failed: HTTP ${r.status}`); setMsg("⚠ Firebase 응답 " + r.status + " — 로컬만 저장됨"); }
+    } catch (e) { console.warn("ZoneEditor PUT network error:", e && e.message ? e.message : e); setMsg("⚠ 네트워크 오류 — 로컬만 저장됨"); }
   };
   const resetToDefaults = () => {
     if (!window.confirm("기본 5개 구역만 기본값으로 되돌립니다. 사용자가 추가한 구역은 유지돼요. 계속할까요?")) return;
@@ -3870,7 +3872,7 @@ function ZoneEditor({ onClose, dbUrl, getAuth, refreshAuth }) {
 }
 
 /* 경유점 편집기 — 운영자 전용. 클릭하면 가장 가까운 구간의 도착 정류장 approachVia 끝에 추가. via 마커 탭하여 제거. */
-function ViaEditor({ onClose, dbUrl, getAuth }) {
+function ViaEditor({ onClose, dbUrl, getAuth, refreshAuth }) {
   const elRef = useRef(null), mapRef = useRef(null);
   const [viaMap, setViaMap] = useState(() => LS.getJSON("viapoints", {}));
   const [syncStatus, setSyncStatus] = useState("idle"); // idle | local | syncing | synced | error
@@ -4087,19 +4089,35 @@ function ViaEditor({ onClose, dbUrl, getAuth }) {
     if (!dbUrl) { setSyncStatus("local"); setSyncDetail("DB 주소가 없음"); return; }
     setSyncStatus("syncing"); setSyncDetail("");
     const auth = await ensureToken();
-    if (!auth) { setSyncStatus("local"); setSyncDetail("로그인 정보(이메일/비밀번호/API 키)가 없거나 로그인 실패"); return; }
+    if (!auth && !refreshAuth) { setSyncStatus("local"); setSyncDetail("로그인 정보(이메일/비밀번호/API 키)가 없거나 로그인 실패"); return; }
+    const base = dbUrl.replace(/\/+$/, "");
+    const body = JSON.stringify(viaMap);
+    const putWith = (tok) => fetch(`${base}/viapoints.json`, {
+      method: "PUT", body,
+      headers: tok ? { "Authorization": `Bearer ${tok}` } : {},
+    });
     try {
-      const r = await fetch(`${dbUrl.replace(/\/+$/, "")}/viapoints.json`, {
-        method: "PUT", body: JSON.stringify(viaMap),
-        headers: { "Authorization": `Bearer ${auth}` },
-      });
+      let r = await putWith(auth);
+      // 401/403 → refreshAuth 로 토큰 재발급 후 1회 재시도 (HandoffModal 패턴)
+      if ((r.status === 401 || r.status === 403) && refreshAuth) {
+        setSyncDetail("인증 갱신 중…");
+        const fresh = await refreshAuth();
+        if (fresh) {
+          editorTokenRef.current = fresh;
+          r = await putWith(fresh);
+        }
+      }
       if (r.ok) { setSyncStatus("synced"); setSyncDetail(""); }
       else {
         const t = await r.text().catch(() => "");
         setSyncStatus("error");
         setSyncDetail(t && t.length < 200 ? t : `HTTP ${r.status} — Firebase 규칙에서 viapoints 쓰기 권한을 확인하세요`);
+        try { console.warn(`ViaEditor PUT failed: HTTP ${r.status}${refreshAuth ? " after refresh" : ""} — ${t.slice(0, 120)}`); } catch (_) {}
       }
-    } catch (e) { setSyncStatus("error"); setSyncDetail("네트워크 오류"); }
+    } catch (e) {
+      setSyncStatus("error"); setSyncDetail("네트워크 오류");
+      try { console.warn("ViaEditor PUT failed: network error —", e && e.message); } catch (_) {}
+    }
   };
 
   // 변경 시 로컬 저장 + 자동 업로드
@@ -11028,7 +11046,8 @@ function App() {
         setShowViaEditor(false);
         // 경유점 변경되었을 수 있음 — FAKE GPS OSRM 폴리라인 재로드(새 via 반영)
         if (FAKE_GPS) setFakeOsrmPolys({});
-      }} dbUrl={shareUrl} getAuth={() => authTokenRef.current} />}
+      }} dbUrl={shareUrl} getAuth={() => authTokenRef.current}
+        refreshAuth={async () => { try { const d = await firebaseSignIn(); if (d && d.idToken) { authTokenRef.current = d.idToken; tokenIssuedAtRef.current = Date.now(); return d.idToken; } } catch (_) {} return null; }} />}
       {showStopTimingEditor && <StopTimingEditor onClose={() => setShowStopTimingEditor(false)} stopTimings={stopTimings} setStopTimings={setStopTimings} defaultTiming={autoAnnTiming} />}
       {showZoneEditor && <ZoneEditor onClose={() => setShowZoneEditor(false)} dbUrl={shareUrl} getAuth={() => authTokenRef.current}
         refreshAuth={async () => { try { const d = await firebaseSignIn(); if (d && d.idToken) { authTokenRef.current = d.idToken; tokenIssuedAtRef.current = Date.now(); return d.idToken; } } catch (_) {} return null; }} />}
