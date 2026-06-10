@@ -216,7 +216,7 @@
 
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef, useMemo } = React;
-const BUILD = "b451"; /* 화면 우하단 표시 — 최신 배포 확인용 */
+const BUILD = "b452"; /* 화면 우하단 표시 — 최신 배포 확인용 */
 
 /* IS_FLAT — 평면 디자인 활성 여부. 페이지 로드 시 결정.
    우선순위: URL ?theme= (공유·비교용) > localStorage 「shuttle:theme」(사용자 선택) > 기본 false.
@@ -6511,6 +6511,126 @@ function SettingsModal({ onClose, dbUrl, getAuth, refreshAuth }) {
   );
 }
 
+/* 연결 자가진단 모달 — 위치 공유 실패 시 어디서 막혔는지 4단계 순차 점검.
+   ① Firebase 연결(공개 read) ② 보안 룰 v2 게시 여부(비인증 /drivers read 가 거부되는지)
+   ③ 운영자 로그인(토큰 발급) ④ 쓰기 권한(UID 등록 — /buses/__diag__ 에 실제 PUT 후 즉시 DELETE).
+   진단용 PUT 은 trip:99 + lat/stop 없음 → 승객 화면 필터에 걸려 노출 안 됨, 1초 내 삭제. */
+function DiagnosticModal({ onClose, dbUrl, refreshAuth }) {
+  const STEPS = [
+    { key: "conn",  label: "Firebase 연결" },
+    { key: "rules", label: "보안 룰 게시 (v2)" },
+    { key: "login", label: "운영자 로그인" },
+    { key: "write", label: "쓰기 권한 (UID 등록)" },
+  ];
+  const [results, setResults] = useState({}); // { key: { status: "run"|"ok"|"warn"|"fail", detail } }
+  const [running, setRunning] = useState(false);
+  const set = (key, status, detail) => setResults((p) => ({ ...p, [key]: { status, detail } }));
+  const run = async () => {
+    if (running) return;
+    setRunning(true);
+    setResults({});
+    const base = (dbUrl || "").replace(/\/+$/, "");
+    // ① 연결 — 공개 read 노드로 도달성 확인
+    set("conn", "run");
+    try {
+      const r = await fetch(`${base}/settings.json`, { cache: "no-store" });
+      if (r.ok) set("conn", "ok", "DB 도달 정상");
+      else set("conn", "fail", `HTTP ${r.status} — DB 주소 확인 (연결 탭)`);
+    } catch (_) {
+      set("conn", "fail", "네트워크 오류 — Wi-Fi/LTE 또는 DB 주소 확인");
+      setRunning(false); return; // 연결 자체가 안 되면 이후 단계 무의미
+    }
+    // ② 룰 게시 — 비인증으로 /drivers 읽기 시도. v2 룰이면 거부(401)되어야 정상.
+    set("rules", "run");
+    try {
+      const r = await fetch(`${base}/drivers.json`, { cache: "no-store" });
+      if (r.status === 401 || r.status === 403) set("rules", "ok", "v2 룰 게시됨 (UID 목록 보호 중)");
+      else if (r.ok) set("rules", "warn", "구버전 룰 — Console > Rules 에 database.rules.json 게시 권장");
+      else set("rules", "warn", `예상외 응답 HTTP ${r.status}`);
+    } catch (_) { set("rules", "warn", "확인 불가 (네트워크)"); }
+    // ③ 로그인 — 토큰 강제 재발급
+    set("login", "run");
+    let token = null;
+    try { token = refreshAuth ? await refreshAuth() : null; } catch (_) {}
+    if (token) set("login", "ok", "토큰 발급 정상");
+    else {
+      set("login", "fail", "로그인 실패 — 연결 탭에서 이메일/비밀번호 확인");
+      set("write", "fail", "로그인 후 재진단 필요");
+      setRunning(false); return;
+    }
+    // ④ 쓰기 권한 — /buses/__diag__ 실제 PUT (trip:99·좌표 없음 → 승객 화면 비노출) 후 즉시 삭제
+    set("write", "run");
+    try {
+      const auth = `?auth=${encodeURIComponent(token)}`;
+      const body = JSON.stringify({ dir: "outbound", trip: 99, ts: Date.now() });
+      const r = await fetch(`${base}/buses/__diag__.json${auth}`, { method: "PUT", body });
+      try { await fetch(`${base}/buses/__diag__.json${auth}`, { method: "DELETE" }); } catch (_) {}
+      if (r.ok) set("write", "ok", "쓰기 정상 — 위치 공유 가능");
+      else if (r.status === 401 || r.status === 403)
+        set("write", "fail", "권한 없음 — Console > Data > /drivers/{UID}=true 등록 확인 (UID 는 Authentication > Users)");
+      else set("write", "fail", `HTTP ${r.status} — 룰 validate 거부 가능, 관리자 문의`);
+    } catch (_) { set("write", "fail", "네트워크 오류"); }
+    setRunning(false);
+  };
+  useEffect(() => { run(); }, []); // 모달 열리면 자동 1회 실행
+  const ICON = { run: "⏳", ok: "✅", warn: "⚠️", fail: "❌" };
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4"
+      style={{ background: "rgba(15,15,18,0.6)" }} onClick={onClose}>
+      <div className="w-full max-w-sm space-y-3"
+        style={{ background: "#fff",
+          border: IS_FLAT ? "1px solid " + FT.mute + "88" : "2.5px solid " + FT.ink,
+          borderRadius: 14, padding: 16,
+          boxShadow: IS_FLAT ? "0 8px 24px rgba(0,0,0,0.16)" : "4px 4px 0 " + FT.ink }}
+        onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between">
+          <div style={{ fontSize: 14, color: FT.ink, fontFamily: "'Jua', sans-serif", fontWeight: 700 }}>
+            🩺 연결 자가진단
+          </div>
+          <button onClick={onClose} aria-label="닫기"
+            style={{ width: 28, height: 28, lineHeight: 1, borderRadius: 8,
+              border: IS_FLAT ? "1px solid " + FT.mute + "66" : "2px solid " + FT.ink,
+              background: "#fff", color: FT.ink, fontWeight: 700, fontFamily: "'Jua', sans-serif" }}>×</button>
+        </div>
+        <div className="space-y-2">
+          {STEPS.map((s) => {
+            const r = results[s.key];
+            return (
+              <div key={s.key} style={{ display: "flex", alignItems: "flex-start", gap: 9,
+                background: r?.status === "fail" ? "#FEF2F2" : r?.status === "warn" ? "#FFFBEB" : FT.paper,
+                border: "1px solid " + (r?.status === "fail" ? "#fca5a5" : r?.status === "warn" ? "#fcd34d" : FT.mute + "44"),
+                borderRadius: 10, padding: "9px 11px" }}>
+                <span aria-hidden style={{ fontSize: 14, flexShrink: 0, lineHeight: "18px" }}>
+                  {r ? ICON[r.status] : "·"}
+                </span>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 12.5, color: FT.ink, fontFamily: "'Jua', sans-serif", fontWeight: 700, lineHeight: 1.3 }}>
+                    {s.label}
+                  </div>
+                  {r?.detail && (
+                    <div style={{ fontSize: 11, marginTop: 2, lineHeight: 1.4, fontWeight: 500,
+                      fontFamily: "'Gowun Dodum', system-ui, sans-serif",
+                      color: r.status === "fail" ? "#b91c1c" : r.status === "warn" ? "#92400e" : FT.inkSoft }}>
+                      {r.detail}
+                    </div>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+        <button onClick={run} disabled={running}
+          style={{ width: "100%", padding: "9px 0", borderRadius: 10,
+            background: running ? FT.mute : FT.tealDark, color: "#fff",
+            border: "none", fontFamily: "'Jua', sans-serif", fontWeight: 700, fontSize: 13,
+            cursor: running ? "default" : "pointer", opacity: running ? 0.6 : 1 }}>
+          {running ? "진단 중…" : "다시 진단"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 /* 승객 기본 화면 — 실시간 버스 목록(버스안내판 스타일) + 지도 탭. 제목 7번 탭하면 운영자(히든) 진입 */
 function PassengerView({ dbUrl, onAdmin, initialTab = "list", theme = "default" }) {
   const [buses, setBuses] = useState({});
@@ -8455,6 +8575,8 @@ function App() {
   const [showHandoff, setShowHandoff] = useState(false);
   // 사용자 페이지 디자인 테마 설정 (Firebase /settings/theme 게시 → 모든 사용자 동기화)
   const [showThemeSettings, setShowThemeSettings] = useState(false);
+  // 연결 자가진단 — 위치 공유 실패 시 연결·룰·로그인·UID 4단계 점검
+  const [showDiag, setShowDiag] = useState(false);
   /* 핸드오프 — 신규 게시 polling 으로 다른 운영자가 게시한 인계 대기 알림 (다른 단말이 이미 게시했음을 감지) */
   const [handoffPending, setHandoffPending] = useState(null);
   const lastSeenHandoffTsRef = useRef(0);
@@ -10897,6 +11019,10 @@ function App() {
                 label="사용자 페이지 디자인 테마"
                 sub={IS_FLAT ? "현재 평면(미니멀) — 모든 사용자 단말 동기화" : "현재 기본(포스터) — 모든 사용자 단말 동기화"}
                 onClick={() => setShowThemeSettings(true)} />
+              <ActBtn Icon={Crosshair} color="#22d65f"
+                label="🩺 연결 자가진단"
+                sub="위치 공유 실패 시 — 연결·룰·로그인·UID 4단계 점검"
+                onClick={() => setShowDiag(true)} />
               <ActBtn Icon={Archive} color="#fbbf24"
                 label="전체 수정사항 백업·복원" sub="좌표·멘트·구역·설정 JSON 일괄"
                 onClick={() => setShowBackup(true)} />
@@ -11089,7 +11215,8 @@ function App() {
       {showHandoff && <HandoffModal onClose={() => setShowHandoff(false)} dbUrl={shareUrl}
         getAuth={() => authTokenRef.current}
         refreshAuth={async () => { try { const d = await firebaseSignIn(); if (d && d.idToken) { authTokenRef.current = d.idToken; tokenIssuedAtRef.current = Date.now(); return d.idToken; } } catch (_) {} return null; }}
-        getCurrent={() => ({ busId, dir: direction, tripIdx, currentIdx, curStop: curStop?.name || "" })}
+        getCurrent={() => ({ busId, dir: direction, tripIdx, currentIdx, curStop: curStop?.name || "",
+          by: (driverEmail || "").split("@")[0] || busId /* 인계 게시자 audit — 이메일 local part (PII 최소화) */ })}
         applyState={(s) => {
           if (typeof s.busId === "string") { setBusId(s.busId); LS.set("busid", s.busId); }
           if (s.dir === "outbound" || s.dir === "inbound") setDirection(s.dir);
@@ -11102,6 +11229,8 @@ function App() {
       {showBackup && <BackupModal onClose={() => setShowBackup(false)} counts={counts} dateKey={dateKey} />}
       {showThemeSettings && <SettingsModal onClose={() => setShowThemeSettings(false)}
         dbUrl={shareUrl} getAuth={() => authTokenRef.current}
+        refreshAuth={async () => { try { const d = await firebaseSignIn(); if (d && d.idToken) { authTokenRef.current = d.idToken; tokenIssuedAtRef.current = Date.now(); return d.idToken; } } catch (_) {} return null; }} />}
+      {showDiag && <DiagnosticModal onClose={() => setShowDiag(false)} dbUrl={shareUrl}
         refreshAuth={async () => { try { const d = await firebaseSignIn(); if (d && d.idToken) { authTokenRef.current = d.idToken; tokenIssuedAtRef.current = Date.now(); return d.idToken; } } catch (_) {} return null; }} />}
 
       {/* 멘트 편집·백업·복원 모달 */}

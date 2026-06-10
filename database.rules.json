@@ -7,7 +7,7 @@
       ".read": true,
       "$busId": {
         ".write": "auth != null && (root.child('drivers').child(auth.uid).exists() || root.child('admins').child(auth.uid).exists())",
-        ".validate": "newData.hasChildren(['dir','trip','ts']) || newData.val() == null"
+        ".validate": "(newData.hasChildren(['dir','trip','ts']) && (!newData.hasChild('lat') || (newData.child('lat').isNumber() && newData.child('lat').val() >= 34.9 && newData.child('lat').val() <= 35.4)) && (!newData.hasChild('lng') || (newData.child('lng').isNumber() && newData.child('lng').val() >= 126.5 && newData.child('lng').val() <= 127.3))) || newData.val() == null"
       }
     },
 
@@ -48,7 +48,8 @@
       ".write": "auth != null && (root.child('drivers').child(auth.uid).exists() || root.child('admins').child(auth.uid).exists())",
       ".validate": "(newData.hasChild('busId') && newData.hasChild('ts')) || newData.val() == null",
       "busId":      { ".validate": "newData.isString() && newData.val().length <= 32" },
-      "ts":         { ".validate": "newData.isNumber()" }
+      "ts":         { ".validate": "newData.isNumber()" },
+      "by":         { ".validate": "newData.isString() && newData.val().length <= 64" }
     },
 
     "settings": {
