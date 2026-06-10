@@ -216,7 +216,7 @@
 
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef, useMemo } = React;
-const BUILD = "b452"; /* 화면 우하단 표시 — 최신 배포 확인용 */
+const BUILD = "b453"; /* 화면 우하단 표시 — 최신 배포 확인용 */
 
 /* IS_FLAT — 평면 디자인 활성 여부. 페이지 로드 시 결정.
    우선순위: URL ?theme= (공유·비교용) > localStorage 「shuttle:theme」(사용자 선택) > 기본 false.
@@ -4329,7 +4329,15 @@ function LiveMapView({ dbUrl, onHome, onOpenVenue, isFlat = false }) {
         return;
       }
       const label = (stickerLabelRef.current || "").trim().slice(0, 60);
-      const body = { lat: +e.latlng.lat.toFixed(6), lng: +e.latlng.lng.toFixed(6), kind, ts: now };
+      // 서버 룰(bbox 35.125~35.150 × 126.915~126.970) 사전 검사 — 범위 밖은 400 거부되므로
+      // PUT 전에 친절한 안내로 차단. (행사장·전 정류장은 모두 범위 안)
+      const la = +e.latlng.lat.toFixed(6), ln = +e.latlng.lng.toFixed(6);
+      if (la < 35.125 || la > 35.150 || ln < 126.915 || ln > 126.970) {
+        setStickerMsg("행사장 주변에만 남길 수 있어요 — 지도를 행사장 쪽으로 이동해 주세요");
+        setTimeout(() => setStickerMsg(""), 2600);
+        return;
+      }
+      const body = { lat: la, lng: ln, kind, ts: now };
       if (label) body.label = label;
       try {
         const r = await fetch(`${url}/stickers.json`, { method: "POST", body: JSON.stringify(body) });
@@ -4355,8 +4363,13 @@ function LiveMapView({ dbUrl, onHome, onOpenVenue, isFlat = false }) {
         setStickerKind(null);
         setStickerLabel("");
       } catch (err) {
-        setStickerMsg("저장 실패: " + (err && err.message ? err.message : "네트워크 오류"));
-        setTimeout(() => setStickerMsg(""), 2400);
+        // 400 은 대부분 룰 validate 거부 — bbox 는 위에서 사전 차단했으므로 남는 케이스는
+        // 단말 시계 skew(서버 now 대비 1분+ 빠름). 시계 안내로 구체화.
+        const m = err && err.message ? err.message : "네트워크 오류";
+        setStickerMsg(m.includes("400")
+          ? "저장 실패 — 휴대폰 시계가 실제 시각과 다른 것 같아요 (설정에서 자동 시간 켜기)"
+          : "저장 실패: " + m);
+        setTimeout(() => setStickerMsg(""), 3000);
         try { window.__mdsStats && window.__mdsStats.track("error_sticker_save"); } catch (__) {}
       }
     });

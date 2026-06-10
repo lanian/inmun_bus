@@ -43,9 +43,21 @@ UID 리스트와 `/stats` 분석 데이터가 누구나 read 가능 (자식 `.re
 운영자 토큰 탈취 시 위변조 방어.
 
 - `/notice` `.validate`: `message` ≤500자 / `level` ∈ `{info,warn,danger}` / `ts` number
-- `/handoff` `.validate`: `busId`/`dir`/`tripIdx`/`currentIdx`/`ts`/`by` 구조 강제
+- `/handoff` `.validate`: 필수 `busId`+`ts` 만 강제 (초기 설계의 dir/tripIdx/currentIdx 강제는
+  클라이언트 호환을 위해 완화). `by` 는 선택 audit 필드 — 게시자 이메일 local part, ≤64자
 - `/settings/theme` `.validate`: `"flat"` 또는 `"default"` 만 허용
 - `/journal/$date`·`/counts/$date` 정규식 `^\d{4}-\d{2}-\d{2}$`
+- `/buses/$busId` `.validate`: `lat`/`lng` 가 있으면 광주 광역 bbox(34.9~35.4 × 126.5~127.3) 내
+  숫자 강제. 행사장보다 넓게 잡아 운영자 자택 사전 테스트 호환 — 타 도시 좌표 위변조만 차단.
+  좌표 없는 「운행 정보만 송신」 모드는 그대로 허용. ※ 토큰 탈취 시 시내 임의 좌표 게시는
+  여전히 가능 (잔존 위험 절 참고)
+
+### 인증 전달 방식 (참고)
+
+- 모든 인증 fetch 는 `?auth=<idToken>` URL 파라미터 사용 — Firebase RTDB REST 의 공식 1순위 방식.
+- `Authorization: Bearer` 헤더 마이그레이션을 시도(b444)했으나 RTDB 의 ID 토큰 Bearer 처리가
+  비일관적이어서 위치 송신 401 발생 → b451 에서 전면 회귀. 행사 후 OAuth2 access token 기반
+  재시도 검토.
 
 ---
 
