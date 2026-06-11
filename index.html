@@ -157,7 +157,7 @@
   /* 운영자 폼 입력 — 포커스/호버 상태 일관화 */
   .mds-input { width: 100%; min-height: 44px; padding: 10px 12px; border-radius: 8px;
     background: #0a0b0f; color: #cbd5e1; border: 1px solid #3a3f54;
-    font-family: 'IBM Plex Mono', monospace; font-size: 12px;
+    font-family: 'IBM Plex Mono', 'Jua', monospace; font-size: 12px;
     transition: border-color 0.15s, box-shadow 0.15s, background 0.15s; }
   .mds-input::placeholder { color: #475569; }
   .mds-input:hover { border-color: #4b5169; }
@@ -223,7 +223,7 @@
 
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef, useMemo } = React;
-const BUILD = "b464"; /* 화면 우하단 표시 — 최신 배포 확인용 */
+const BUILD = "b465"; /* 화면 우하단 표시 — 최신 배포 확인용 */
 
 /* IS_FLAT — 평면 디자인 활성 여부. 페이지 로드 시 결정.
    우선순위: URL ?theme= (공유·비교용) > localStorage 「shuttle:theme」(사용자 선택) > 기본 false.
@@ -833,7 +833,7 @@ function TimetableModal({ tripsToday, onClose, focusTrip = null }) {
               <span style={{ fontSize: 11, color: FT.inkSoft, fontFamily: "'Jua', sans-serif" }}>{ROUTES[dir].full}</span>
             </div>
             <div className="overflow-x-auto" style={{ border: IS_FLAT ? "1px solid " + FT.mute + "66" : "2px solid " + FT.ink, borderRadius: 10, background: "#fff" }}>
-              <table className="text-[10px]" style={{ borderCollapse: "collapse", fontFamily: "'IBM Plex Mono', monospace" }}>
+              <table className="text-[10px]" style={{ borderCollapse: "collapse", fontFamily: "'IBM Plex Mono', 'Jua', monospace" }}>
                 <thead>
                   <tr style={{ background: FT.paper, borderBottom: IS_FLAT ? "1px solid " + FT.mute + "66" : "2px solid " + FT.ink }}>
                     <th className="px-2 py-1.5 whitespace-nowrap"
@@ -960,7 +960,7 @@ function BackupModal({ onClose, counts, dateKey }) {
         <textarea value={text} onChange={(e) => setText(e.target.value)}
           className="w-full p-2"
           style={{ background: FT.paper, border: "2px solid " + FT.ink, borderRadius: 8, color: FT.ink,
-            fontFamily: "'IBM Plex Mono', monospace", fontSize: 10, minHeight: 180, resize: "vertical" }} />
+            fontFamily: "'IBM Plex Mono', 'Jua', monospace", fontSize: 10, minHeight: 180, resize: "vertical" }} />
         <div className="grid grid-cols-2 gap-2">
           <button onClick={copy}
             style={{ background: "#fff", color: FT.ink, padding: "8px 10px", borderRadius: 8, border: "2px solid " + FT.ink, boxShadow: "2px 2px 0 " + FT.ink, fontFamily: "'Jua', sans-serif", fontWeight: 700, fontSize: 12 }}>복사</button>
@@ -1258,11 +1258,11 @@ function StatsModal({ counts, dateKey, onClose, onReset, busCapacity, setBusCapa
         <div className="grid grid-cols-2 gap-2 text-center">
           <div className="rounded-lg p-2" style={{ background: "rgba(34,214,95,0.12)", border: "1px solid rgba(34,214,95,0.3)" }}>
             <div className="text-[10px] text-emerald-400/70" style={{ fontFamily: "'Jua', sans-serif" }}>총 탑승</div>
-            <div className="text-2xl font-bold" style={{ color: "#22d65f", fontFamily: "'Black Han Sans', sans-serif" }}>{totalBoard}</div>
+            <div className="text-2xl font-bold" style={{ color: "#22d65f", fontFamily: "'Black Han Sans', 'Jua', system-ui, sans-serif" }}>{totalBoard}</div>
           </div>
           <div className="rounded-lg p-2" style={{ background: "rgba(251,146,60,0.12)", border: "1px solid rgba(251,146,60,0.3)" }}>
             <div className="text-[10px]" style={{ color: "#fb923c", opacity: 0.7, fontFamily: "'Jua', sans-serif" }}>총 하차</div>
-            <div className="text-2xl font-bold" style={{ color: "#fb923c", fontFamily: "'Black Han Sans', sans-serif" }}>{totalAlight}</div>
+            <div className="text-2xl font-bold" style={{ color: "#fb923c", fontFamily: "'Black Han Sans', 'Jua', system-ui, sans-serif" }}>{totalAlight}</div>
           </div>
         </div>
         <div>
@@ -1588,7 +1588,7 @@ function VenueModal({ onClose, initialZone = 0, initialProgram = null, onOpenLiv
                       borderRadius: 8, padding: "5px 8px", cursor: "pointer", textAlign: "left" }}>
                     <span style={{ flexShrink: 0, width: 22, height: 22, display: "flex", alignItems: "center", justifyContent: "center",
                       background: zc, color: "#fff", borderRadius: 5, fontFamily: "'Jua', sans-serif", fontWeight: 700, fontSize: 11 }}>{it.zone}</span>
-                    <span style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 10, color: FT.inkSoft, fontWeight: 700, flexShrink: 0 }}>{it.time}</span>
+                    <span style={{ fontFamily: "'IBM Plex Mono', 'Jua', monospace", fontSize: 10, color: FT.inkSoft, fontWeight: 700, flexShrink: 0 }}>{it.time}</span>
                     <span style={{ fontSize: 12, color: FT.ink, fontFamily: "'Jua', sans-serif", fontWeight: 700, flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{it.title}</span>
                   </button>
                 );
@@ -1756,7 +1756,7 @@ function VenueModal({ onClose, initialZone = 0, initialProgram = null, onOpenLiv
                     boxShadow: isFocused ? `0 0 0 3px ${FT.orange}33` : "none",
                     cursor: hasMore ? "pointer" : "default", textAlign: "left", font: "inherit" }}>
                   <div style={{ flexShrink: 0, width: 60, display: "flex", flexDirection: "column", alignItems: "center", gap: 4, paddingTop: 2 }}>
-                    <span style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 11, color: FT.ink, fontWeight: 700, lineHeight: 1.2 }}>
+                    <span style={{ fontFamily: "'IBM Plex Mono', 'Jua', monospace", fontSize: 11, color: FT.ink, fontWeight: 700, lineHeight: 1.2 }}>
                       {it.time}
                     </span>
                     {/* 카테고리 아이콘을 시간 컬럼 내부로 이동 — 시각·시간 정보 한 블록으로 묶음 */}
@@ -1844,7 +1844,7 @@ function VenueModal({ onClose, initialZone = 0, initialProgram = null, onOpenLiv
                                 <CategoryIcon cat={it.cat} size={28} color={v.color} strokeWidth={2.2} />
                               </div>
                               <div style={{ position: "relative", fontSize: 10, color: v.color, letterSpacing: 2,
-                                fontFamily: "'IBM Plex Mono', monospace", fontWeight: 700 }}>
+                                fontFamily: "'IBM Plex Mono', 'Jua', monospace", fontWeight: 700 }}>
                                 ▸ {v.label}
                               </div>
                             </div>
@@ -2461,7 +2461,7 @@ function HandoffModal({ onClose, dbUrl, getAuth, refreshAuth, getCurrent, applyS
               <div className="text-[11px] font-bold" style={{ color: isStale ? "#94a3b8" : "#60a5fa", fontFamily: "'Jua', sans-serif" }}>
                 {isStale ? "⌛ 오래된 인계 (30분 초과)" : "📥 인계 대기 중"}
               </div>
-              <div className="text-[10px]" style={{ color: "#64748b", fontFamily: "'IBM Plex Mono', monospace" }}>
+              <div className="text-[10px]" style={{ color: "#64748b", fontFamily: "'IBM Plex Mono', 'Jua', monospace" }}>
                 {pending.ts ? `${Math.round((Date.now() - pending.ts) / 60000)}분 전` : ""}
               </div>
             </div>
@@ -2853,7 +2853,7 @@ function UsageStatsViewer({ onClose, dbUrl, getAuth, refreshAuth }) {
   const HourBar = ({ hourly, color }) => {
     const max = Math.max(1, ...hourly);
     return (
-      <div className="grid grid-cols-12 gap-x-1 gap-y-2 text-[9px]" style={{ fontFamily: "'IBM Plex Mono', monospace", color: "#94a3b8" }}>
+      <div className="grid grid-cols-12 gap-x-1 gap-y-2 text-[9px]" style={{ fontFamily: "'IBM Plex Mono', 'Jua', monospace", color: "#94a3b8" }}>
         {hourly.map((v, h) => {
           const pct = max > 0 ? Math.round((v / max) * 100) : 0;
           return (
@@ -2952,14 +2952,14 @@ function UsageStatsViewer({ onClose, dbUrl, getAuth, refreshAuth }) {
             <span className="text-[10px]" style={{ color: "#22d65f", fontFamily: "'Jua', sans-serif" }}>A</span>
             <input type="date" value={dateA} onChange={(e) => setDateA(e.target.value)}
               className="px-2 py-1.5 rounded text-xs"
-              style={{ background: "#0a0b0f", border: "1px solid #3a3f54", color: "#cbd5e1", fontFamily: "'IBM Plex Mono', monospace" }} />
+              style={{ background: "#0a0b0f", border: "1px solid #3a3f54", color: "#cbd5e1", fontFamily: "'IBM Plex Mono', 'Jua', monospace" }} />
           </div>
           <div className="flex items-center gap-1">
             <span className="text-[10px]" style={{ color: "#fb923c", fontFamily: "'Jua', sans-serif" }}>B</span>
             <input type="date" value={dateB} onChange={(e) => setDateB(e.target.value)}
               placeholder="비교(선택)"
               className="px-2 py-1.5 rounded text-xs"
-              style={{ background: "#0a0b0f", border: "1px solid #3a3f54", color: "#cbd5e1", fontFamily: "'IBM Plex Mono', monospace" }} />
+              style={{ background: "#0a0b0f", border: "1px solid #3a3f54", color: "#cbd5e1", fontFamily: "'IBM Plex Mono', 'Jua', monospace" }} />
             {dateB && (
               <button onClick={() => setDateB("")} className="text-[10px] px-1.5" style={{ color: "#94a3b8" }} title="비교 해제">×</button>
             )}
@@ -3208,7 +3208,7 @@ function DemoModeEditor({ onClose }) {
             <div className="text-[11px] font-bold" style={{ color: "#fbbf24", fontFamily: "'Jua', sans-serif" }}>
               현재 활성 중
             </div>
-            <div className="text-[10px] text-slate-400" style={{ fontFamily: "'IBM Plex Mono', monospace" }}>
+            <div className="text-[10px] text-slate-400" style={{ fontFamily: "'IBM Plex Mono', 'Jua', monospace" }}>
               base: {new Date(FAKE.baseMs).toLocaleString("ko-KR")}
               {FAKE.speed !== 1 && ` · ×${FAKE.speed}`}
               {FAKE_GPS && " · 📍시뮬"}
@@ -3221,7 +3221,7 @@ function DemoModeEditor({ onClose }) {
           </label>
           <input type="datetime-local" value={dt} onChange={(e) => setDt(e.target.value)}
             className="w-full px-2 py-1.5 rounded text-[12px]"
-            style={{ background: "#0a0b0f", border: "1px solid #3a3f54", color: "#cbd5e1", fontFamily: "'IBM Plex Mono', monospace" }} />
+            style={{ background: "#0a0b0f", border: "1px solid #3a3f54", color: "#cbd5e1", fontFamily: "'IBM Plex Mono', 'Jua', monospace" }} />
         </div>
         <div>
           <label className="block text-[11px] mb-1.5" style={{ color: "#94a3b8", fontFamily: "'Jua', sans-serif" }}>
@@ -3268,7 +3268,7 @@ function DemoModeEditor({ onClose }) {
                 className="w-full text-left px-2 py-1.5 rounded text-[11px]"
                 style={{ background: "rgba(96,165,250,0.10)", color: "#cbd5e1",
                   border: "1px solid rgba(96,165,250,0.3)", fontFamily: "'Jua', sans-serif" }}>
-                {p.label} <span style={{ color: "#94a3b8", fontFamily: "'IBM Plex Mono', monospace", fontSize: 10 }}>{p.iso}{p.speed !== 1 ? ` ×${p.speed}` : ""}</span>
+                {p.label} <span style={{ color: "#94a3b8", fontFamily: "'IBM Plex Mono', 'Jua', monospace", fontSize: 10 }}>{p.iso}{p.speed !== 1 ? ` ×${p.speed}` : ""}</span>
               </button>
             ))}
           </div>
@@ -3425,7 +3425,7 @@ function StickerEditor({ onClose, dbUrl, getAuth, refreshAuth }) {
                   <div className="text-[11px]" style={{ color: "#cbd5e1", fontFamily: "'Jua', sans-serif", fontWeight: 700 }}>
                     {ageMin <= 0 ? "방금" : `${ageMin}분 전`} {expired && <span style={{ color: "#fb923c" }}>· 만료</span>}
                   </div>
-                  <div className="text-[10px] text-slate-500" style={{ fontFamily: "'IBM Plex Mono', monospace" }}>
+                  <div className="text-[10px] text-slate-500" style={{ fontFamily: "'IBM Plex Mono', 'Jua', monospace" }}>
                     {it.lat.toFixed(5)}, {it.lng.toFixed(5)}
                   </div>
                   {it.label && <div className="text-[10px] text-slate-400 mt-0.5 truncate">{it.label}</div>}
@@ -3863,7 +3863,7 @@ function ZoneEditor({ onClose, dbUrl, getAuth, refreshAuth }) {
                     placeholder={bm ? bm.title : `새 구역 ${z.num}`}
                     className="flex-1 min-w-0 px-1.5 py-0.5 rounded text-[11px]"
                     style={{ background: "#0a0b0f", border: "1px solid #3a3f54", color: "#cbd5e1", fontFamily: "'Jua', sans-serif" }} />
-                  <span className="text-[9px]" style={{ color: "#94a3b8", fontFamily: "'IBM Plex Mono', monospace" }}>{typeof v.lat === "number" ? v.lat.toFixed(5) : "-"}, {typeof v.lng === "number" ? v.lng.toFixed(5) : "-"}</span>
+                  <span className="text-[9px]" style={{ color: "#94a3b8", fontFamily: "'IBM Plex Mono', 'Jua', monospace" }}>{typeof v.lat === "number" ? v.lat.toFixed(5) : "-"}, {typeof v.lng === "number" ? v.lng.toFixed(5) : "-"}</span>
                   {!builtin && (
                     <button onClick={() => deleteZone(z.num)}
                       className="text-[10px] px-1.5 py-0.5 rounded font-bold"
@@ -3882,15 +3882,15 @@ function ZoneEditor({ onClose, dbUrl, getAuth, refreshAuth }) {
                   <div className="flex items-center gap-1 text-[10px]" style={{ color: "#cbd5e1", fontFamily: "'Jua', sans-serif" }}>
                     <span style={{ width: 24, color: "#94a3b8" }}>가로</span>
                     <input type="number" min="10" step="10" value={v.rA ?? ""} onChange={(e) => update("rA", e.target.value)} onBlur={() => commitDefault("rA", 80)}
-                      className="w-14 px-1 py-0.5 rounded" style={{ background: "#0a0b0f", border: "1px solid #3a3f54", color: "#cbd5e1", fontFamily: "'IBM Plex Mono', monospace" }} />
+                      className="w-14 px-1 py-0.5 rounded" style={{ background: "#0a0b0f", border: "1px solid #3a3f54", color: "#cbd5e1", fontFamily: "'IBM Plex Mono', 'Jua', monospace" }} />
                     <span style={{ color: "#64748b" }}>m</span>
                     <span style={{ width: 24, color: "#94a3b8", marginLeft: 6 }}>세로</span>
                     <input type="number" min="10" step="10" value={v.rB ?? ""} onChange={(e) => update("rB", e.target.value)} onBlur={() => commitDefault("rB", 80)}
-                      className="w-14 px-1 py-0.5 rounded" style={{ background: "#0a0b0f", border: "1px solid #3a3f54", color: "#cbd5e1", fontFamily: "'IBM Plex Mono', monospace" }} />
+                      className="w-14 px-1 py-0.5 rounded" style={{ background: "#0a0b0f", border: "1px solid #3a3f54", color: "#cbd5e1", fontFamily: "'IBM Plex Mono', 'Jua', monospace" }} />
                     <span style={{ color: "#64748b" }}>m</span>
                     <span style={{ width: 24, color: "#94a3b8", marginLeft: 6 }}>회전</span>
                     <input type="number" min="0" max="180" step="5" value={v.rot ?? ""} onChange={(e) => update("rot", e.target.value)} onBlur={() => commitDefault("rot", 0)}
-                      className="w-12 px-1 py-0.5 rounded" style={{ background: "#0a0b0f", border: "1px solid #3a3f54", color: "#cbd5e1", fontFamily: "'IBM Plex Mono', monospace" }} />
+                      className="w-12 px-1 py-0.5 rounded" style={{ background: "#0a0b0f", border: "1px solid #3a3f54", color: "#cbd5e1", fontFamily: "'IBM Plex Mono', 'Jua', monospace" }} />
                     <span style={{ color: "#64748b" }}>°</span>
                   </div>
                 )}
@@ -3946,7 +3946,7 @@ function ZoneEditor({ onClose, dbUrl, getAuth, refreshAuth }) {
                       <input type="text" value={s.name || ""} onChange={(e) => updateSubName(z.num, i, e.target.value)} placeholder="장소명"
                         className="flex-1 px-1.5 py-0.5 rounded text-[10px]"
                         style={{ background: "#0a0b0f", border: "1px solid #3a3f54", color: "#cbd5e1", fontFamily: "'Jua', sans-serif" }} />
-                      <span className="text-[9px]" style={{ color: "#64748b", fontFamily: "'IBM Plex Mono', monospace", whiteSpace: "nowrap" }}>
+                      <span className="text-[9px]" style={{ color: "#64748b", fontFamily: "'IBM Plex Mono', 'Jua', monospace", whiteSpace: "nowrap" }}>
                         {typeof s.lat === "number" ? s.lat.toFixed(5) : "-"},{typeof s.lng === "number" ? s.lng.toFixed(5) : "-"}
                       </span>
                       <button onClick={() => removeSub(z.num, i)} className="text-[10px] leading-none px-1.5 py-0.5 rounded font-bold"
@@ -5848,7 +5848,7 @@ function BusCardImpl({ id, bus, agoText, nowMin, tripsToday, departedInfo, isFla
                 <span style={{ fontSize: 14, color: etaColor, fontFamily: "'Jua', sans-serif", fontWeight: 700 }}>{etaLabel}</span>
               )}
               {schedAt && (
-                <span style={{ fontSize: 11, color: etaColor, fontFamily: "'IBM Plex Mono', monospace", opacity: 0.85 }}>
+                <span style={{ fontSize: 11, color: etaColor, fontFamily: "'IBM Plex Mono', 'Jua', monospace", opacity: 0.85 }}>
                   {delayed ? `${fromMin(toMin(schedAt) + (-mins))} 예상` : `${schedAt} 예정`}
                 </span>
               )}
@@ -5886,7 +5886,7 @@ function BusCardImpl({ id, bus, agoText, nowMin, tripsToday, departedInfo, isFla
                   <span style={{ color: delay > 0 ? "#dc2626" : FT.inkSoft, fontWeight: 700, minWidth: 56, textAlign: "right" }}>
                     {r.mins === 0 ? "곧" : `${r.mins}분 후`}
                   </span>
-                  <span style={{ color: FT.mute, fontFamily: "'IBM Plex Mono', monospace", minWidth: 44, textAlign: "right" }}>
+                  <span style={{ color: FT.mute, fontFamily: "'IBM Plex Mono', 'Jua', monospace", minWidth: 44, textAlign: "right" }}>
                     {delay > 0 ? fromMin(toMin(r.time) + delay) : r.time}
                   </span>
                 </div>
@@ -5971,7 +5971,7 @@ function RecentStickersBanner({ stickers, onTap }) {
             {cur.label ? cur.label : (kindName || "스티커")}
           </div>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <span style={{ fontSize: 10, color: accent, fontFamily: "'IBM Plex Mono', monospace", fontWeight: 700 }}>
+            <span style={{ fontSize: 10, color: accent, fontFamily: "'IBM Plex Mono', 'Jua', monospace", fontWeight: 700 }}>
               {ageMin <= 0 ? "방금" : `${ageMin}분 전`}
               {kindName && cur.label ? <span style={{ fontSize: 9, color: accent, opacity: 0.8 }}> · {kindName}</span> : null}
             </span>
@@ -6251,7 +6251,7 @@ function UnifiedMapBanner({ stickers, onOpenVenue, onTapSticker, onActiveSlide }
             {/* 상단 메타 — 타입 chip + 존 + 시간 */}
             <div style={{ display: "flex", alignItems: "center", gap: 5, flexWrap: "nowrap", lineHeight: 1 }}>
               <span style={{ fontSize: 8, letterSpacing: 1, fontWeight: 700, color: v.color,
-                fontFamily: "'IBM Plex Mono', monospace",
+                fontFamily: "'IBM Plex Mono', 'Jua', monospace",
                 background: `${v.color}1f`, padding: "1px 5px", borderRadius: 3 }}>
                 행사
               </span>
@@ -6261,7 +6261,7 @@ function UnifiedMapBanner({ stickers, onOpenVenue, onTapSticker, onActiveSlide }
                   {pick.zone}존
                 </span>
               )}
-              <span style={{ fontSize: 10, color: FT.inkSoft, fontFamily: "'IBM Plex Mono', monospace", fontWeight: 700 }}>
+              <span style={{ fontSize: 10, color: FT.inkSoft, fontFamily: "'IBM Plex Mono', 'Jua', monospace", fontWeight: 700 }}>
                 {pick.time}{slide.mode === "preview" && dayLabel ? ` · ${dayLabel}` : ""}
               </span>
             </div>
@@ -6303,7 +6303,7 @@ function UnifiedMapBanner({ stickers, onOpenVenue, onTapSticker, onActiveSlide }
           <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 2 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 5, flexWrap: "nowrap", lineHeight: 1 }}>
               <span style={{ fontSize: 8, letterSpacing: 1, fontWeight: 700, color: art.color,
-                fontFamily: "'IBM Plex Mono', monospace",
+                fontFamily: "'IBM Plex Mono', 'Jua', monospace",
                 background: `${art.color}1f`, padding: "1px 5px", borderRadius: 3 }}>
                 스티커
               </span>
@@ -6311,7 +6311,7 @@ function UnifiedMapBanner({ stickers, onOpenVenue, onTapSticker, onActiveSlide }
                 background: art.color, padding: "1px 5px", borderRadius: 3 }}>
                 {kindName}
               </span>
-              <span style={{ fontSize: 10, color: FT.inkSoft, fontFamily: "'IBM Plex Mono', monospace", fontWeight: 700 }}>
+              <span style={{ fontSize: 10, color: FT.inkSoft, fontFamily: "'IBM Plex Mono', 'Jua', monospace", fontWeight: 700 }}>
                 {ageMin <= 0 ? "방금" : ageMin < 60 ? `${ageMin}분 전` : `${Math.floor(ageMin / 60)}시간 전`}
               </span>
             </div>
@@ -6456,7 +6456,7 @@ function UpcomingPromoCard({ onOpen, compact = false }) {
           <span style={{ display: "inline-block", width: 5, height: 5, borderRadius: "50%",
             background: slides[safeIdx].zone % 2 ? FT.orangeDark : FT.tealDark }}
             className="animate-pulse" />
-          <span style={{ fontSize: 10, color: FT.inkSoft, fontWeight: 700, fontFamily: "'IBM Plex Mono', monospace",
+          <span style={{ fontSize: 10, color: FT.inkSoft, fontWeight: 700, fontFamily: "'IBM Plex Mono', 'Jua', monospace",
             letterSpacing: 1, textTransform: "uppercase" }}>
             {mode === "upcoming" ? "곧 시작" : mode === "ongoing" ? "진행 중" : mode === "ended" ? "오늘 종료" : "미리보기"}
           </span>
@@ -6483,7 +6483,7 @@ function UpcomingPromoCard({ onOpen, compact = false }) {
                   padding: compact ? "8px 10px" : "10px 12px",
                   fontFamily: "'Jua', sans-serif", cursor: "pointer", textAlign: "left", minHeight: compact ? 52 : 58 }}>
                 {/* 좌측 시간 컬럼 */}
-                <div style={{ flexShrink: 0, fontFamily: "'IBM Plex Mono', monospace",
+                <div style={{ flexShrink: 0, fontFamily: "'IBM Plex Mono', 'Jua', monospace",
                   display: "flex", flexDirection: "column", alignItems: "flex-start", lineHeight: 1.1 }}>
                   <span style={{ fontSize: 13, color: cDark, fontWeight: 700 }}>{(pick.time || "").split("~")[0]}</span>
                   {mode === "preview" && dayLabel && (
@@ -7407,7 +7407,7 @@ function PassengerView({ dbUrl, onAdmin, initialTab = "list", theme = "default" 
                     행사장·프로그램
                   </div>
                   <div style={{ marginTop: 3, lineHeight: 1.25 }}>
-                    <span style={{ fontSize: 11, color: FT.tealDark, fontFamily: "'Gowun Dodum', 'Jua', sans-serif",
+                    <span style={{ fontSize: 11, color: FT.tealDark, fontFamily: "'Gowun Dodum', system-ui, sans-serif",
                       fontStyle: "italic", fontWeight: 700 }}>
                       &ldquo;생각을 끄고, 생각을 켜다&rdquo;
                     </span>
@@ -7458,7 +7458,7 @@ function PassengerView({ dbUrl, onAdmin, initialTab = "list", theme = "default" 
               </div>
               {/* 슬로건 — 브랜드 핵심. 따옴표·이탤릭으로 시적 톤. 행사 회차는 작은 따라가는 메타로 분리 */}
               <div style={{ marginTop: 3, lineHeight: 1.25 }}>
-                <span style={{ fontSize: 11, color: FT.tealDark, fontFamily: "'Gowun Dodum', 'Jua', sans-serif",
+                <span style={{ fontSize: 11, color: FT.tealDark, fontFamily: "'Gowun Dodum', system-ui, sans-serif",
                   fontStyle: "italic", fontWeight: 700 }}>
                   &ldquo;생각을 끄고, 생각을 켜다&rdquo;
                 </span>
@@ -7539,7 +7539,7 @@ function PassengerView({ dbUrl, onAdmin, initialTab = "list", theme = "default" 
                       </span>
                       {nd && <span style={{ marginLeft: "auto", fontSize: 9, color: FT.mute, fontFamily: "'Jua', sans-serif" }}>{nd.idx + 1}회차</span>}
                     </div>
-                    <div style={{ fontSize: 26, color: FT.ink, fontFamily: "'IBM Plex Mono', monospace", fontWeight: 700, lineHeight: 1, marginBottom: 3 }}>
+                    <div style={{ fontSize: 26, color: FT.ink, fontFamily: "'IBM Plex Mono', 'Jua', monospace", fontWeight: 700, lineHeight: 1, marginBottom: 3 }}>
                       {nd ? nd.time : "—"}
                     </div>
                     <div style={{ fontSize: 13, color: clickable ? c : FT.inkSoft, fontFamily: "'Jua', sans-serif", fontWeight: 700, lineHeight: 1.25 }}>
@@ -7569,7 +7569,7 @@ function PassengerView({ dbUrl, onAdmin, initialTab = "list", theme = "default" 
             {live.length > 0 && (
               <React.Fragment>
                 <div style={{ fontSize: 10, color: FT.tealDark, fontWeight: 700, letterSpacing: 1,
-                  fontFamily: "'IBM Plex Mono', monospace", padding: "0 2px",
+                  fontFamily: "'IBM Plex Mono', 'Jua', monospace", padding: "0 2px",
                   display: "inline-flex", alignItems: "center", gap: 4 }}>
                   <span className="animate-pulse" style={{ width: 6, height: 6, borderRadius: "50%", background: FT.teal }} />
                   LIVE · {live.length}대
@@ -7643,7 +7643,7 @@ function PassengerView({ dbUrl, onAdmin, initialTab = "list", theme = "default" 
                 <div style={{ marginTop: live.length > 0 ? 8 : 12 }}>
                   <div className="flex items-center justify-between" style={{ marginBottom: 6, padding: "0 2px" }}>
                     <div style={{ fontSize: 10, color: FT.inkSoft, fontWeight: 700, letterSpacing: 1,
-                      fontFamily: "'IBM Plex Mono', monospace", textTransform: "uppercase" }}>
+                      fontFamily: "'IBM Plex Mono', 'Jua', monospace", textTransform: "uppercase" }}>
                       시간표 기준 운행 · {items.length}대
                     </div>
                     <div style={{ fontSize: 9, color: FT.mute, fontFamily: "'Jua', sans-serif" }}>
@@ -7666,7 +7666,7 @@ function PassengerView({ dbUrl, onAdmin, initialTab = "list", theme = "default" 
                                 fontFamily: "'Jua', sans-serif", fontWeight: 700 }}>🅿 휴식</span>
                               <span style={{ fontSize: 11, color: c, fontFamily: "'Jua', sans-serif", fontWeight: 700 }}>{it.route.label}</span>
                               <span style={{ fontSize: 10, color: FT.mute, fontFamily: "'Jua', sans-serif" }}>{it.ti + 1}회차 출발 대기</span>
-                              <span style={{ marginLeft: "auto", fontSize: 10, color: FT.mute, fontFamily: "'IBM Plex Mono', monospace" }}>
+                              <span style={{ marginLeft: "auto", fontSize: 10, color: FT.mute, fontFamily: "'IBM Plex Mono', 'Jua', monospace" }}>
                                 {it.startTime} 출발
                               </span>
                             </div>
@@ -7692,7 +7692,7 @@ function PassengerView({ dbUrl, onAdmin, initialTab = "list", theme = "default" 
                               fontFamily: "'Jua', sans-serif", fontWeight: 700 }}>예정</span>
                             <span style={{ fontSize: 11, color: c, fontFamily: "'Jua', sans-serif", fontWeight: 700 }}>{it.route.label}</span>
                             <span style={{ fontSize: 10, color: FT.mute, fontFamily: "'Jua', sans-serif" }}>{it.ti + 1}회차</span>
-                            <span style={{ marginLeft: "auto", fontSize: 10, color: FT.mute, fontFamily: "'IBM Plex Mono', monospace" }}>
+                            <span style={{ marginLeft: "auto", fontSize: 10, color: FT.mute, fontFamily: "'IBM Plex Mono', 'Jua', monospace" }}>
                               {it.sched[0]}~{it.sched[it.sched.length - 1]}
                             </span>
                           </div>
@@ -7829,7 +7829,7 @@ function PassengerView({ dbUrl, onAdmin, initialTab = "list", theme = "default" 
                     {!ended && (
                       <React.Fragment>
                         <div style={{ fontSize: 10, color: FT.inkSoft, fontWeight: 700, letterSpacing: 1,
-                          fontFamily: "'IBM Plex Mono', monospace", padding: "8px 2px 0", textTransform: "uppercase" }}>
+                          fontFamily: "'IBM Plex Mono', 'Jua', monospace", padding: "8px 2px 0", textTransform: "uppercase" }}>
                           다가올 프로그램
                         </div>
                         <UpcomingPromoCard onOpen={(pick) => { trackStat("click_promo"); setVenueProgram(pick || null); setVenueZone(pick?.zone || 0); setTab("venue"); }} />
@@ -7977,7 +7977,7 @@ function OpsDashboard({ dbUrl }) {
 
   const th = { padding: "8px 10px", textAlign: "left", fontSize: 11, color: "#94a3b8", fontWeight: 700, fontFamily: "'Jua', sans-serif", whiteSpace: "nowrap" };
   const td = { padding: "8px 10px", fontSize: 12, fontFamily: "'Jua', sans-serif" };
-  const tdMono = { ...td, fontFamily: "'IBM Plex Mono', monospace", color: "#cbd5e1" };
+  const tdMono = { ...td, fontFamily: "'IBM Plex Mono', 'Jua', monospace", color: "#cbd5e1" };
 
   return (
     <div style={{ minHeight: "100vh", background: "radial-gradient(ellipse at top, #1a1d29 0%, #0a0b10 60%, #050608 100%)", padding: "16px", color: "#cbd5e1" }}>
@@ -7986,7 +7986,7 @@ function OpsDashboard({ dbUrl }) {
           <div>
             <div style={{ fontSize: 10, color: "#94a3b8", letterSpacing: 2, fontFamily: "'Jua', sans-serif" }}>OPERATIONS DASHBOARD · ?view=ops</div>
             <div style={{ fontSize: 22, fontWeight: 700, color: "#fbbf24", fontFamily: "'Jua', sans-serif" }}>🚌 본부 운영자 대시보드</div>
-            <div style={{ fontSize: 10, color: "#64748b", fontFamily: "'IBM Plex Mono', monospace", marginTop: 2 }}>
+            <div style={{ fontSize: 10, color: "#64748b", fontFamily: "'IBM Plex Mono', 'Jua', monospace", marginTop: 2 }}>
               {autoRefresh ? "5초 폴링" : "수동 갱신"} · 마지막 {refreshAt ? new Date(refreshAt).toLocaleTimeString() : "—"}
             </div>
           </div>
@@ -8079,7 +8079,7 @@ function OpsDashboard({ dbUrl }) {
             stale <span style={{ color: "#ef4444", fontWeight: 700 }}>{totals.stale}</span> ·
             총 탑승 <span style={{ color: "#fbbf24", fontWeight: 700 }}>{totals.onboard}</span>명
           </div>
-          <div style={{ fontFamily: "'IBM Plex Mono', monospace" }}>BUILD {BUILD}</div>
+          <div style={{ fontFamily: "'IBM Plex Mono', 'Jua', monospace" }}>BUILD {BUILD}</div>
         </div>
       </div>
     </div>
@@ -9926,7 +9926,7 @@ function App() {
             </span>
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ fontSize: 10, opacity: 0.85, letterSpacing: 1.5, fontWeight: 700,
-                fontFamily: "'IBM Plex Mono', monospace", marginBottom: 2 }}>
+                fontFamily: "'IBM Plex Mono', 'Jua', monospace", marginBottom: 2 }}>
                 새 스티커 · {stickerKindName}{stickerExtraN > 0 ? ` 외 ${stickerExtraN}` : ""}
               </div>
               <div style={{ fontSize: 13, fontWeight: 700, lineHeight: 1.3,
@@ -9934,7 +9934,7 @@ function App() {
                 {stickerNotif.label ? `"${stickerNotif.label}"` : "탭하여 관리"}
               </div>
             </div>
-            <span style={{ flexShrink: 0, fontSize: 12, opacity: 0.9, fontFamily: "'IBM Plex Mono', monospace",
+            <span style={{ flexShrink: 0, fontSize: 12, opacity: 0.9, fontFamily: "'IBM Plex Mono', 'Jua', monospace",
               padding: "4px 8px", borderRadius: 6, background: "rgba(255,255,255,0.15)" }}>탭 →</span>
           </button>
           <button
@@ -9970,7 +9970,7 @@ function App() {
               fontSize: 20, lineHeight: 1, fontWeight: 900 }}>⟳</span>
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ fontSize: 10, opacity: 0.7, letterSpacing: 1.5, fontWeight: 700,
-                fontFamily: "'IBM Plex Mono', monospace", marginBottom: 2 }}>
+                fontFamily: "'IBM Plex Mono', 'Jua', monospace", marginBottom: 2 }}>
                 시각 기준 재설정
                 {!resetToast.gps && (
                   <span style={{ marginLeft: 8, opacity: 0.7 }}>· GPS OFF</span>
@@ -9981,7 +9981,7 @@ function App() {
                 {(resetToast.text || "").replace(/^⟳\s*/, "")}
               </div>
             </div>
-            <span style={{ flexShrink: 0, fontSize: 12, opacity: 0.85, fontFamily: "'IBM Plex Mono', monospace",
+            <span style={{ flexShrink: 0, fontSize: 12, opacity: 0.85, fontFamily: "'IBM Plex Mono', 'Jua', monospace",
               padding: "4px 8px", borderRadius: 6, background: "rgba(10,11,15,0.12)" }}>다시 →</span>
           </button>
           <button
@@ -10104,7 +10104,7 @@ function App() {
                 {route.label} · {tripIdx + 1}회차
               </div>
               <div className="text-[10px] text-slate-400 mt-0.5"
-                style={{ fontFamily: "'IBM Plex Mono', monospace" }}>
+                style={{ fontFamily: "'IBM Plex Mono', 'Jua', monospace" }}>
                 {trip[0]} 출발 · {trip[trip.length - 1]} 도착 · <span style={{ color: tripStatus.color }}>{tripStatus.label}</span>
               </div>
             </div>
@@ -10206,7 +10206,7 @@ function App() {
                 </div>
                 {/* 송신 통계 — sharing 중일 때만 우측에 작게 */}
                 {sharing && (
-                  <div className="flex-shrink-0 text-[10px] text-right" style={{ color: st.c, opacity: 0.85, fontFamily: "'IBM Plex Mono', monospace", lineHeight: 1.25 }}>
+                  <div className="flex-shrink-0 text-[10px] text-right" style={{ color: st.c, opacity: 0.85, fontFamily: "'IBM Plex Mono', 'Jua', monospace", lineHeight: 1.25 }}>
                     {broadcastStats.lastAt ? (
                       <div>송신 {Math.max(0, Math.floor((Date.now() - broadcastStats.lastAt) / 1000))}s 전</div>
                     ) : <div>송신 대기</div>}
@@ -10229,7 +10229,7 @@ function App() {
               className="w-full flex flex-col items-center justify-center py-8"
               style={{ background: "linear-gradient(180deg, rgba(96,165,250,0.22) 0%, rgba(96,165,250,0.12) 100%)",
                 borderColor: "#3a3f54", borderBottom: "1px solid #3a3f54", cursor: "pointer" }}>
-              <div style={{ fontSize: "clamp(2.2rem, 11vw, 3.2rem)", fontFamily: "'Black Han Sans', sans-serif", color: "#60a5fa",
+              <div style={{ fontSize: "clamp(2.2rem, 11vw, 3.2rem)", fontFamily: "'Black Han Sans', 'Jua', system-ui, sans-serif", color: "#60a5fa",
                 textShadow: "0 0 24px rgba(96,165,250,0.7), 0 0 48px rgba(96,165,250,0.3)", lineHeight: 1, letterSpacing: "-0.02em" }}>
                 🅿️ 출발 대기 중
               </div>
@@ -10247,7 +10247,7 @@ function App() {
             <div className="text-center mb-3 flex items-center justify-center gap-2 flex-wrap">
               <span className="text-[11px] tracking-[0.3em] px-3 py-1 rounded-full"
                 style={{ color: "#fbbf24", background: "rgba(251, 191, 36, 0.1)",
-                  fontFamily: "'IBM Plex Mono', monospace" }}>
+                  fontFamily: "'IBM Plex Mono', 'Jua', monospace" }}>
                 이번 정류장 · {trip[currentIdx]}
               </span>
               {curStop && autoMode && (() => {
@@ -10283,7 +10283,7 @@ function App() {
                 <span className="text-[10px] px-2 py-0.5 rounded"
                   style={{ background: distToCur < triggerRadius ? "rgba(239,68,68,0.2)" : "rgba(251,191,36,0.12)",
                     color: distToCur < triggerRadius ? "#ef4444" : "#fbbf24",
-                    fontFamily: "'IBM Plex Mono', monospace" }}
+                    fontFamily: "'IBM Plex Mono', 'Jua', monospace" }}
                   title="이번 정류장까지 남은 거리">
                   {distToCur < 10 ? `✓ ${fmtDist(distToCur)}` : `↓ ${fmtDist(distToCur)}`}
                 </span>
@@ -10301,7 +10301,7 @@ function App() {
             <div className="text-center">
               <div style={{
                 color: "#fbbf24",
-                fontFamily: "'Black Han Sans', sans-serif",
+                fontFamily: "'Black Han Sans', 'Jua', system-ui, sans-serif",
                 fontSize: "clamp(2.5rem, 14vw, 4.5rem)",
                 lineHeight: 1,
                 textShadow: "0 0 24px rgba(251, 191, 36, 0.7), 0 0 48px rgba(251, 191, 36, 0.3)",
@@ -10342,9 +10342,9 @@ function App() {
                   <div className="flex flex-col items-center px-2 py-1 rounded"
                     style={{ background: "#22d65f" }}>
                     <span className="text-[8px] tracking-widest"
-                      style={{ color: "#0a0b0f", fontFamily: "'IBM Plex Mono', monospace" }}>NEXT</span>
+                      style={{ color: "#0a0b0f", fontFamily: "'IBM Plex Mono', 'Jua', monospace" }}>NEXT</span>
                     <span className="text-xs font-black"
-                      style={{ color: "#0a0b0f", fontFamily: "'IBM Plex Mono', monospace" }}>
+                      style={{ color: "#0a0b0f", fontFamily: "'IBM Plex Mono', 'Jua', monospace" }}>
                       {nextLegInfo.departTime}
                     </span>
                   </div>
@@ -10378,9 +10378,9 @@ function App() {
             <div className="flex-shrink-0 flex flex-col items-center px-3 py-1.5 rounded"
               style={{ background: "rgba(34, 214, 95, 0.12)", minWidth: 68 }}>
               <span className="text-[10px] tracking-widest text-emerald-400/80"
-                style={{ fontFamily: "'IBM Plex Mono', monospace" }}>NEXT</span>
+                style={{ fontFamily: "'IBM Plex Mono', 'Jua', monospace" }}>NEXT</span>
               <span className="text-base font-black text-emerald-400"
-                style={{ fontFamily: "'IBM Plex Mono', monospace" }}>
+                style={{ fontFamily: "'IBM Plex Mono', 'Jua', monospace" }}>
                 {nextStop ? trip[currentIdx + 1] : "종점"}
               </span>
             </div>
@@ -10398,7 +10398,7 @@ function App() {
               {arrivalDistText && nextStop && (
                 <div className="text-[12px] mt-0.5"
                   style={{ color: distToNext < triggerRadius ? "#ef4444" : "#22d65f",
-                    fontFamily: "'IBM Plex Mono', monospace" }}>
+                    fontFamily: "'IBM Plex Mono', 'Jua', monospace" }}>
                   ↓ {arrivalDistText}
                 </div>
               )}
@@ -10415,7 +10415,7 @@ function App() {
                 <div className="flex items-center gap-2 mt-1">
                   <button onClick={() => updateCount(kind, -1)}
                     style={{ width: 44, height: 44, borderRadius: 12, background: color + "26", color: color, border: "1.5px solid " + color, fontSize: 22, fontFamily: "'Jua', sans-serif", fontWeight: 700 }}>−</button>
-                  <div style={{ minWidth: 48, textAlign: "center", color: color, fontFamily: "'Black Han Sans', sans-serif", fontSize: 28, lineHeight: 1 }}>{cur[kind] || 0}</div>
+                  <div style={{ minWidth: 48, textAlign: "center", color: color, fontFamily: "'Black Han Sans', 'Jua', system-ui, sans-serif", fontSize: 28, lineHeight: 1 }}>{cur[kind] || 0}</div>
                   <button onClick={() => updateCount(kind, +1)}
                     style={{ width: 44, height: 44, borderRadius: 12, background: color, color: "#0a0b0f", border: "1.5px solid " + color, fontSize: 24, fontFamily: "'Jua', sans-serif", fontWeight: 700 }}>+</button>
                 </div>
@@ -10577,7 +10577,7 @@ function App() {
                 padding: "10px 14px", background: "transparent", border: "none", cursor: "pointer",
                 fontFamily: "'Jua', sans-serif", fontSize: 13, fontWeight: 700, color: "#94a3b8" }}>
               <span>{bottomPanelOpen ? "설정 숨기기" : "설정 펼치기"}</span>
-              <span style={{ fontSize: 10, color: "#475569", fontFamily: "'IBM Plex Mono', monospace", marginLeft: 8 }}>
+              <span style={{ fontSize: 10, color: "#475569", fontFamily: "'IBM Plex Mono', 'Jua', monospace", marginLeft: 8 }}>
                 {currentIdx + 1}/{stops.length} · {tripsToday}회 · {BUILD}
               </span>
             </button>
@@ -10702,14 +10702,14 @@ function App() {
             <div className="flex items-center gap-3">
               <div className="w-12 h-12 rounded-xl flex items-center justify-center shadow-lg"
                 style={{ background: "linear-gradient(135deg, #f59e0b 0%, #d97706 100%)", color: "#fff",
-                  fontFamily: "'Black Han Sans', sans-serif", fontSize: "0.78rem", lineHeight: 1, letterSpacing: -0.5,
+                  fontFamily: "'Black Han Sans', 'Jua', system-ui, sans-serif", fontSize: "0.78rem", lineHeight: 1, letterSpacing: -0.5,
                   boxShadow: "0 0 20px rgba(245, 158, 11, 0.4)" }}>
                 순환
               </div>
               <div>
                 <div className="text-[10px] text-amber-400/80 tracking-widest mb-0.5">제4회 무등산 인문축제</div>
                 <div className="text-xl leading-none" style={{ color: "#fbbf24",
-                  fontFamily: "'Black Han Sans', sans-serif", textShadow: "0 0 12px rgba(251, 191, 36, 0.4)" }}>
+                  fontFamily: "'Black Han Sans', 'Jua', system-ui, sans-serif", textShadow: "0 0 12px rgba(251, 191, 36, 0.4)" }}>
                   {route.label}
                 </div>
               </div>
@@ -10780,11 +10780,11 @@ function App() {
             </div>
             <span className="text-[10px] px-2 py-0.5 rounded-full"
               style={{ background: `${tripStatus.color}22`, color: tripStatus.color,
-                fontFamily: "'IBM Plex Mono', monospace" }}>
+                fontFamily: "'IBM Plex Mono', 'Jua', monospace" }}>
               {tripStatus.label}
             </span>
           </div>
-          <div className="text-[10px] text-slate-500 mb-1" style={{ fontFamily: "'IBM Plex Mono', monospace" }}>
+          <div className="text-[10px] text-slate-500 mb-1" style={{ fontFamily: "'IBM Plex Mono', 'Jua', monospace" }}>
             오늘 운행 {tripsToday}회차 {festivalDay === "auto" ? "(자동)" : festivalDay === "day2" ? "(6.14 일)" : "(6.13 토)"}
           </div>
           <div className="grid gap-1" style={{ gridTemplateColumns: `repeat(${tripsToday}, minmax(0, 1fr))` }}>
@@ -10836,7 +10836,7 @@ function App() {
           <div className="text-center mb-2 flex items-center justify-center gap-2 flex-wrap">
             <span className="text-[11px] tracking-[0.3em] px-3 py-1 rounded-full"
               style={{ color: "#fbbf24", background: "rgba(251, 191, 36, 0.1)",
-                fontFamily: "'IBM Plex Mono', monospace" }}>
+                fontFamily: "'IBM Plex Mono', 'Jua', monospace" }}>
               이번 정류장 · {trip[currentIdx]}
             </span>
             {curStop && autoMode && (() => {
@@ -10872,7 +10872,7 @@ function App() {
               <span className="text-[10px] px-2 py-0.5 rounded"
                 style={{ background: distToCur < triggerRadius ? "rgba(239,68,68,0.2)" : "rgba(251,191,36,0.12)",
                   color: distToCur < triggerRadius ? "#ef4444" : "#fbbf24",
-                  fontFamily: "'IBM Plex Mono', monospace" }}
+                  fontFamily: "'IBM Plex Mono', 'Jua', monospace" }}
                 title="이번 정류장까지 남은 거리(노선/직선은 거리 계산 방식 설정 따름)">
                 {distToCur < 10 ? `✓ ${fmtDist(distToCur)}` : `↓ ${fmtDist(distToCur)}`}
               </span>
@@ -10880,7 +10880,7 @@ function App() {
           </div>
           <div className="text-center py-3">
             <div className="text-5xl font-black leading-tight break-keep"
-              style={{ color: "#fbbf24", fontFamily: "'Black Han Sans', sans-serif",
+              style={{ color: "#fbbf24", fontFamily: "'Black Han Sans', 'Jua', system-ui, sans-serif",
                 textShadow: "0 0 20px rgba(251, 191, 36, 0.6), 0 0 40px rgba(251, 191, 36, 0.3)",
                 letterSpacing: "-0.02em" }}>
               {curStop?.name || "—"}
@@ -10890,7 +10890,7 @@ function App() {
           <div className="border-t border-dashed mt-3 pt-3" style={{ borderColor: "#374151" }}>
             <div className="flex items-center justify-between">
               <span className="text-[10px] tracking-[0.3em]"
-                style={{ color: "#64748b", fontFamily: "'IBM Plex Mono', monospace" }}>
+                style={{ color: "#64748b", fontFamily: "'IBM Plex Mono', 'Jua', monospace" }}>
                 다음 · {nextStop ? trip[currentIdx + 1] : "종점"}
               </span>
               <div className="flex items-center gap-2">
@@ -10898,7 +10898,7 @@ function App() {
                   <span className="text-[10px] px-1.5 py-0.5 rounded"
                     style={{ background: distToNext < triggerRadius ? "rgba(239,68,68,0.2)" : "rgba(34,214,95,0.15)",
                       color: distToNext < triggerRadius ? "#ef4444" : "#22d65f",
-                      fontFamily: "'IBM Plex Mono', monospace" }}>
+                      fontFamily: "'IBM Plex Mono', 'Jua', monospace" }}>
                     {fmtDist(distToNext)}
                   </span>
                 )}
@@ -10924,11 +10924,11 @@ function App() {
               <div className="flex flex-col items-center px-2 py-1 rounded"
                 style={{ background: isAtTerminus ? "#22d65f" : "rgba(34, 214, 95, 0.15)" }}>
                 <span className="text-[8px] tracking-widest"
-                  style={{ color: isAtTerminus ? "#0a0b0f" : "#22d65f", fontFamily: "'IBM Plex Mono', monospace" }}>
+                  style={{ color: isAtTerminus ? "#0a0b0f" : "#22d65f", fontFamily: "'IBM Plex Mono', 'Jua', monospace" }}>
                   NEXT
                 </span>
                 <span className="text-xs font-black leading-none"
-                  style={{ color: isAtTerminus ? "#0a0b0f" : "#22d65f", fontFamily: "'IBM Plex Mono', monospace" }}>
+                  style={{ color: isAtTerminus ? "#0a0b0f" : "#22d65f", fontFamily: "'IBM Plex Mono', 'Jua', monospace" }}>
                   {nextLegInfo.departTime}
                 </span>
               </div>
@@ -11140,11 +11140,11 @@ function App() {
                   <div className="flex flex-col items-end gap-0.5">
                     <span className="text-sm font-bold"
                       style={{ color: isCurrent ? "#fbbf24" : isPast ? "#64748b" : "#94a3b8",
-                        fontFamily: "'IBM Plex Mono', monospace" }}>
+                        fontFamily: "'IBM Plex Mono', 'Jua', monospace" }}>
                       {trip[i]}
                     </span>
                     {dist != null && (
-                      <span className="text-[9px] text-slate-500" style={{ fontFamily: "'IBM Plex Mono', monospace" }}>
+                      <span className="text-[9px] text-slate-500" style={{ fontFamily: "'IBM Plex Mono', 'Jua', monospace" }}>
                         {fmtDist(dist)}
                       </span>
                     )}
@@ -11174,7 +11174,7 @@ function App() {
             <label className="text-xs text-slate-400 w-16">속도</label>
             <input type="range" min="0.5" max="1.5" step="0.05" value={rate}
               onChange={(e) => setRate(parseFloat(e.target.value))} className="flex-1 accent-amber-400" />
-            <span className="text-xs text-amber-400 w-10 text-right" style={{ fontFamily: "'IBM Plex Mono', monospace" }}>
+            <span className="text-xs text-amber-400 w-10 text-right" style={{ fontFamily: "'IBM Plex Mono', 'Jua', monospace" }}>
               {rate.toFixed(2)}
             </span>
           </div>
@@ -11216,7 +11216,7 @@ function App() {
             <label className="text-xs text-slate-400 w-16" title="진입 트리거 — 정류장에서 이만큼 가까워지면 진입(또는 통과 모드 큐 추가)">진입반경</label>
             <input type="range" min="50" max="500" step="10" value={triggerRadius}
               onChange={(e) => setTriggerRadius(parseInt(e.target.value))} className="flex-1 accent-emerald-400" />
-            <span className="text-xs text-emerald-400 w-12 text-right" style={{ fontFamily: "'IBM Plex Mono', monospace" }}>
+            <span className="text-xs text-emerald-400 w-12 text-right" style={{ fontFamily: "'IBM Plex Mono', 'Jua', monospace" }}>
               {triggerRadius}m
             </span>
           </div>
@@ -11224,7 +11224,7 @@ function App() {
             <label className="text-xs text-slate-400 w-16" title="통과 발화 트리거 — 정류장에서 이만큼 멀어진 뒤(전진 확인) 통과 안내 발화">통과반경</label>
             <input type="range" min="10" max="500" step="10" value={passRadius}
               onChange={(e) => setPassRadius(parseInt(e.target.value))} className="flex-1 accent-amber-400" />
-            <span className="text-xs text-amber-400 w-12 text-right" style={{ fontFamily: "'IBM Plex Mono', monospace" }}>
+            <span className="text-xs text-amber-400 w-12 text-right" style={{ fontFamily: "'IBM Plex Mono', 'Jua', monospace" }}>
               {passRadius}m
             </span>
           </div>
@@ -11603,7 +11603,7 @@ function App() {
             <div className="text-[10px] text-slate-600 leading-relaxed">로그인을 채우면 승객은 읽기만 가능(쓰기 차단). 비워두면 테스트 모드로 동작.</div>
           </div>
 
-          <div className="text-[10px] text-slate-600 leading-relaxed mb-2">기사 화면 재진입: 주소 끝에 <span style={{ color: "#fbbf24", fontFamily: "'IBM Plex Mono', monospace" }}>?admin=1</span> 붙여 북마크하거나, 승객 화면 제목을 7번 탭하세요.</div>
+          <div className="text-[10px] text-slate-600 leading-relaxed mb-2">기사 화면 재진입: 주소 끝에 <span style={{ color: "#fbbf24", fontFamily: "'IBM Plex Mono', 'Jua', monospace" }}>?admin=1</span> 붙여 북마크하거나, 승객 화면 제목을 7번 탭하세요.</div>
           {shareUrl && (() => {
             const norm = (s) => s.replace(/\/+$/, "");
             const baked = SHARE_DB && norm(shareUrl) === norm(SHARE_DB);
@@ -11688,7 +11688,7 @@ function App() {
         )}
 
         <div className="text-center mt-4 text-[10px] text-slate-600 tracking-wider leading-relaxed"
-          style={{ fontFamily: "'IBM Plex Mono', monospace" }}>
+          style={{ fontFamily: "'IBM Plex Mono', 'Jua', monospace" }}>
           {currentIdx + 1} / {stops.length} STOPS · TRIP {tripIdx + 1}/{tripsToday} · {autoMode ? "GPS AUTO" : "MANUAL"}
           <div className="text-slate-500 mt-1">※ 6.13.(토) 1~6회차 · 6.14.(일) 1~5회차 운영</div>
         </div>
@@ -11751,7 +11751,7 @@ function App() {
               spellCheck={false} rows={10}
               className="w-full px-2 py-2 rounded text-[11px]"
               style={{ background: "#0a0b0f", border: "1px solid #3a3f54", color: "#cbd5e1",
-                fontFamily: "'IBM Plex Mono', monospace", resize: "vertical" }} />
+                fontFamily: "'IBM Plex Mono', 'Jua', monospace", resize: "vertical" }} />
             {mentMsg && <div className="text-[11px]" style={{ color: "#fbbf24" }}>{mentMsg}</div>}
             <div className="grid grid-cols-2 gap-2">
               <button onClick={copyMent}
@@ -11804,7 +11804,7 @@ function App() {
               spellCheck={false} rows={8}
               className="w-full px-2 py-2 rounded text-[11px]"
               style={{ background: "#0a0b0f", border: "1px solid #3a3f54", color: "#cbd5e1",
-                fontFamily: "'IBM Plex Mono', monospace", resize: "vertical" }} />
+                fontFamily: "'IBM Plex Mono', 'Jua', monospace", resize: "vertical" }} />
             {backupMsg && <div className="text-[11px]" style={{ color: "#fbbf24" }}>{backupMsg}</div>}
             <div className="grid grid-cols-2 gap-2">
               <button onClick={copyBackup}
@@ -11861,14 +11861,14 @@ function App() {
                 <input type="number" step="0.0001" value={editing.lat}
                   onChange={(e) => setEditing(p => ({ ...p, lat: e.target.value }))}
                   className="w-full px-2 py-1.5 rounded text-xs"
-                  style={{ background: "#0a0b0f", border: "1px solid #3a3f54", color: "#cbd5e1", fontFamily: "'IBM Plex Mono', monospace" }} />
+                  style={{ background: "#0a0b0f", border: "1px solid #3a3f54", color: "#cbd5e1", fontFamily: "'IBM Plex Mono', 'Jua', monospace" }} />
               </div>
               <div className="flex-1">
                 <label className="text-[10px] text-slate-400">경도(lng)</label>
                 <input type="number" step="0.0001" value={editing.lng}
                   onChange={(e) => setEditing(p => ({ ...p, lng: e.target.value }))}
                   className="w-full px-2 py-1.5 rounded text-xs"
-                  style={{ background: "#0a0b0f", border: "1px solid #3a3f54", color: "#cbd5e1", fontFamily: "'IBM Plex Mono', monospace" }} />
+                  style={{ background: "#0a0b0f", border: "1px solid #3a3f54", color: "#cbd5e1", fontFamily: "'IBM Plex Mono', 'Jua', monospace" }} />
               </div>
             </div>
             <div className="flex gap-2 pt-1">
@@ -12021,9 +12021,9 @@ function FakeTimeIndicator() {
         fontFamily: "'Jua', sans-serif", fontWeight: 700,
         boxShadow: "1.5px 1.5px 0 #101113" }}>
       <span aria-hidden style={{ fontSize: 12 }}>🧪</span>
-      <span style={{ fontFamily: "'IBM Plex Mono', monospace" }}>{ymd}({dow}) {hms}</span>
+      <span style={{ fontFamily: "'IBM Plex Mono', 'Jua', monospace" }}>{ymd}({dow}) {hms}</span>
       {FAKE.speed !== 1 && (
-        <span style={{ fontSize: 10, opacity: 0.85, fontFamily: "'IBM Plex Mono', monospace" }}>×{FAKE.speed}</span>
+        <span style={{ fontSize: 10, opacity: 0.85, fontFamily: "'IBM Plex Mono', 'Jua', monospace" }}>×{FAKE.speed}</span>
       )}
       {FAKE_GPS && (
         <span aria-label="GPS 시뮬레이션 활성"
