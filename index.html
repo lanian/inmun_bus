@@ -216,7 +216,7 @@
 
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef, useMemo } = React;
-const BUILD = "b458"; /* 화면 우하단 표시 — 최신 배포 확인용 */
+const BUILD = "b459"; /* 화면 우하단 표시 — 최신 배포 확인용 */
 
 /* IS_FLAT — 평면 디자인 활성 여부. 페이지 로드 시 결정.
    우선순위: URL ?theme= (공유·비교용) > localStorage 「shuttle:theme」(사용자 선택) > 기본 false.
@@ -6593,32 +6593,45 @@ function SettingsModal({ onClose, dbUrl, getAuth, refreshAuth }) {
    ① Firebase 연결(공개 read) ② 보안 룰 v2 게시 여부(비인증 /drivers read 가 거부되는지)
    ③ 운영자 로그인(토큰 발급) ④ 쓰기 권한(UID 등록 — /buses/__diag__ 에 실제 PUT 후 즉시 DELETE).
    진단용 PUT 은 trip:99 + lat/stop 없음 → 승객 화면 필터에 걸려 노출 안 됨, 1초 내 삭제. */
-function DiagnosticModal({ onClose, dbUrl, refreshAuth }) {
+function DiagnosticModal({ onClose, dbUrl, refreshAuth, busId }) {
+  // 강화판 (b459) — 4 → 8단계. 연결/인증/단말환경/외부의존 4 영역.
   const STEPS = [
-    { key: "conn",  label: "Firebase 연결" },
-    { key: "rules", label: "보안 룰 게시 (v2)" },
-    { key: "login", label: "운영자 로그인" },
-    { key: "write", label: "쓰기 권한 (UID 등록)" },
+    // [A] 연결
+    { key: "conn",   label: "Firebase 연결",          area: "A" },
+    { key: "rules",  label: "보안 룰 게시",            area: "A" },
+    // [B] 인증·권한
+    { key: "login",  label: "운영자 로그인",            area: "B" },
+    { key: "write",  label: "쓰기 권한 (UID 등록)",     area: "B" },
+    { key: "busid",  label: "busId 충돌 없음",          area: "B" },
+    // [C] 단말 환경
+    { key: "clock",  label: "단말 시계 정확도",          area: "C" },
+    { key: "gps",    label: "GPS 권한",                 area: "C" },
+    // [D] 외부 의존
+    { key: "osrm",   label: "OSRM 도로 데이터 도달성",   area: "D" },
   ];
-  const [results, setResults] = useState({}); // { key: { status: "run"|"ok"|"warn"|"fail", detail } }
+  const [results, setResults] = useState({});
   const [running, setRunning] = useState(false);
+  const [copyMsg, setCopyMsg] = useState("");
   const set = (key, status, detail) => setResults((p) => ({ ...p, [key]: { status, detail } }));
   const run = async () => {
     if (running) return;
     setRunning(true);
     setResults({});
     const base = (dbUrl || "").replace(/\/+$/, "");
-    // ① 연결 — 공개 read 노드로 도달성 확인
+    const startWall = Date.now();
+    // [A①] Firebase 연결 — 공개 read 도달성
     set("conn", "run");
+    let serverDateHeader = "";
     try {
       const r = await fetch(`${base}/settings.json`, { cache: "no-store" });
+      serverDateHeader = r.headers.get("date") || "";
       if (r.ok) set("conn", "ok", "DB 도달 정상");
-      else set("conn", "fail", `HTTP ${r.status} — DB 주소 확인 (연결 탭)`);
+      else { set("conn", "fail", `HTTP ${r.status} — DB 주소 확인 (연결 탭)`); setRunning(false); return; }
     } catch (_) {
       set("conn", "fail", "네트워크 오류 — Wi-Fi/LTE 또는 DB 주소 확인");
-      setRunning(false); return; // 연결 자체가 안 되면 이후 단계 무의미
+      setRunning(false); return;
     }
-    // ② 룰 게시 — 비인증으로 /drivers 읽기 시도. v2 룰이면 거부(401)되어야 정상.
+    // [A②] 보안 룰 게시 — 비인증 /drivers 가 401 이어야 정상
     set("rules", "run");
     try {
       const r = await fetch(`${base}/drivers.json`, { cache: "no-store" });
@@ -6626,32 +6639,159 @@ function DiagnosticModal({ onClose, dbUrl, refreshAuth }) {
       else if (r.ok) set("rules", "warn", "구버전 룰 — Console > Rules 에 database.rules.json 게시 권장");
       else set("rules", "warn", `예상외 응답 HTTP ${r.status}`);
     } catch (_) { set("rules", "warn", "확인 불가 (네트워크)"); }
-    // ③ 로그인 — 토큰 강제 재발급
+    // [B③] 운영자 로그인 — 토큰 발급
     set("login", "run");
     let token = null;
     try { token = refreshAuth ? await refreshAuth() : null; } catch (_) {}
     if (token) set("login", "ok", "토큰 발급 정상");
     else {
-      set("login", "fail", "로그인 실패 — 연결 탭에서 이메일/비밀번호 확인");
+      set("login", "fail", "로그인 실패 — 연결 탭 이메일/비밀번호 확인 (또는 8초 timeout)");
       set("write", "fail", "로그인 후 재진단 필요");
-      setRunning(false); return;
+      set("busid", "fail", "로그인 후 재진단 필요");
+      // 단말 환경(C)·외부(D) 는 인증 무관 — 계속 진행
     }
-    // ④ 쓰기 권한 — /buses/__diag__ 실제 PUT (trip:99·좌표 없음 → 승객 화면 비노출) 후 즉시 삭제
-    set("write", "run");
+    // [B④] 쓰기 권한 — /buses/__diag__ 임시 PUT 후 DELETE
+    if (token) {
+      set("write", "run");
+      try {
+        const auth = `?auth=${encodeURIComponent(token)}`;
+        const body = JSON.stringify({ dir: "outbound", trip: 99, ts: Date.now() });
+        const r = await fetch(`${base}/buses/__diag__.json${auth}`, { method: "PUT", body });
+        try { await fetch(`${base}/buses/__diag__.json${auth}`, { method: "DELETE" }); } catch (_) {}
+        if (r.ok) set("write", "ok", "쓰기 정상 — 위치 공유 가능");
+        else if (r.status === 401 || r.status === 403)
+          set("write", "fail", "권한 없음 — Console > Data > /drivers/{UID}=true 등록 확인 (UID 는 Authentication > Users)");
+        else set("write", "fail", `HTTP ${r.status} — 룰 validate 거부 가능, 관리자 문의`);
+      } catch (_) { set("write", "fail", "네트워크 오류"); }
+    }
+    // [B⑤] busId 충돌 — 본인 busId 슬롯에 다른 단말이 최근 15초 내 송신 중인지
+    set("busid", "run");
+    if (!busId) set("busid", "warn", "busId 미설정 — 연결 탭에서 지정");
+    else {
+      try {
+        const r = await fetch(`${base}/buses/${encodeURIComponent(busId)}.json`, { cache: "no-store" });
+        if (!r.ok) set("busid", "warn", `상태 확인 불가 (HTTP ${r.status})`);
+        else {
+          const d = await r.json();
+          if (!d || !d.ts) set("busid", "ok", `busId 「${busId}」 — 다른 단말 송신 없음`);
+          else if (Date.now() - d.ts > 15000) set("busid", "ok", `busId 「${busId}」 — 다른 단말 송신 없음 (마지막 ${Math.round((Date.now() - d.ts) / 1000)}초 전)`);
+          else set("busid", "fail", `busId 「${busId}」 — 다른 단말이 ${Math.round((Date.now() - d.ts) / 1000)}초 전 송신. 다른 busId 로 변경 또는 핸드오프 진행`);
+        }
+      } catch (_) { set("busid", "warn", "확인 불가 (네트워크)"); }
+    }
+    // [C⑥] 단말 시계 — 서버 Date 헤더 vs 단말 Date.now()
+    set("clock", "run");
     try {
-      const auth = `?auth=${encodeURIComponent(token)}`;
-      const body = JSON.stringify({ dir: "outbound", trip: 99, ts: Date.now() });
-      const r = await fetch(`${base}/buses/__diag__.json${auth}`, { method: "PUT", body });
-      try { await fetch(`${base}/buses/__diag__.json${auth}`, { method: "DELETE" }); } catch (_) {}
-      if (r.ok) set("write", "ok", "쓰기 정상 — 위치 공유 가능");
-      else if (r.status === 401 || r.status === 403)
-        set("write", "fail", "권한 없음 — Console > Data > /drivers/{UID}=true 등록 확인 (UID 는 Authentication > Users)");
-      else set("write", "fail", `HTTP ${r.status} — 룰 validate 거부 가능, 관리자 문의`);
-    } catch (_) { set("write", "fail", "네트워크 오류"); }
+      let serverMs = 0;
+      if (serverDateHeader) serverMs = Date.parse(serverDateHeader) || 0;
+      if (!serverMs) {
+        const r = await fetch(`${base}/.json?shallow=true`, { cache: "no-store" });
+        const dh = r.headers.get("date") || "";
+        serverMs = Date.parse(dh) || 0;
+      }
+      if (!serverMs) set("clock", "warn", "서버 시각 확인 불가 — 단말 시각 「자동 설정」 권장");
+      else {
+        const skewSec = Math.round((Date.now() - serverMs) / 1000);
+        const abs = Math.abs(skewSec);
+        if (abs <= 30) set("clock", "ok", `시계 정확 (서버 대비 ${skewSec >= 0 ? "+" : ""}${skewSec}초)`);
+        else if (abs <= 120) set("clock", "warn", `시계 ${skewSec >= 0 ? "+" : ""}${skewSec}초 차이 — 「자동 시간」 권장`);
+        else set("clock", "fail", `시계 ${skewSec >= 0 ? "+" : ""}${skewSec}초 — 스티커·기록 거부됨. 설정에서 시간 자동 동기화 필수`);
+      }
+    } catch (_) { set("clock", "warn", "확인 불가 (네트워크)"); }
+    // [C⑦] GPS 권한 — Permissions API 우선, 없으면 getCurrentPosition 즉시 확인
+    set("gps", "run");
+    try {
+      if (!navigator.geolocation) set("gps", "fail", "이 브라우저에서 GPS 미지원");
+      else {
+        let state = null;
+        try {
+          if (navigator.permissions && navigator.permissions.query) {
+            const p = await navigator.permissions.query({ name: "geolocation" });
+            state = p.state; // "granted" | "denied" | "prompt"
+          }
+        } catch (_) {}
+        if (state === "granted") set("gps", "ok", "위치 권한 허용됨");
+        else if (state === "denied") set("gps", "fail", "위치 권한 거부됨 — 브라우저 설정에서 이 사이트 위치 「허용」");
+        else {
+          // prompt 또는 Permissions API 없음 — getCurrentPosition 으로 5초 대기
+          const probe = await new Promise((res) => {
+            const t = setTimeout(() => res("timeout"), 5000);
+            navigator.geolocation.getCurrentPosition(
+              () => { clearTimeout(t); res("ok"); },
+              (e) => { clearTimeout(t); res(e && e.code === 1 ? "denied" : "error"); },
+              { enableHighAccuracy: false, maximumAge: 60000, timeout: 4500 }
+            );
+          });
+          if (probe === "ok") set("gps", "ok", "위치 권한 허용됨");
+          else if (probe === "denied") set("gps", "fail", "위치 권한 거부됨 — 브라우저 설정에서 「허용」");
+          else if (probe === "timeout") set("gps", "warn", "GPS 응답 지연 — 실외에서 재시도 권장");
+          else set("gps", "warn", "GPS 일시 오류 — 재시도 권장");
+        }
+      }
+    } catch (_) { set("gps", "warn", "확인 불가") }
+    // [D⑧] OSRM 도로 데이터 — 무료 endpoint 단일 점 확인
+    set("osrm", "run");
+    try {
+      const ctrl = new AbortController();
+      const t = setTimeout(() => ctrl.abort(), 6000);
+      // 행사장 주변 좌표 2점 — bbox 안. 실패해도 사용자 영향 적음(직선 폴백) 이라 warn.
+      const path = "126.91908,35.14605;126.95942,35.13334";
+      const r = await fetch(`https://router.project-osrm.org/route/v1/driving/${path}?overview=false`, { signal: ctrl.signal });
+      clearTimeout(t);
+      if (r.ok) {
+        const d = await r.json();
+        if (d && d.code === "Ok") set("osrm", "ok", "OSRM 정상 — 노선 곡선 표시 가능");
+        else set("osrm", "warn", "OSRM 응답 이상 — 직선 폴백 사용 가능");
+      } else if (r.status === 429) set("osrm", "warn", "OSRM rate-limit — 캐시·재시도 백오프 가동, 직선 폴백 가능");
+      else set("osrm", "warn", `OSRM HTTP ${r.status} — 직선 폴백 사용`);
+    } catch (e) {
+      if (e && e.name === "AbortError") set("osrm", "warn", "OSRM 응답 지연(6초+) — 직선 폴백 사용");
+      else set("osrm", "warn", "OSRM 도달 불가 — 직선 폴백 사용");
+    }
+    void startWall;
     setRunning(false);
   };
   useEffect(() => { run(); }, []); // 모달 열리면 자동 1회 실행
   const ICON = { run: "⏳", ok: "✅", warn: "⚠️", fail: "❌" };
+  // 결과 요약: 전체 OK / warn 있음 / fail 있음
+  const summary = (() => {
+    const vals = STEPS.map((s) => results[s.key]?.status).filter(Boolean);
+    if (running || vals.length < STEPS.length) return null;
+    if (vals.includes("fail")) return { tone: "fail", label: "조치 필요 — 빨간 항목 먼저 해결" };
+    if (vals.includes("warn")) return { tone: "warn", label: "경고 있음 — 운영 가능하나 확인 권장" };
+    return { tone: "ok", label: "✓ 모든 항목 통과 — 행사일 운영 준비 완료" };
+  })();
+  const copyResults = () => {
+    try {
+      const lines = STEPS.map((s) => {
+        const r = results[s.key];
+        const ic = r ? (r.status === "ok" ? "OK" : r.status === "warn" ? "WARN" : r.status === "fail" ? "FAIL" : "RUN") : "-";
+        return `[${ic}] ${s.label}${r?.detail ? ` — ${r.detail}` : ""}`;
+      });
+      const txt = `무등생각 연결 자가진단 ${new Date().toLocaleString("ko-KR")}\nBUILD ${typeof BUILD !== "undefined" ? BUILD : "?"}\nbusId: ${busId || "(미설정)"}\n\n${lines.join("\n")}`;
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(txt).then(() => {
+          setCopyMsg("✓ 결과 클립보드 복사 — 운영 본부에 공유");
+          setTimeout(() => setCopyMsg(""), 2400);
+        });
+      } else {
+        const ta = document.createElement("textarea");
+        ta.value = txt; document.body.appendChild(ta); ta.select();
+        try { document.execCommand("copy"); setCopyMsg("✓ 결과 복사됨"); } catch (_) { setCopyMsg("복사 실패 — 수동으로 화면 캡처"); }
+        document.body.removeChild(ta);
+        setTimeout(() => setCopyMsg(""), 2400);
+      }
+    } catch (_) { setCopyMsg("복사 실패"); setTimeout(() => setCopyMsg(""), 2000); }
+  };
+  // 영역 헤더 라벨
+  const AREA_LABELS = { A: "연결", B: "인증 · 권한", C: "단말 환경", D: "외부 의존" };
+  // 영역별 STEPS 그룹화 — 순서 유지
+  const groupedByArea = [];
+  STEPS.forEach((s) => {
+    const last = groupedByArea[groupedByArea.length - 1];
+    if (last && last.area === s.area) last.steps.push(s);
+    else groupedByArea.push({ area: s.area, steps: [s] });
+  });
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center p-4"
       style={{ background: "rgba(15,15,18,0.6)" }} onClick={onClose}>
@@ -6659,7 +6799,8 @@ function DiagnosticModal({ onClose, dbUrl, refreshAuth }) {
         style={{ background: "#fff",
           border: IS_FLAT ? "1px solid " + FT.mute + "88" : "2.5px solid " + FT.ink,
           borderRadius: 14, padding: 16,
-          boxShadow: IS_FLAT ? "0 8px 24px rgba(0,0,0,0.16)" : "4px 4px 0 " + FT.ink }}
+          boxShadow: IS_FLAT ? "0 8px 24px rgba(0,0,0,0.16)" : "4px 4px 0 " + FT.ink,
+          maxHeight: "85vh", overflowY: "auto" }}
         onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between">
           <div style={{ fontSize: 14, color: FT.ink, fontFamily: "'Jua', sans-serif", fontWeight: 700 }}>
@@ -6670,40 +6811,75 @@ function DiagnosticModal({ onClose, dbUrl, refreshAuth }) {
               border: IS_FLAT ? "1px solid " + FT.mute + "66" : "2px solid " + FT.ink,
               background: "#fff", color: FT.ink, fontWeight: 700, fontFamily: "'Jua', sans-serif" }}>×</button>
         </div>
-        <div className="space-y-2">
-          {STEPS.map((s) => {
-            const r = results[s.key];
-            return (
-              <div key={s.key} style={{ display: "flex", alignItems: "flex-start", gap: 9,
-                background: r?.status === "fail" ? "#FEF2F2" : r?.status === "warn" ? "#FFFBEB" : FT.paper,
-                border: "1px solid " + (r?.status === "fail" ? "#fca5a5" : r?.status === "warn" ? "#fcd34d" : FT.mute + "44"),
-                borderRadius: 10, padding: "9px 11px" }}>
-                <span aria-hidden style={{ fontSize: 14, flexShrink: 0, lineHeight: "18px" }}>
-                  {r ? ICON[r.status] : "·"}
-                </span>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 12.5, color: FT.ink, fontFamily: "'Jua', sans-serif", fontWeight: 700, lineHeight: 1.3 }}>
-                    {s.label}
-                  </div>
-                  {r?.detail && (
-                    <div style={{ fontSize: 11, marginTop: 2, lineHeight: 1.4, fontWeight: 500,
-                      fontFamily: "'Gowun Dodum', system-ui, sans-serif",
-                      color: r.status === "fail" ? "#b91c1c" : r.status === "warn" ? "#92400e" : FT.inkSoft }}>
-                      {r.detail}
+        {/* 요약 배지 — 모든 단계 완료 후만 노출 */}
+        {summary && (
+          <div style={{ padding: "8px 11px", borderRadius: 10, fontFamily: "'Jua', sans-serif", fontWeight: 700,
+            fontSize: 12.5, lineHeight: 1.3,
+            background: summary.tone === "ok" ? "#ECFDF5" : summary.tone === "warn" ? "#FFFBEB" : "#FEF2F2",
+            color:      summary.tone === "ok" ? "#047857" : summary.tone === "warn" ? "#92400e" : "#b91c1c",
+            border: "1px solid " + (summary.tone === "ok" ? "#6ee7b7" : summary.tone === "warn" ? "#fcd34d" : "#fca5a5") }}>
+            {summary.label}
+          </div>
+        )}
+        {/* 영역별 그룹 렌더 — A 연결 / B 인증 / C 환경 / D 외부 */}
+        {groupedByArea.map((g) => (
+          <div key={g.area} className="space-y-2">
+            <div style={{ fontSize: 10, color: FT.mute, fontWeight: 700, letterSpacing: 2,
+              fontFamily: "'Jua', sans-serif", textTransform: "uppercase", padding: "0 2px" }}>
+              {AREA_LABELS[g.area]}
+            </div>
+            {g.steps.map((s) => {
+              const r = results[s.key];
+              return (
+                <div key={s.key} style={{ display: "flex", alignItems: "flex-start", gap: 9,
+                  background: r?.status === "fail" ? "#FEF2F2" : r?.status === "warn" ? "#FFFBEB" : r?.status === "ok" ? "#ECFDF5" : FT.paper,
+                  border: "1px solid " + (r?.status === "fail" ? "#fca5a5" : r?.status === "warn" ? "#fcd34d" : r?.status === "ok" ? "#a7f3d0" : FT.mute + "44"),
+                  borderRadius: 10, padding: "9px 11px" }}>
+                  <span aria-hidden style={{ fontSize: 14, flexShrink: 0, lineHeight: "18px" }}>
+                    {r ? ICON[r.status] : "·"}
+                  </span>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 12.5, color: FT.ink, fontFamily: "'Jua', sans-serif", fontWeight: 700, lineHeight: 1.3 }}>
+                      {s.label}
                     </div>
-                  )}
+                    {r?.detail && (
+                      <div style={{ fontSize: 11, marginTop: 2, lineHeight: 1.4, fontWeight: 500,
+                        fontFamily: "'Gowun Dodum', system-ui, sans-serif",
+                        color: r.status === "fail" ? "#b91c1c" : r.status === "warn" ? "#92400e" : FT.inkSoft }}>
+                        {r.detail}
+                      </div>
+                    )}
+                  </div>
                 </div>
-              </div>
-            );
-          })}
+              );
+            })}
+          </div>
+        ))}
+        {/* 액션 버튼 — 다시 진단 + 결과 복사. 복사 결과 토스트 */}
+        <div className="flex gap-2">
+          <button onClick={run} disabled={running}
+            style={{ flex: 2, padding: "9px 0", borderRadius: 10,
+              background: running ? FT.mute : FT.tealDark, color: "#fff",
+              border: "none", fontFamily: "'Jua', sans-serif", fontWeight: 700, fontSize: 13,
+              cursor: running ? "default" : "pointer", opacity: running ? 0.6 : 1 }}>
+            {running ? "진단 중…" : "다시 진단"}
+          </button>
+          <button onClick={copyResults} disabled={running}
+            title="결과를 텍스트로 복사 — 운영 본부에 공유"
+            style={{ flex: 1, padding: "9px 0", borderRadius: 10,
+              background: "#fff", color: FT.ink,
+              border: IS_FLAT ? "1px solid " + FT.mute + "66" : "2px solid " + FT.ink,
+              fontFamily: "'Jua', sans-serif", fontWeight: 700, fontSize: 13,
+              cursor: running ? "default" : "pointer", opacity: running ? 0.5 : 1 }}>
+            📋 복사
+          </button>
         </div>
-        <button onClick={run} disabled={running}
-          style={{ width: "100%", padding: "9px 0", borderRadius: 10,
-            background: running ? FT.mute : FT.tealDark, color: "#fff",
-            border: "none", fontFamily: "'Jua', sans-serif", fontWeight: 700, fontSize: 13,
-            cursor: running ? "default" : "pointer", opacity: running ? 0.6 : 1 }}>
-          {running ? "진단 중…" : "다시 진단"}
-        </button>
+        {copyMsg && (
+          <div style={{ fontSize: 11, color: FT.tealDark, fontFamily: "'Gowun Dodum', system-ui, sans-serif",
+            textAlign: "center", fontWeight: 600 }}>
+            {copyMsg}
+          </div>
+        )}
       </div>
     </div>
   );
@@ -11390,7 +11566,7 @@ function App() {
       {showThemeSettings && <SettingsModal onClose={() => setShowThemeSettings(false)}
         dbUrl={shareUrl} getAuth={() => authTokenRef.current}
         refreshAuth={async () => { try { const d = await firebaseSignIn(); if (d && d.idToken) { authTokenRef.current = d.idToken; tokenIssuedAtRef.current = Date.now(); return d.idToken; } } catch (_) {} return null; }} />}
-      {showDiag && <DiagnosticModal onClose={() => setShowDiag(false)} dbUrl={shareUrl}
+      {showDiag && <DiagnosticModal onClose={() => setShowDiag(false)} dbUrl={shareUrl} busId={busId}
         refreshAuth={async () => { try { const d = await firebaseSignIn(); if (d && d.idToken) { authTokenRef.current = d.idToken; tokenIssuedAtRef.current = Date.now(); return d.idToken; } } catch (_) {} return null; }} />}
 
       {/* 멘트 편집·백업·복원 모달 */}
