@@ -216,7 +216,7 @@
 
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef, useMemo } = React;
-const BUILD = "b461"; /* 화면 우하단 표시 — 최신 배포 확인용 */
+const BUILD = "b462"; /* 화면 우하단 표시 — 최신 배포 확인용 */
 
 /* IS_FLAT — 평면 디자인 활성 여부. 페이지 로드 시 결정.
    우선순위: URL ?theme= (공유·비교용) > localStorage 「shuttle:theme」(사용자 선택) > 기본 false.
@@ -9783,6 +9783,29 @@ function App() {
     fetch(`${base}/buses/${encodeURIComponent(busId || "1")}.json${auth}`, { method: "DELETE" }).catch(() => {});
   }, [sharing]);
 
+  /* ⚠ 운전자가 「위치 공유 OFF」 안 하고 앱 닫거나 새로고침 시 자동 cleanup —
+     pagehide/beforeunload 시점에 /buses/{busId} DELETE.
+     stale 버스가 승객 지도에 영구 잔존하는 문제 차단. keepalive:true 로 페이지 unload 중에도 송신.
+     안드로이드 Chrome / iOS Safari 모두 keepalive 지원. */
+  useEffect(() => {
+    if (!sharing || !shareUrl || !busId) return;
+    const cleanup = () => {
+      try {
+        const base = shareUrl.replace(/\/+$/, "");
+        const auth = authTokenRef.current ? `?auth=${encodeURIComponent(authTokenRef.current)}` : "";
+        fetch(`${base}/buses/${encodeURIComponent(busId)}.json${auth}`, {
+          method: "DELETE", keepalive: true,
+        });
+      } catch (_) {}
+    };
+    window.addEventListener("pagehide", cleanup);
+    window.addEventListener("beforeunload", cleanup);
+    return () => {
+      window.removeEventListener("pagehide", cleanup);
+      window.removeEventListener("beforeunload", cleanup);
+    };
+  }, [sharing, shareUrl, busId]);
+
   /* --- Trip status (출발 전/운행 중/지연/종료) — 지연 운행을 '종료'로 오표시하지 않음 --- */
   const tripStatus = useMemo(() => {
     const now = getNow(); const nowMin = now.getHours() * 60 + now.getMinutes();
@@ -11382,7 +11405,15 @@ function App() {
                 label="운영자 핸드오프"
                 sub={handoffPending ? `📥 대기 중 — ${handoffPending.busId} ${(handoffPending.tripIdx || 0) + 1}회차` : "단말 교체 시 운행 상태 인계"}
                 badge={handoffPending ? 1 : 0}
-                onClick={() => setShowHandoff(true)} />
+                onClick={() => {
+                  // 운전 중(sharing ON) 핸드오프 진입 안전 가드 — 정류장 정지 후 진행 권장
+                  if (sharing && !window.confirm(
+                    "⚠ 위치 공유 ON 상태\n\n" +
+                    "핸드오프는 정류장에 정차한 안전한 상태에서만 진행하세요.\n" +
+                    "지금 계속할까요?"
+                  )) return;
+                  setShowHandoff(true);
+                }} />
               <ActBtn Icon={Settings} color="#a78bfa"
                 label="사용자 페이지 디자인 테마"
                 sub={IS_FLAT ? "현재 평면(미니멀) — 모든 사용자 단말 동기화" : "현재 기본(포스터) — 모든 사용자 단말 동기화"}
@@ -11528,10 +11559,28 @@ function App() {
         </div>
         )}
 
-        {/* 운행 탭 — Controls (이전·안내·다음) */}
+        {/* 운행 탭 — 음량 테스트(시동 전 필수) + Controls (이전·안내·다음) */}
         {advTab === "운행" && (
-        <div className="px-5 py-5 flex items-center justify-center gap-3"
+        <div className="px-5 py-4 space-y-4"
           style={{ background: "linear-gradient(180deg, #1c1f2b 0%, #13151c 100%)", borderColor: "#3a3f54" }}>
+          {/* 시동 전 음량 확인 — 시끄러운 cabin 에서 안내 못 들음 방지 */}
+          <button onClick={testVoice}
+            className="w-full flex items-center justify-center gap-3 py-3 rounded-xl"
+            style={{ background: "rgba(34, 214, 95, 0.12)",
+              border: "1.5px solid rgba(34, 214, 95, 0.45)",
+              color: "#22d65f", fontFamily: "'Jua', sans-serif", fontWeight: 700, fontSize: 14 }}>
+            <span aria-hidden style={{ fontSize: 18 }}>📢</span>
+            <span>음량 테스트</span>
+            <span style={{ fontSize: 10, fontWeight: 500, color: "#86efac", marginLeft: 6 }}>
+              시동 전 필수
+            </span>
+          </button>
+          <div style={{ fontSize: 10, color: "#94a3b8", textAlign: "center",
+            fontFamily: "'Gowun Dodum', system-ui, sans-serif", lineHeight: 1.4, margin: "-6px 0 0" }}>
+            안내 멘트가 명확히 들리는지 확인 후 휴대폰 음량 키 1~2 단계 더 올려 두세요.
+          </div>
+          <div className="flex items-center justify-center gap-3"
+            style={{ paddingTop: 4 }}>
           <button onClick={prev} disabled={currentIdx === 0}
             className="w-12 h-12 rounded-full flex items-center justify-center disabled:opacity-30"
             style={{ background: "rgba(251, 191, 36, 0.1)", border: "1px solid rgba(251, 191, 36, 0.3)", color: "#fbbf24" }}>
@@ -11553,6 +11602,7 @@ function App() {
             style={{ background: "rgba(251, 191, 36, 0.1)", border: "1px solid rgba(251, 191, 36, 0.3)", color: "#fbbf24" }}>
             <SkipForward size={18} />
           </button>
+          </div>
         </div>
         )}
 
