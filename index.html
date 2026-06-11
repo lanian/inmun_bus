@@ -216,7 +216,7 @@
 
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef, useMemo } = React;
-const BUILD = "b457"; /* 화면 우하단 표시 — 최신 배포 확인용 */
+const BUILD = "b458"; /* 화면 우하단 표시 — 최신 배포 확인용 */
 
 /* IS_FLAT — 평면 디자인 활성 여부. 페이지 로드 시 결정.
    우선순위: URL ?theme= (공유·비교용) > localStorage 「shuttle:theme」(사용자 선택) > 기본 false.
@@ -2650,7 +2650,19 @@ function UsageStatsViewer({ onClose, dbUrl, getAuth, refreshAuth }) {
         ? `권한 없음 (HTTP ${r.status}) — admin/driver 계정 필요`
         : `응답 ${r.status}`);
     }
-    const j = await r.json();
+    // 대용량 응답 가드 — 10MB 초과 시 파싱 자체가 React state 에 들어가 메인 스레드 freeze.
+    // Content-Length 가 제공되면 사전 차단, 없으면 응답 텍스트 길이로 사후 차단.
+    const SIZE_LIMIT_BYTES = 10 * 1024 * 1024;
+    const cl = parseInt(r.headers.get("content-length") || "0", 10) || 0;
+    if (cl > SIZE_LIMIT_BYTES) {
+      throw new Error(`데이터 ${(cl / 1024 / 1024).toFixed(1)}MB — 너무 커서 표시 차단. 행사 후 별도 추출/분석 필요`);
+    }
+    const txt = await r.text();
+    if (txt.length > SIZE_LIMIT_BYTES) {
+      throw new Error(`데이터 ${(txt.length / 1024 / 1024).toFixed(1)}MB — 너무 커서 표시 차단. 행사 후 별도 추출/분석 필요`);
+    }
+    let j = null;
+    try { j = JSON.parse(txt); } catch (_) { throw new Error("응답 JSON 파싱 실패"); }
     return j && typeof j === "object" ? j : {};
   };
   const load = async () => {
@@ -4130,14 +4142,17 @@ function ViaEditor({ onClose, dbUrl, getAuth, refreshAuth }) {
     const email = LS.get("driveremail", "");
     const pass = LS.get("driverpass", "");
     if (!key || !email || !pass) return "";
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 8000); // 8초 timeout
     try {
       const r = await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${key}`, {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, password: pass, returnSecureToken: true }),
+        signal: ctrl.signal,
       });
       const d = await r.json();
       if (d.idToken) { editorTokenRef.current = d.idToken; return d.idToken; }
-    } catch (_) {}
+    } catch (_) {} finally { clearTimeout(timer); }
     return "";
   };
 
@@ -9329,14 +9344,25 @@ function App() {
     setSharing(true);
   };
 
-  /* --- 기사 쓰기 로그인(선택): 이메일/비밀번호가 있으면 로그인해 토큰 발급(50분마다 갱신). 없으면 인증 없이 공개 쓰기. --- */
+  /* --- 기사 쓰기 로그인(선택): 이메일/비밀번호가 있으면 로그인해 토큰 발급(50분마다 갱신). 없으면 인증 없이 공개 쓰기.
+     8초 timeout — Identity Toolkit 응답 지연 시 무한 대기 막아 재로그인 시도 조기 복구 가능. --- */
   const firebaseSignIn = async () => {
     const key = apiKey || SHARE_API_KEY;
-    const r = await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${key}`, {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email: driverEmail, password: driverPass, returnSecureToken: true }),
-    });
-    return r.json();
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 8000);
+    try {
+      const r = await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${key}`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: driverEmail, password: driverPass, returnSecureToken: true }),
+        signal: ctrl.signal,
+      });
+      return r.json();
+    } catch (e) {
+      if (e && e.name === "AbortError") return { error: { message: "TIMEOUT" } };
+      throw e;
+    } finally {
+      clearTimeout(timer);
+    }
   };
   const testLogin = async () => {
     const key = apiKey || SHARE_API_KEY;
@@ -11686,7 +11712,9 @@ ReactDOM.createRoot(document.getElementById('root')).render(<Root />);
     window.addEventListener("load", () => {
       navigator.serviceWorker.register("sw.js")
         .then((reg) => {
-          // 행사장 영역 z14~16 타일 prefetch — 24h 안에 한 번만, LTE 약전계 대비
+          // 행사장 영역 z13~17 타일 prefetch — 24h 안에 한 번만, LTE 약전계 + NAT 한도 대비.
+          // z17 까지 확대해 줌 인 시에도 캐시 hit, 단일 단말이 OSM 에 같은 타일 반복 요청하지 않음.
+          // 타일 수: z13(1)+z14(1)+z15(4)+z16(16)+z17(64) ≈ 86개. 약 8~10MB 일회성.
           try {
             const PREFETCH_KEY = "shuttle:tilesPrefetchAt";
             const last = parseInt(localStorage.getItem(PREFETCH_KEY) || "0", 10);
@@ -11700,7 +11728,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(<Root />);
               return { x, y };
             };
             const urls = [];
-            for (const z of [14, 15, 16]) {
+            for (const z of [13, 14, 15, 16, 17]) {
               const min = tileXY(bounds.latMax, bounds.lngMin, z);
               const max = tileXY(bounds.latMin, bounds.lngMax, z);
               for (let x = min.x; x <= max.x; x++) {
