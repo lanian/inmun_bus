@@ -216,7 +216,7 @@
 
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef, useMemo } = React;
-const BUILD = "b460"; /* 화면 우하단 표시 — 최신 배포 확인용 */
+const BUILD = "b461"; /* 화면 우하단 표시 — 최신 배포 확인용 */
 
 /* IS_FLAT — 평면 디자인 활성 여부. 페이지 로드 시 결정.
    우선순위: URL ?theme= (공유·비교용) > localStorage 「shuttle:theme」(사용자 선택) > 기본 false.
@@ -3326,12 +3326,22 @@ function StickerEditor({ onClose, dbUrl, getAuth, refreshAuth }) {
   const wipeAll = async () => {
     if (items.length === 0) { setStatus("스티커가 없어요"); return; }
     if (!window.confirm(`전체 스티커 ${items.length}개를 삭제할까요? 되돌릴 수 없어요.`)) return;
-    setStatus("전체 삭제 중…");
-    try {
-      const r = await callDelete(`/stickers`);
-      if (r.ok) { setStatus("✅ 전체 삭제 완료"); reload(); }
-      else { try { console.warn(`StickerEditor DELETE-all failed: HTTP ${r.status}${refreshAuth ? " after refresh" : ""}`); } catch (_) {} setStatus(`⚠ 실패 (HTTP ${r.status})`); }
-    } catch (e) { try { console.warn("StickerEditor DELETE-all network error:", e && e.message ? e.message : e); } catch (_) {} setStatus(`⚠ ${e && e.message ? e.message : "네트워크 오류"}`); }
+    // 룰 정책: /stickers 부모는 .write 없음(루트 false 상속) → 전체 노드 DELETE 거부됨.
+    // $id 별 개별 DELETE 로 처리 (sweepExpired 와 동일). 진행 상태 10건 단위 갱신.
+    setStatus(`전체 삭제 진행 중… 0 / ${items.length}`);
+    let ok = 0, fail = 0;
+    for (let i = 0; i < items.length; i++) {
+      const it = items[i];
+      try {
+        const r = await callDelete(`/stickers/${encodeURIComponent(it.id)}`);
+        if (r.ok) ok++; else fail++;
+      } catch (_) { fail++; }
+      if ((i + 1) % 10 === 0 || i === items.length - 1) {
+        setStatus(`전체 삭제 진행 중… ${i + 1} / ${items.length}`);
+      }
+    }
+    setStatus(`✅ 전체 삭제 완료 — 성공 ${ok}건${fail ? ` · 실패 ${fail}건` : ""}`);
+    reload();
   };
   const now = Date.now();
   const expiredCount = now >= STICKER_EXPIRY_MS ? items.length : 0;
