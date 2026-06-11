@@ -18,9 +18,22 @@ Firebase Realtime Database 룰(`database.rules.json`) 변경 이력 및 배포 �
   서버 측 bbox+ts validate 가 실 강제.
 
 ### /stats/{date}/sessions/{$sid}
-- 익명 쓰기 제거 → driver/admin 인증 필수
-- 클라이언트(`index.html ~L625`) 가 익명 PUT 하던 익명 세션 분석은 401/403
-  silent 처리 (console.warn + 10분 backoff). 사용자 UX 영향 없음 (fire-and-forget)
+- v1 에서 익명 쓰기 제거 → v3(b454) 에서 익명 허용 재개. abuse 제약 강화.
+- 클라이언트 변경 없음 (`createStatsTracker` 그대로).
+
+**v3 강화된 abuse 제약** (룰):
+- `$sid` 패턴: `^[a-z0-9]{6,16}$` — `toString(36)` 출력만 통과 (대소문자·특수문자 거부)
+- `$flushTs` 패턴: 정확히 13자리 epoch ms (`Date.now()` 형식)
+- `flush.ts` 윈도우: `now - 24h ~ now + 1분` — 위·미래 ts 리플레이 차단
+- `flush.startedAt` 윈도우: `now - 48h ~ now + 1분`, `durMs` ≤ 48h
+- `flush.cat` 패턴: `unknown` 또는 `os.br.(mobile|desktop)` — `parseUaCategory` 형식 강제
+- 이벤트 키: 화이트리스트 카테고리(`session|view|click|toggle|open|notice|transition|stop|sticker|error`) + `_[A-Za-z0-9_]{1,40}`
+- 이벤트 값: 0 ~ 100,000 사이 정수 — 단일 키 카운트 폭주 차단
+- `$other` 화이트리스트(`ts|startedAt|durMs|cat|ev`) — 임의 필드 거부
+
+**남는 위험**: 정교한 공격자가 위 형식 모두 지키며 다수 sid 생성. 완전 차단은 어렵지만
+의미 없는 쓰레기 데이터 양산 비용은 크게 상승. 행사 후 abuse 발견 시 sid 별 빈도
+이상치 분석 + 의심 sid 제거.
 
 ---
 
