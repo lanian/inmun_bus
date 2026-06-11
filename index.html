@@ -216,7 +216,7 @@
 
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef, useMemo } = React;
-const BUILD = "b454"; /* 화면 우하단 표시 — 최신 배포 확인용 */
+const BUILD = "b455"; /* 화면 우하단 표시 — 최신 배포 확인용 */
 
 /* IS_FLAT — 평면 디자인 활성 여부. 페이지 로드 시 결정.
    우선순위: URL ?theme= (공유·비교용) > localStorage 「shuttle:theme」(사용자 선택) > 기본 false.
@@ -2059,8 +2059,9 @@ function interpolateAlongPolyline(points, t) {
 }
 
 /* 운행 정보(dir/trip/현재 정류장) + 시간 + 대기 플래그 → 보간 위치 + 상태(phase)
-   phase: waiting/before/approaching/at/passed/end */
-function operationBasedPos(dir, tripIdx, curStopName, nowMin, waiting) {
+   phase: waiting/before/approaching/at/passed/end
+   osrmPoly 가 있으면 도로 곡선 arc 우선 보간 — scheduledBusPos 와 동일 폴백 체인. */
+function operationBasedPos(dir, tripIdx, curStopName, nowMin, waiting, osrmPoly) {
   const route = ROUTES[dir];
   const sched = route.trips[tripIdx];
   if (!sched) return null;
@@ -2072,24 +2073,42 @@ function operationBasedPos(dir, tripIdx, curStopName, nowMin, waiting) {
   const tCur = sched[i] ? toMin(sched[i]) : null;
   const tPrev = i > 0 && sched[i - 1] ? toMin(sched[i - 1]) : null;
   const tNext = i < stops.length - 1 && sched[i + 1] ? toMin(sched[i + 1]) : null;
-  // 진입 구간(prev → cur) — approachVia 포함 폴리라인 따라 보간
+  /* 두 정류장 사이 t(0~1) 위치 — OSRM arc 우선 → approachVia 포함 폴리라인 → 직선 폴백.
+     scheduledBusPos 와 같은 순서로 통일. */
+  const interpBetween = (sa, sb, t) => {
+    if (osrmPoly) {
+      try {
+        const arc = arcBetweenOnPoly(osrmPoly, sa, sb);
+        if (arc && arc.length >= 2) {
+          const p = interpolateAlongPolyline(arc.map((q) => ({ lat: q[0], lng: q[1] })), t);
+          if (p && typeof p.lat === "number") return p;
+        }
+      } catch (_) {}
+    }
+    try {
+      const p = interpolateAlongPolyline(buildSegmentPolyline(dir, sa, sb), t);
+      if (p && typeof p.lat === "number") return p;
+    } catch (_) {}
+    return { lat: sa.lat + (sb.lat - sa.lat) * t, lng: sa.lng + (sb.lng - sa.lng) * t };
+  };
+  // 진입 구간(prev → cur) — 도로 곡선 따라 보간
   if (i > 0 && tPrev != null && tCur != null && nowMin < tCur) {
     const prev = stops[i - 1], cur = stops[i];
     if (prev.lat == null || cur.lat == null) return at(i, "approaching");
     const t = Math.max(0, Math.min(1, (nowMin - tPrev) / Math.max(1, tCur - tPrev)));
     const phase = (tCur - nowMin) <= 1 ? "approaching" : "between";
-    const p = interpolateAlongPolyline(buildSegmentPolyline(dir, prev, cur), t);
+    const p = interpBetween(prev, cur, t);
     return { ...p, fromName: prev.name, toName: cur.name, phase };
   }
   // 시발지 출발 시각 전 — 정류장에서 대기
   if (i === 0 && tCur != null && nowMin < tCur) return at(0, "before");
-  // 통과 구간(cur → next) — 동일하게 폴리라인 보간
+  // 통과 구간(cur → next) — 동일 보간
   if (tCur != null && tNext != null && nowMin >= tCur && nowMin <= tNext) {
     const cur = stops[i], nxt = stops[i + 1];
     if (cur.lat == null || nxt.lat == null) return at(i, "passed");
     const t = Math.max(0, Math.min(1, (nowMin - tCur) / Math.max(1, tNext - tCur)));
     const phase = (nowMin - tCur) <= 1 ? "at" : "passed";
-    const p = interpolateAlongPolyline(buildSegmentPolyline(dir, cur, nxt), t);
+    const p = interpBetween(cur, nxt, t);
     return { ...p, fromName: cur.name, toName: nxt.name, phase };
   }
   // 종점 또는 다음 정류장도 지나간 경우 — 가장 근접한 정류장에 고정
@@ -5023,7 +5042,9 @@ function LiveMapView({ dbUrl, onHome, onOpenVenue, isFlat = false }) {
             else pos = [b.lat, b.lng];
           } else if (b.stop && b.dir) {
             const dirKey = b.dir === "inbound" ? "inbound" : "outbound";
-            const op = b.trip ? operationBasedPos(dirKey, b.trip - 1, b.stop, nowMinTick, b.waiting === true) : null;
+            // OSRM 도로 폴리라인 있으면 도로 따라 보간, 없으면 approachVia/직선 폴백
+            const opOsrmPoly = osrmPolyRef.current[dirKey];
+            const op = b.trip ? operationBasedPos(dirKey, b.trip - 1, b.stop, nowMinTick, b.waiting === true, opOsrmPoly) : null;
             if (op) { pos = [op.lat, op.lng]; noGps = true; b._op = op; }
             else {
               const route = ROUTES[dirKey];
