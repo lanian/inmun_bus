@@ -141,8 +141,8 @@
   }
   /* 정류장 상시 라벨 — 무등생각 테마(흰 박스 + 검정 외곽선 + 입체 그림자) */
   .leaflet-tooltip.fest-stop { background: #fff; color: #101113; border: 1.5px solid #101113;
-    border-radius: 6px; padding: 1px 7px; font-family: 'Jua', sans-serif; font-size: 11px; font-weight: 700;
-    box-shadow: 1.5px 1.5px 0 #101113; white-space: nowrap; }
+    border-radius: 6px; padding: 4px 9px; font-family: 'Jua', sans-serif; font-size: 11px; font-weight: 700;
+    box-shadow: 1.5px 1.5px 0 #101113; white-space: nowrap; cursor: pointer; }
   .leaflet-tooltip.fest-stop::before { display: none; }
   .leaflet-tooltip.fest-stop.dir-out { border-color: #EE6B2E; box-shadow: 1.5px 1.5px 0 #EE6B2E; color: #C2521D; }
   .leaflet-tooltip.fest-stop.dir-in  { border-color: #16A89E; box-shadow: 1.5px 1.5px 0 #16A89E; color: #0F786E; }
@@ -223,7 +223,7 @@
 
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef, useMemo } = React;
-const BUILD = "b463"; /* 화면 우하단 표시 — 최신 배포 확인용 */
+const BUILD = "b464"; /* 화면 우하단 표시 — 최신 배포 확인용 */
 
 /* IS_FLAT — 평면 디자인 활성 여부. 페이지 로드 시 결정.
    우선순위: URL ?theme= (공유·비교용) > localStorage 「shuttle:theme」(사용자 선택) > 기본 false.
@@ -1449,6 +1449,9 @@ function VenueModal({ onClose, initialZone = 0, initialProgram = null, onOpenLiv
   // 자세히 진입 시 해당 프로그램 카드로 스크롤 + 펼침. key 형식: `${day}|${time}|${title}` (아래 렌더와 일치)
   const initialProgramKey = initialProgram ? `${initialProgram._day || progDay}|${initialProgram.time}|${initialProgram.title}` : null;
   const [hidePast, setHidePast] = useState(false);
+  // 저사양 단말 jank 방어 — 프로그램 리스트 50개씩 페이지네이션. filter 변경 시 0 으로 리셋.
+  const [programPage, setProgramPage] = useState(0);
+  useEffect(() => { setProgramPage(0); }, [progDay, progZone, hidePast]);
   // 주요 구역 카드 — 모달에서는 기본 펼침(상세 보기 목적). 본문은 항상 칩 row(b220 옵션 A)
   const [zonesExpanded, setZonesExpanded] = useState(true);
   // 사용자가 운영자 화면에서 추가한 zone 도 함께 노출 — LS 캐시 사용 (라이브 지도 진입 시 채워짐)
@@ -1725,7 +1728,15 @@ function VenueModal({ onClose, initialZone = 0, initialProgram = null, onOpenLiv
                 </div>
               );
             }
-            return filtered.map((it, i) => {
+            // 저사양 단말 jank 방어 — 50개 초과 시 「더 보기」 페이지네이션.
+            // 행사 당일 hidePast=true 또는 progZone 필터 적용으로 대부분 ≤ 30개 → 영향 없음.
+            // 전체 보기(2일 100+ 항목) 시에만 lazy.
+            const PAGE = 50;
+            const showCount = Math.min(filtered.length, (programPage + 1) * PAGE);
+            const visible = filtered.slice(0, showCount);
+            const hasMorePage = showCount < filtered.length;
+            return (<>
+              {visible.map((it, i) => {
               const zoneColor = it.zone % 2 ? FT.orange : FT.teal;
               const hasMore = !!(it.desc || it.host || (Array.isArray(it.sub) && it.sub.length) || it.image);
               const key = `${progDay}|${it.time}|${it.title}`;
@@ -1871,7 +1882,17 @@ function VenueModal({ onClose, initialZone = 0, initialProgram = null, onOpenLiv
                   )}
                 </Tag>
               );
-            });
+            })}
+            {hasMorePage && (
+              <button onClick={() => setProgramPage((p) => p + 1)}
+                style={{ width: "100%", padding: "10px 12px", background: "#fff",
+                  color: FT.tealDark, border: "1.5px dashed " + FT.tealDark + "88",
+                  borderRadius: 10, fontFamily: "'Jua', sans-serif", fontWeight: 700,
+                  fontSize: 12.5, cursor: "pointer", marginTop: 4 }}>
+                + 더 보기 ({filtered.length - showCount}개 더)
+              </button>
+            )}
+            </>);
           })()}
         </div>
         <button onClick={() => setExpandedImg(progSrc)}
@@ -4845,7 +4866,18 @@ function LiveMapView({ dbUrl, onHome, onOpenVenue, isFlat = false }) {
         });
         m.on("tooltipopen", (e) => {
           const el = e.tooltip && e.tooltip.getElement();
-          if (el) el.style.cursor = "pointer";
+          if (el) {
+            el.style.cursor = "pointer";
+            // 모바일 호환 — Leaflet tooltip click 이 모바일에서 fragile (UX 보고).
+            // DOM touchend 직접 등록해 첫 탭에 popup 열림 보장. _mdsBound 으로 중복 방지.
+            if (!el._mdsTouchBound) {
+              el._mdsTouchBound = true;
+              el.addEventListener("touchend", (ev) => {
+                try { ev.preventDefault(); ev.stopPropagation(); } catch (_) {}
+                m.openPopup();
+              }, { passive: false });
+            }
+          }
         });
         m.on("popupopen", () => {
           // popup 열릴 때마다 현재 시각 기준으로 컨텐츠 재생성 (다음 도착 / 과거 표시 갱신)
