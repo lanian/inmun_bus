@@ -6,9 +6,9 @@
 <meta name="theme-color" content="#0a0b10" />
 <meta name="apple-mobile-web-app-capable" content="yes" />
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-<meta name="apple-mobile-web-app-title" content="무등생각 셔틀" />
+<meta name="apple-mobile-web-app-title" content="무등생각 순환버스" />
 <link rel="manifest" href="manifest.webmanifest" />
-<title>무등산 인문축제 셔틀</title>
+<title>무등산 인문축제 순환버스</title>
 
 <script src="https://unpkg.com/react@18.3.1/umd/react.production.min.js" crossorigin></script>
 <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js" crossorigin></script>
@@ -210,13 +210,13 @@
   <img src="logo.png" alt="무등생각" />
   <div class="slogan">생각을 끄고, 생각을 켜다</div>
   <div class="who">제4회 동구 무등산 인문축제</div>
-  <div class="accent">&lt;무등생각&gt; 셔틀버스 안내</div>
+  <div class="accent">&lt;무등생각&gt; 순환버스 안내</div>
   <div class="dots"><span class="dot"></span><span class="dot"></span><span class="dot"></span></div>
 </div></div>
 
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef, useMemo } = React;
-const BUILD = "b455"; /* 화면 우하단 표시 — 최신 배포 확인용 */
+const BUILD = "b456"; /* 화면 우하단 표시 — 최신 배포 확인용 */
 
 /* IS_FLAT — 평면 디자인 활성 여부. 페이지 로드 시 결정.
    우선순위: URL ?theme= (공유·비교용) > localStorage 「shuttle:theme」(사용자 선택) > 기본 false.
@@ -435,11 +435,11 @@ const AUDIO_KEYS = {
 const FESTIVAL = {
   // 축제장 방향 출발지(5·18민주광장)에서 — 환영 + 축제 소개
   // [출발지·5·18민주광장] 환영 + 축제명·테마·종점 1회 각인
-  welcome: "안녕하세요. 무등산 인문축제, 무등생각 셔틀버스입니다. 이 셔틀은 축제장, 무등산 증심사 입구까지 갑니다. 생각을 끄고, 생각을 켜다. 잠시 일상의 생각을 내려놓고 편안히 함께 가시길 바랍니다.",
+  welcome: "안녕하세요. 무등산 인문축제, 무등생각 순환버스입니다. 이 순환버스는 축제장, 무등산 증심사 입구까지 갑니다. 생각을 끄고, 생각을 켜다. 잠시 일상의 생각을 내려놓고 편안히 함께 가시길 바랍니다.",
   // 축제장 방향 승강장별 멘트 (역할이 겹치지 않도록 구성. 하늘마당·홍림교는 의도적으로 침묵)
   promos: {
     // [학동증심사역·지하철 환승역] 신규 탑승객 오리엔테이션
-    "학동증심사역": "학동증심사역입니다. 이 셔틀은 종점, 무등생각 축제장까지 갑니다. 편히 앉아 무등산으로 함께 오르시길 바랍니다.",
+    "학동증심사역": "학동증심사역입니다. 이 순환버스는 종점, 무등생각 축제장까지 갑니다. 편히 앉아 무등산으로 함께 오르시길 바랍니다.",
     // [학운초등학교·종점 직전] 하차 준비·소지품·안전 안내
     "학운초등학교": "다음 정류장은 종점, 무등생각 축제장입니다. 내리실 준비를 해주시고, 두고 내리시는 물건이 없는지 확인해 주세요. 차가 완전히 멈춘 뒤 안전하게 내려주시기 바랍니다.",
   },
@@ -481,7 +481,7 @@ const FESTIVAL = {
   // 축제 기간 외 기본 안내
   defaultProgram: "잠시 후 무등생각 축제장에 도착합니다. 이곳에서는 편백숲 디지털 디톡스와 증심사 명상, 한강 작가에게 엽서 쓰기, 무등 버스킹, 미술관 특별 전시 등 다양한 인문 프로그램을 즐기실 수 있습니다. 천천히 둘러보며 편안한 시간 보내세요.",
   // 민주광장 방향(축제장 출발) 하차 안내
-  alight: "5·18민주광장 방향 셔틀버스입니다. 내리실 정류장이 가까워지면 미리 말씀해 주세요.",
+  alight: "5·18민주광장 방향 순환버스입니다. 내리실 정류장이 가까워지면 미리 말씀해 주세요.",
 };
 
 /* 지정한 멘트 설정(m)의 schedule에서, 축제장 도착(예정) 시각 이후 시작분만 골라 안내 문구 생성.
@@ -2239,10 +2239,10 @@ function NoticeEditor({ onClose, dbUrl, getAuth, refreshAuth }) {
     } catch (e) { console.warn("NoticeEditor PUT network error:", e && e.message ? e.message : e); setStatus(`⚠ 네트워크 오류 · ${e && e.message ? e.message : ""}`); }
   };
   const presets = [
-    { label: "🌧 우천 지연", lv: "warn", t: "우천으로 셔틀 운행이 지연되고 있습니다. 잠시만 기다려 주세요." },
+    { label: "🌧 우천 지연", lv: "warn", t: "우천으로 순환버스 운행이 지연되고 있습니다. 잠시만 기다려 주세요." },
     { label: "🚧 노선 변경", lv: "warn", t: "교통 통제로 일부 노선이 변경되었습니다. 안내방송을 확인해 주세요." },
-    { label: "⛔ 운행 중단", lv: "danger", t: "안전상의 이유로 셔틀 운행이 일시 중단되었습니다. 추후 안내 드리겠습니다." },
-    { label: "ⓘ 정상 운행", lv: "info", t: "셔틀이 정상 운행 중입니다." },
+    { label: "⛔ 운행 중단", lv: "danger", t: "안전상의 이유로 순환버스 운행이 일시 중단되었습니다. 추후 안내 드리겠습니다." },
+    { label: "ⓘ 정상 운행", lv: "info", t: "순환버스가 정상 운행 중입니다." },
   ];
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
@@ -5211,7 +5211,7 @@ function LiveMapView({ dbUrl, onHome, onOpenVenue, isFlat = false }) {
           : nResting > 0 ? `🅿 ${nResting}대 휴식 중`
           : postFestival ? "행사 종료"
           : preFestival ? `행사 전 · D-${Math.max(1, Math.round((day1Ts - today0) / 86400000))}`
-          : "운행 중인 셔틀이 없습니다");
+          : "운행 중인 순환버스가 없습니다");
       } catch (_) { setCount(0); setStatus("연결 오류 — 잠시 후 다시 시도"); try { window.__mdsStats && window.__mdsStats.track("error_conn_live"); } catch (__) {} }
     };
     poll();
@@ -6984,7 +6984,7 @@ function PassengerView({ dbUrl, onAdmin, initialTab = "list", theme = "default" 
     : postFestival ? "행사 종료 · 다음 회 운영 안내 예정"
     : preFestival ? "행사 전 · 6.13(토)~6.14(일) 운영 예정"
     : schedActive ? "라이브 송신 없음 · 시간표 기준 진행 중"
-    : "현재 운행 중인 셔틀이 없습니다";
+    : "현재 운행 중인 순환버스가 없습니다";
 
   // 풋터 공통 — 어디서나 동일 3-버튼. 현재 화면(active)은 검정 강조, 활성 버튼 재클릭 시 홈(list) 복귀
   const renderFooter = (currentKey) => {
@@ -7140,7 +7140,7 @@ function PassengerView({ dbUrl, onAdmin, initialTab = "list", theme = "default" 
             <div style={{ flex: 1, minWidth: 0, paddingRight: 22 }}>
               <div onClick={onTitleTap} className="select-none"
                 style={{ fontSize: 18, color: FT.orange, fontFamily: "'Jua', sans-serif", fontWeight: 700, lineHeight: 1.1 }}>
-                무등생각 셔틀
+                무등생각 순환버스
               </div>
               {/* 슬로건 — 브랜드 핵심. 따옴표·이탤릭으로 시적 톤. 행사 회차는 작은 따라가는 메타로 분리 */}
               <div style={{ marginTop: 3, lineHeight: 1.25 }}>
@@ -7236,7 +7236,7 @@ function PassengerView({ dbUrl, onAdmin, initialTab = "list", theme = "default" 
                 borderRadius: 0 }}>
                 {conn === "error" ? "연결을 확인하는 중입니다…"
                   : schedActive ? "📡 라이브 신호 없음 · 시간표 기준 운행 중"
-                  : "지금은 운행 중인 셔틀이 없어요"}
+                  : "지금은 운행 중인 순환버스가 없어요"}
               </div>
             )}
             {/* 라이브 카드 — 실제 신호 있는 차량 */}
@@ -7672,7 +7672,7 @@ function OpsDashboard({ dbUrl }) {
           <div style={{ background: "#13151c", border: "1px solid #2c3142", borderRadius: 10, padding: 32, textAlign: "center", color: "#64748b", fontFamily: "'Jua', sans-serif" }}>
             {conn === "error" ? "Firebase 연결 실패 — 잠시 후 다시 시도합니다."
               : conn === "loading" ? "데이터 불러오는 중…"
-              : "현재 송신 중인 셔틀이 없습니다."}
+              : "현재 송신 중인 순환버스가 없습니다."}
           </div>
         ) : (
           <div style={{ background: "#13151c", border: "1px solid #2c3142", borderRadius: 10, overflow: "auto" }}>
@@ -8381,7 +8381,7 @@ function App() {
     try { window.speechSynthesis.speak(u); setTtsPrimed(true); } catch (_) {}
   };
 
-  const testVoice = () => { primeTTS(); chimeThenSpeak("안녕하세요. 무등산 인문축제 셔틀버스 음성 안내 테스트입니다."); };
+  const testVoice = () => { primeTTS(); chimeThenSpeak("안녕하세요. 무등산 인문축제 순환버스 음성 안내 테스트입니다."); };
 
   const lastAnnounceRef = useRef({ idx: -1, at: 0 });
   const announceStop = (idx) => {
@@ -8444,7 +8444,7 @@ function App() {
         const nowMin = getNowMin();
         const onTime = toMin(nextLegInfo.departTime) >= nowMin;
         const when = onTime ? `${spokenTime(nextLegInfo.departTime)}에` : "잠시 후";
-        text = `${base} ${when} ${nextLegInfo.label} ${nextLegInfo.tripNum}회차 셔틀버스가 출발합니다.`;
+        text = `${base} ${when} ${nextLegInfo.label} ${nextLegInfo.tripNum}회차 순환버스가 출발합니다.`;
       } else {
         text = `${base} 오늘 운행이 종료되었습니다. 이용해 주셔서 감사합니다.`;
       }
@@ -8525,7 +8525,7 @@ function App() {
       const blob = new Blob([JSON.stringify(coords, null, 2)], { type: "application/json" });
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
-      a.href = url; a.download = "무등생각셔틀-좌표.json"; a.click();
+      a.href = url; a.download = "무등생각순환버스-좌표.json"; a.click();
       setTimeout(() => URL.revokeObjectURL(url), 1000);
       setBackupMsg("파일로 저장했어요");
     } catch (_) { setBackupMsg("파일 저장 실패"); }
@@ -8657,7 +8657,7 @@ function App() {
       const blob = new Blob([JSON.stringify(ments, null, 2)], { type: "application/json" });
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
-      a.href = url; a.download = "무등생각셔틀-멘트.json"; a.click();
+      a.href = url; a.download = "무등생각순환버스-멘트.json"; a.click();
       setTimeout(() => URL.revokeObjectURL(url), 1000);
       setMentMsg("파일로 저장했어요");
     } catch (_) { setMentMsg("파일 저장 실패"); }
@@ -10264,9 +10264,9 @@ function App() {
             <div className="flex items-center gap-3">
               <div className="w-12 h-12 rounded-xl flex items-center justify-center shadow-lg"
                 style={{ background: "linear-gradient(135deg, #f59e0b 0%, #d97706 100%)", color: "#fff",
-                  fontFamily: "'Black Han Sans', sans-serif", fontSize: "1rem", lineHeight: 1,
+                  fontFamily: "'Black Han Sans', sans-serif", fontSize: "0.78rem", lineHeight: 1, letterSpacing: -0.5,
                   boxShadow: "0 0 20px rgba(245, 158, 11, 0.4)" }}>
-                셔틀
+                순환
               </div>
               <div>
                 <div className="text-[10px] text-amber-400/80 tracking-widest mb-0.5">제4회 무등산 인문축제</div>
@@ -11438,7 +11438,7 @@ function Intro({ admin = false }) {
       <img src="logo.png" alt="무등생각" />
       <div className="slogan">{admin ? "운영자 모드 준비 중" : "생각을 끄고, 생각을 켜다"}</div>
       <div className="who">제4회 동구 무등산 인문축제</div>
-      <div className="accent">{admin ? "기사·운영자 시스템" : <>&lt;무등생각&gt; 셔틀버스 안내</>}</div>
+      <div className="accent">{admin ? "기사·운영자 시스템" : <>&lt;무등생각&gt; 순환버스 안내</>}</div>
       <div className="dots"><span className="dot"></span><span className="dot"></span><span className="dot"></span></div>
     </div>
   );
