@@ -1,0 +1,12 @@
+{
+  "name": "무등생각 셔틀 음성 안내",
+  "short_name": "무등생각 셔틀",
+  "description": "제4회 무등산 인문축제 무등생각 셔틀버스 정류장 음성 안내",
+  "lang": "ko",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#050608",
+  "theme_color": "#0a0b10"
+}
