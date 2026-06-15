@@ -128,6 +128,28 @@
     0%, 100% { box-shadow: 0 3px 10px rgba(245,158,11,0.22); }
     50%      { box-shadow: 0 5px 18px rgba(245,158,11,0.42); }
   }
+  /* 라이브 셔틀 구간 강조 — 이중 chevron(>>) 이 노선 따라 좌→우 흐름.
+     두 polyline 을 가로로 배치 → 「>>」 형태 명확. transform rotate inline, animation opacity only. */
+  .mds-arrow-svg { width: 32px; height: 22px; display: block;
+    filter: drop-shadow(0 1px 2px rgba(0,0,0,0.45)) drop-shadow(0 0 4px rgba(120,53,15,0.7));
+    animation: mdsArrowWave 1.4s ease-in-out infinite; pointer-events: none; }
+  @keyframes mdsArrowWave {
+    0%, 100% { opacity: 0.3; }
+    50%      { opacity: 1; }
+  }
+  /* 라이브 셔틀의 「이번 정류장」 강조 ring — 노란 ring + 갈색 외곽 + scale/glow 펄스 1.4s.
+     정류장 마커 위에 overlay 로 배치. 정류장 도착 임박을 한눈에 인지. */
+  .mds-stop-target {
+    width: 34px; height: 34px; border-radius: 50%;
+    border: 3px solid #facc15;
+    background: rgba(250,204,21,0.18);
+    box-shadow: 0 0 0 3px rgba(120,53,15,0.55);
+    animation: mdsStopTargetPulse 1.4s ease-in-out infinite;
+  }
+  @keyframes mdsStopTargetPulse {
+    0%, 100% { transform: scale(1);    box-shadow: 0 0 0 3px rgba(120,53,15,0.55), 0 0 0 0 rgba(250,204,21,0.7); }
+    50%      { transform: scale(1.12); box-shadow: 0 0 0 3px rgba(120,53,15,0.4),  0 0 0 14px rgba(250,204,21,0); }
+  }
   /* 새로 등록한 스티커 마커 — 1.2s 1회 펄스 + scale bounce. 등록 위치 시각 강조. */
   @keyframes mdsStickerNewPulse {
     0%   { transform: scale(0.6); box-shadow: 0 0 0 0 rgba(22,168,158,0.55); }
@@ -223,7 +245,7 @@
 
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef, useMemo } = React;
-const BUILD = "b465"; /* 화면 우하단 표시 — 최신 배포 확인용 */
+const BUILD = "b505"; /* 화면 우하단 표시 — 최신 배포 확인용 */
 
 /* IS_FLAT — 평면 디자인 활성 여부. 페이지 로드 시 결정.
    우선순위: URL ?theme= (공유·비교용) > localStorage 「shuttle:theme」(사용자 선택) > 기본 false.
@@ -455,12 +477,20 @@ const AUDIO_KEYS = {
 const FESTIVAL = {
   // 축제장 방향 출발지(5·18민주광장)에서 — 환영 + 축제 소개
   // [출발지·5·18민주광장] 환영 + 축제명·테마·종점 1회 각인
+  // 축제장 방향은 종점(축제장)에서만 하차 — 「자유 승하차」 언급 없음.
+  // 자유 승하차는 inbound(민주광장 방향) alight 멘트에서 「내리실 정류장이 가까워지면 미리 말씀해 주세요」 로 자연스럽게 안내됨.
   welcome: "안녕하세요. 무등산 인문축제, 무등생각 순환버스입니다. 이 순환버스는 축제장, 무등산 증심사 입구까지 갑니다. 생각을 끄고, 생각을 켜다. 잠시 일상의 생각을 내려놓고 편안히 함께 가시길 바랍니다.",
-  // 축제장 방향 승강장별 멘트 (역할이 겹치지 않도록 구성. 하늘마당·홍림교는 의도적으로 침묵)
+  // 축제장 방향 승강장별 멘트 — 각 정류장의 역할 분리, 톤 일관 (도심 → 산자락 → 종점)
   promos: {
-    // [학동증심사역·지하철 환승역] 신규 탑승객 오리엔테이션
-    "학동증심사역": "학동증심사역입니다. 이 순환버스는 종점, 무등생각 축제장까지 갑니다. 편히 앉아 무등산으로 함께 오르시길 바랍니다.",
-    // [학운초등학교·종점 직전] 하차 준비·소지품·안전 안내
+    // [하늘마당·출발 직후] 무등생각 축제 환기 — welcome 직후라 정류장명 생략, 「도심→무등산」 진행감 + 인문축제 기대감 환기
+    "하늘마당": "무등생각 축제장으로 향하는 길, 도심의 풍경을 지나 무등산 자락으로 함께 나아갑니다. 잠시 일상의 속도를 늦추고, 무등산이 품은 인문축제의 시간을 함께해 주시길 바랍니다.",
+    // [학동증심사역·종점 안내 + 축제 환기] 「무등산 등반」 톤 회피 — 인문축제 즐기러 가는 길임을 강조
+    "학동증심사역": "이 순환버스는 종점, 무등생각 축제장까지 갑니다. 편히 앉아 무등산 자락에서 펼쳐지는 인문축제를 함께 즐기러 가시길 바랍니다.",
+    // [홍림교·무등산 자락 진입] 풍경 환기 — 정류장명 생략, 한 줄 풍경 멘트
+    "홍림교": "무등산 자락으로 들어서는 길, 창밖 풍경과 함께 천천히 나아갑니다.",
+    // [운림중학교·종점 임박 카운트다운] 학운초 → 종점 순서 환기. 정류장명 생략 — 카운트다운 흐름에 집중.
+    "운림중학교": "잠시 후 학운초등학교를 지나, 종점 무등생각 축제장에 도착합니다.",
+    // [학운초등학교·종점 직전] 하차 준비·소지품 + 안전 (도착 직전이 안전 문구 위치로 표준 — 종점 멘트에선 제거)
     "학운초등학교": "다음 정류장은 종점, 무등생각 축제장입니다. 내리실 준비를 해주시고, 두고 내리시는 물건이 없는지 확인해 주세요. 차가 완전히 멈춘 뒤 안전하게 내려주시기 바랍니다.",
   },
   // 축제장 도착 전 정류장에서 — 도착(현재) 시각 이후에 시작하는 프로그램만 골라 안내
@@ -468,40 +498,43 @@ const FESTIVAL = {
   programStop: "학운초등학교",
   schedule: {
     // 6월 13일 토요일 — { t: 시작시각, d: 안내 설명 } (시각순)
+    // d 형식: 「제목, 설명」 — TTS 에서 「-라는」 반복으로 들리던 패턴 제거 (b494). 항목 사이 구분은
+    // buildProgramText 의 join ". " 으로.
     day1: [
-      { t: "10:00", d: "무등생각의 동구라미라는, 학운초 합창으로 막을 여는 개막식" },
-      { t: "10:20", d: "내 생각에 이름을 붙인다면이라는, 방송인 김제동의 인문 토크" },
-      { t: "13:00", d: "숲이 된 사람들이라는, 편백숲 몸짓 퍼포먼스" },
+      { t: "10:00", d: "무등생각의 동구라미, 학운초 합창으로 막을 여는 개막식" },
+      { t: "10:20", d: "내 생각에 이름을 붙인다면, 방송인 김제동의 인문 토크" },
+      { t: "13:00", d: "숲이 된 사람들, 편백숲 몸짓 퍼포먼스" },
       { t: "13:30", d: "전국 중학생이 참여하는 청소년 시 백일장" },
-      { t: "14:00", d: "고요를 찾아서라는, 증심사 싱잉볼 명상 프로그램" },
-      { t: "14:00", d: "오방 차담이라는, 오방수련원 차 체험 프로그램" },
-      { t: "14:00", d: "보이는 라디오라는, 광주FM 공개 방송" },
-      { t: "14:30", d: "마음의 숲이라는, 편백숲 디지털 디톡스 프로그램" },
-      { t: "15:00", d: "나를 생각하는 생각이라는, 소설가 정용준의 인문 토크" },
-      { t: "15:00", d: "소년을 생각하는 투어라는, 소년이 온다 배경을 걷는 산책" },
-      { t: "16:30", d: "눕독눕독이라는, 숲에 누워 듣는 시 낭독회" },
+      { t: "14:00", d: "고요를 찾아서, 증심사 싱잉볼 명상 프로그램" },
+      { t: "14:00", d: "오방 차담, 오방수련원 차 체험 프로그램" },
+      { t: "14:00", d: "보이는 라디오, 광주FM 공개 방송" },
+      { t: "14:30", d: "마음의 숲, 편백숲 디지털 디톡스 프로그램" },
+      { t: "15:00", d: "나를 생각하는 생각, 소설가 정용준의 인문 토크" },
+      { t: "15:00", d: "소년을 생각하는 투어, 소년이 온다 배경을 걷는 산책" },
+      { t: "16:30", d: "눕독눕독, 숲에 누워 듣는 시 낭독회" },
       { t: "17:00", d: "청소년 시 백일장 시상식과 축하 공연" },
-      { t: "19:00", d: "영화로운 광주라는, 라이브 연주와 함께하는 무성영화 상영회" },
+      { t: "19:00", d: "영화로운 광주, 라이브 연주와 함께하는 무성영화 상영회" },
     ],
     // 6월 14일 일요일
     day2: [
       { t: "10:00", d: "무등산 풍경을 그림으로 담는 의재 사생대회" },
-      { t: "11:00", d: "우리들의 시원한 생각이라는, 인문 다시보기 토크" },
-      { t: "11:00", d: "동무다방이라는, 옛 노래와 커피를 즐기는 엘피 청음회" },
-      { t: "13:00", d: "생각하는 인간이라는, 뮤지션 이랑과 시인 고선경의 북콘서트" },
-      { t: "13:00", d: "마음의 숲이라는, 편백숲 디지털 디톡스 프로그램" },
-      { t: "14:00", d: "고요를 찾아서라는, 증심사 싱잉볼 명상 프로그램" },
-      { t: "14:30", d: "숲이 된 사람들이라는, 편백숲 몸짓 퍼포먼스" },
-      { t: "15:00", d: "봄이 들면이라는, 김영화 작가의 올해의 책 북토크" },
-      { t: "15:30", d: "책 읽는 숲이라는, 침묵 독서 프로그램" },
+      { t: "11:00", d: "우리들의 시원한 생각, 인문 다시보기 토크" },
+      { t: "11:00", d: "동무다방, 옛 노래와 커피를 즐기는 엘피 청음회" },
+      { t: "13:00", d: "생각하는 인간, 뮤지션 이랑과 시인 고선경의 북콘서트" },
+      { t: "13:00", d: "마음의 숲, 편백숲 디지털 디톡스 프로그램" },
+      { t: "14:00", d: "고요를 찾아서, 증심사 싱잉볼 명상 프로그램" },
+      { t: "14:30", d: "숲이 된 사람들, 편백숲 몸짓 퍼포먼스" },
+      { t: "15:00", d: "봄이 들면, 김영화 작가의 올해의 책 북토크" },
+      { t: "15:30", d: "책 읽는 숲, 침묵 독서 프로그램" },
     ],
   },
   // 시각과 무관하게 온종일(10시~18시) 즐기는 프로그램
   allday: "동네책방이 큐레이션한 1187 라이브러리 서가 전시, 무등산을 담은 체험존과 인문 팝업 스토어, 한강 작가에게 엽서 쓰기, 생각의 통로를 채우는 무등 버스킹, 그리고 곳곳에 숨은 명언을 찾는 문장 보물찾기는 온종일 즐기실 수 있습니다. 의재로의 다섯 개 미술관에서도 특별 전시와 체험이 함께 열립니다.",
   // 축제 기간 외 기본 안내
   defaultProgram: "잠시 후 무등생각 축제장에 도착합니다. 이곳에서는 편백숲 디지털 디톡스와 증심사 명상, 한강 작가에게 엽서 쓰기, 무등 버스킹, 미술관 특별 전시 등 다양한 인문 프로그램을 즐기실 수 있습니다. 천천히 둘러보며 편안한 시간 보내세요.",
-  // 민주광장 방향(축제장 출발) 하차 안내
-  alight: "5·18민주광장 방향 순환버스입니다. 내리실 정류장이 가까워지면 미리 말씀해 주세요.",
+  // 민주광장 방향(축제장 출발) 하차 안내 — 축제 마무리 톤 + 회상 + 감사
+  // 「오늘 만난 풍경과 생각, 잠시 마음에 안고…」 — 돌아가는 길의 여운 환기 (축제 정체성 톤)
+  alight: "5·18민주광장 방향 순환버스입니다. 무등생각 축제에 함께해 주셔서 감사합니다. 오늘 만난 풍경과 생각, 잠시 마음에 안고 돌아가시길 바랍니다. 내리실 정류장이 가까워지면 미리 말씀해 주세요. 좋은 시간 안고 안전하게 모셔다 드리겠습니다.",
 };
 
 /* 지정한 멘트 설정(m)의 schedule에서, 축제장 도착(예정) 시각 이후 시작분만 골라 안내 문구 생성.
@@ -518,7 +551,8 @@ const buildProgramText = (m, dayKey, refMin) => {
     return intro + "오늘 준비된 주요 프로그램은 대부분 마무리되었어요. 그래도 " + m.allday + " 무등산에서 천천히, 편안한 시간 보내세요.";
   }
   const shown = upcoming.slice(0, 6); // 안내가 길어지지 않도록 다가오는 6개까지만
-  const items = shown.map(p => `${spokenClock(p.t)} ${p.d}`).join(", ");
+  // 항목 사이는 ". " (마침표) — 각 항목 내부의 「제목, 설명」 콤마와 청각적으로 구분되어 경계 명확
+  const items = shown.map(p => `${spokenClock(p.t)} ${p.d}`).join(". ");
   const more = upcoming.length > shown.length ? " 이 외에도 더 많은 프로그램이 여러분을 기다리고 있어요." : "";
   return intro + "도착하시면, " + items + " 등 다양한 프로그램을 만나보실 수 있습니다." + more + " 그리고 " + m.allday + " 오늘 무등생각과 함께, 마음을 쉬어가는 하루 보내세요.";
 };
@@ -4327,6 +4361,12 @@ function LiveMapView({ dbUrl, onHome, onOpenVenue, isFlat = false }) {
   const [_zoneTick, _setZoneTick] = useState(0);
   useEffect(() => { const id = setInterval(() => _setZoneTick((t) => t + 1), 60000); return () => clearInterval(id); }, []);
   const lineRefsRef = useRef({});
+  // 라이브 셔틀별 「이전→현재 정류장」 구간 강조 폴리라인 (bus id → Leaflet polyline)
+  const segHighlightRef = useRef({});
+  // 라이브 셔틀별 「이번 정류장」 강조 ring 마커 (bus id → Leaflet marker)
+  const stopTargetRef = useRef({});
+  // 라이브 셔틀별 화살표 chevron 마커 그룹 (bus id → Leaflet layerGroup)
+  const segArrowsRef = useRef({});
   const osrmPolyRef = useRef({}); // { [dir]: [[lat,lng], ...] } — 마커 노선 스냅에 사용
   const stopLayersRef = useRef([]);
   const zoneLayersRef = useRef([]);
@@ -5225,6 +5265,129 @@ function LiveMapView({ dbUrl, onHome, onOpenVenue, isFlat = false }) {
         }
         Object.keys(markersRef.current).forEach((id) => {
           if (!validIds.has(id)) { map.removeLayer(markersRef.current[id]); delete markersRef.current[id]; }
+        });
+
+        // 라이브 셔틀별 「이전 정류장 → 현재 정류장」 구간 강조 — OSRM 도로 곡선 arc 슬라이스로
+        // weight 8 흰색 halo 위에 dirColor 더 굵게 덮어 그려 어떤 노선 위에서도 또렷.
+        // b._op (좌표 없는 운영 정보) 있으면 fromName/toName 활용. GPS 좌표(b.lat/lng) 만 있으면 snap 결과 활용.
+        items.forEach((it) => {
+          try {
+            const b = it.b;
+            const dirKey = b.dir === "inbound" ? "inbound" : "outbound";
+            const osrmPoly = osrmPolyRef.current[dirKey];
+            const stops = ROUTES[dirKey].stops;
+            let fromStop = null, toStop = null;
+            if (b._op && b._op.fromName && b._op.toName && b._op.fromName !== b._op.toName) {
+              fromStop = stops.find((s) => s.name === b._op.fromName);
+              toStop = stops.find((s) => s.name === b._op.toName);
+            } else if (b.stop) {
+              // GPS 좌표 송신 케이스 — 현재 정류장(b.stop) 인덱스 찾고 그 이전 정류장과 사이 강조
+              const ci = stops.findIndex((s) => s.name === b.stop);
+              if (ci > 0) { fromStop = stops[ci - 1]; toStop = stops[ci]; }
+              else if (ci === 0 && stops.length > 1) { fromStop = stops[0]; toStop = stops[1]; }
+            }
+            // 기존 강조 제거
+            if (segHighlightRef.current[it.id]) {
+              try { map.removeLayer(segHighlightRef.current[it.id]); } catch (_) {}
+              delete segHighlightRef.current[it.id];
+            }
+            if (!fromStop || !toStop) return;
+            // OSRM arc 슬라이스 우선 → 폴백 직선
+            let arcLatLngs = null;
+            if (osrmPoly && Array.isArray(osrmPoly) && osrmPoly.length >= 2) {
+              const arc = arcBetweenOnPoly(osrmPoly, fromStop, toStop);
+              if (arc && arc.length >= 2) arcLatLngs = arc;
+            }
+            if (!arcLatLngs && fromStop.lat != null && toStop.lat != null) {
+              arcLatLngs = [[fromStop.lat, fromStop.lng], [toStop.lat, toStop.lng]];
+            }
+            if (!arcLatLngs) return;
+            // 활성 운행 구간은 chevron 마커(아래 블록) 가 단독으로 담당. 노란/갈색 segment
+            // 폴리라인은 정적 노선과 톤 충돌이라 제거 — 정적 노선(outbound 주황/inbound 청록) 위에
+            // 노란 chevron 흐름 만으로 「현재 운행 구간」 식별. arc 좌표를 길이 기준 N 등분.
+            try {
+              if (segArrowsRef.current[it.id]) {
+                try { map.removeLayer(segArrowsRef.current[it.id]); } catch (_) {}
+                delete segArrowsRef.current[it.id];
+              }
+              // arc 누적 거리
+              const segLens = [];
+              let totalLen = 0;
+              for (let k = 1; k < arcLatLngs.length; k++) {
+                const d = distanceMeters({ lat: arcLatLngs[k - 1][0], lng: arcLatLngs[k - 1][1] }, { lat: arcLatLngs[k][0], lng: arcLatLngs[k][1] });
+                segLens.push(d); totalLen += d;
+              }
+              if (totalLen >= 30) {
+                // 약 80m 간격, 최소 4개 최대 12개
+                const n = Math.max(4, Math.min(12, Math.round(totalLen / 80)));
+                const arrowMarkers = [];
+                for (let s = 0; s < n; s++) {
+                  const t = (s + 0.5) / n;
+                  let target = t * totalLen;
+                  let idx = 0;
+                  while (idx < segLens.length && target > segLens[idx]) { target -= segLens[idx]; idx++; }
+                  if (idx >= segLens.length) idx = segLens.length - 1;
+                  const segLen = segLens[idx] || 0.0001;
+                  const f = target / segLen;
+                  const lat = arcLatLngs[idx][0] + (arcLatLngs[idx + 1][0] - arcLatLngs[idx][0]) * f;
+                  const lng = arcLatLngs[idx][1] + (arcLatLngs[idx + 1][1] - arcLatLngs[idx][1]) * f;
+                  // 진행 방향 angle — 위경도라도 짧은 거리에선 atan2 충분. 0=동(우), 90=남(아래)
+                  const dy = arcLatLngs[idx + 1][0] - arcLatLngs[idx][0]; // lat 차이
+                  const dx = arcLatLngs[idx + 1][1] - arcLatLngs[idx][1]; // lng 차이
+                  // CSS rotate 0deg 는 우측 — atan2(dx, dy) 로 lat 의 0=북·90=동 의 시각 좌표계와 일치시킴은 복잡.
+                  // 단순화: atan2(-dy, dx) — y축 위가 음수(스크린좌표)라 -dy
+                  const angleDeg = Math.atan2(-dy, dx) * 180 / Math.PI;
+                  const delay = ((s / Math.max(1, n - 1)) * 1.0).toFixed(2);
+                  // 이중 chevron(>>) SVG — viewBox 32x22, 두 polyline 으로 「›› 」 모양 명확.
+                  // stroke 노란 + drop-shadow 갈색 글로우. 마커 pane 은 기본(markerPane) — routePane 위에 떠야 함.
+                  const html = `<svg class="mds-arrow-svg" style="transform: rotate(${angleDeg.toFixed(1)}deg); animation-delay: ${delay}s" viewBox="0 0 32 22" fill="none" stroke="#facc15" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"><polyline points="5 4 13 11 5 18"/><polyline points="17 4 25 11 17 18"/></svg>`;
+                  const icon = L.divIcon({ className: "mds-arrow-wrap", html, iconSize: [36, 26], iconAnchor: [18, 13] });
+                  const m = L.marker([lat, lng], { icon, interactive: false, keyboard: false, zIndexOffset: 200 });
+                  arrowMarkers.push(m);
+                }
+                const arrowGroup = L.featureGroup(arrowMarkers).addTo(map);
+                segArrowsRef.current[it.id] = arrowGroup;
+              }
+            } catch (_) {}
+            // 「이번 정류장」 강조 ring — toStop 좌표에 펄스 ring overlay 배치
+            if (toStop.lat != null && toStop.lng != null) {
+              const ringIcon = L.divIcon({
+                className: "mds-stop-target-wrap",
+                html: '<div class="mds-stop-target"></div>',
+                iconSize: [40, 40], iconAnchor: [20, 20],
+              });
+              let ring = stopTargetRef.current[it.id];
+              if (!ring) {
+                ring = L.marker([toStop.lat, toStop.lng], {
+                  icon: ringIcon, interactive: false, keyboard: false,
+                  pane: "routePane", // 노선 pane (정류장 마커보다 아래 → 마커가 위에 보임)
+                  zIndexOffset: -100,
+                }).addTo(map);
+                stopTargetRef.current[it.id] = ring;
+              } else {
+                ring.setLatLng([toStop.lat, toStop.lng]);
+              }
+            }
+          } catch (_) {}
+        });
+        // 더 이상 유효하지 않은 segment + ring 제거 (라이브 신호 끊긴 셔틀 등)
+        Object.keys(segHighlightRef.current).forEach((id) => {
+          if (!validIds.has(id)) {
+            try { map.removeLayer(segHighlightRef.current[id]); } catch (_) {}
+            delete segHighlightRef.current[id];
+          }
+        });
+        Object.keys(stopTargetRef.current).forEach((id) => {
+          if (!validIds.has(id)) {
+            try { map.removeLayer(stopTargetRef.current[id]); } catch (_) {}
+            delete stopTargetRef.current[id];
+          }
+        });
+        Object.keys(segArrowsRef.current).forEach((id) => {
+          if (!validIds.has(id)) {
+            try { map.removeLayer(segArrowsRef.current[id]); } catch (_) {}
+            delete segArrowsRef.current[id];
+          }
         });
 
         // 시간표 기반 추정 위치 — 라이브 신호가 없어도 항상 표시(라이브로 같은 회차 송신 시만 해당 회차 skip)
@@ -6976,6 +7139,325 @@ function DiagnosticModal({ onClose, dbUrl, refreshAuth, busId }) {
   );
 }
 
+/* 내 정류장 chip — 사용자가 자기 정류장 선택 시 「다음 버스 약 N분 후」를 라이브+시간표 통합으로 표시.
+   geolocation 권한 시 「내 위치로 자동 찾기」 1-tap 매칭. LS 'mystop:name' 영구 저장.
+   - 기본: 「축제장행(outbound)」 만 표시 — 사용자는 거의 모두 축제장 방향 탑승객 (b495).
+   - 예외: 내 정류장이 「축제장」 이면 inbound(민주광장 방향) 출발 시간 — 축제장에서 외부로
+     가려는 탑승객. 헤더 라벨/색·empty state 도 방향에 맞춰 동적 (b498).
+   - 종점(outbound 축제장 idx=6 / inbound 5·18민주광장 idx=5)에서 「도착해 내리는 회차」 는
+     제외 — 사용자가 탑승할 수 없음. */
+function MyStopChip({ live, nowMin, tripsToday, isFestivalDay, preFestival, postFestival, isFlat }) {
+  const [myStop, setMyStop] = useState(() => {
+    try { return localStorage.getItem("mystop:name") || ""; } catch (_) { return ""; }
+  });
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [geoStatus, setGeoStatus] = useState(null); // null|'pending'|'denied'|'unsupported'|'far'|'matched'
+  const [geoNote, setGeoNote] = useState(null);     // { matchedName, distance }
+  const persist = (name) => { try { localStorage.setItem("mystop:name", name || ""); } catch (_) {} };
+
+  // 양방향 통합 정류장 목록 (outbound 순서 기준; inbound 전용은 뒤에 보충)
+  const stopOptions = useMemo(() => {
+    const order = ROUTES.outbound.stops.map(s => s.name);
+    ROUTES.inbound.stops.forEach(s => { if (!order.includes(s.name)) order.push(s.name); });
+    return order.map(name => {
+      const s = ROUTES.outbound.stops.find(x => x.name === name) || ROUTES.inbound.stops.find(x => x.name === name);
+      return { name, lat: s.lat, lng: s.lng };
+    });
+  }, []);
+
+  // 내 정류장이 「축제장」 이면 inbound(민주광장 방향) 출발 시간 표시 — 축제장에서 외부로 가려는
+  // 탑승객 대상. 그 외 정류장은 outbound(축제장행) 도착 시간. (b498)
+  const myDir = myStop === "축제장" ? "inbound" : "outbound";
+
+  const arrivals = useMemo(() => {
+    if (!myStop) return [];
+    const list = [];
+    const liveSet = new Set();
+
+    function compute(dir, ti, ci) {
+      const stops = ROUTES[dir].stops;
+      const sched = ROUTES[dir].trips[ti];
+      const myIdx = stops.findIndex(s => s.name === myStop);
+      if (myIdx < 0 || !sched) return null;
+      if (myIdx === stops.length - 1) return null; // 그 방향 종점 — 탑승 불가
+      if (myIdx < ci) return null;                  // 이미 지나감
+      const mySchedMin = toMin(sched[myIdx]);
+      if (myIdx === ci) return { mins: 0, arrAt: fromMin(Math.max(nowMin, mySchedMin)), delay: 0, myIdx };
+      const ciSchedMin = toMin(sched[ci]);
+      const delay = Math.max(0, nowMin - ciSchedMin);
+      const mins = Math.max(0, (mySchedMin - ciSchedMin) + Math.max(0, ciSchedMin - nowMin));
+      return { mins, arrAt: fromMin(mySchedMin + delay), delay, myIdx };
+    }
+
+    live.forEach(([id, b]) => {
+      const dir = b.dir === "inbound" ? "inbound" : "outbound";
+      if (dir !== myDir) return; // myDir 만 표시 (축제장 ⇒ inbound, 그 외 ⇒ outbound)
+      const stops = ROUTES[dir].stops;
+      let ci = stops.findIndex(s => s.name === b.stop);
+      if (ci < 0) ci = 0;
+      if (b.lat != null && b.lng != null) {
+        try {
+          const proj = projectOnRoute({ lat: b.lat, lng: b.lng }, stops);
+          if (proj && proj.perpDist < 200 && proj.ci > ci) ci = Math.min(proj.ci, ci + 2);
+        } catch (_) {}
+      }
+      const ti = (b.trip || 1) - 1;
+      const eta = compute(dir, ti, ci);
+      if (!eta) return;
+      list.push({ kind: "live", id, dir, ti, ci, ...eta });
+      liveSet.add(`${dir}|${ti + 1}`);
+    });
+
+    if (isFestivalDay && !postFestival) {
+      for (const dir of [myDir]) {
+        for (let ti = 0; ti < tripsToday; ti++) {
+          if (liveSet.has(`${dir}|${ti + 1}`)) continue;
+          const sched = ROUTES[dir].trips[ti];
+          const stops = ROUTES[dir].stops;
+          if (!sched) continue;
+          const myIdx = stops.findIndex(s => s.name === myStop);
+          if (myIdx < 0) continue;
+          if (myIdx === stops.length - 1) continue;
+          const startMin = toMin(sched[0]);
+          const endMin = toMin(sched[sched.length - 1]);
+          if (nowMin > endMin + 15) continue;
+          if (nowMin < startMin) {
+            const mins = toMin(sched[myIdx]) - nowMin;
+            list.push({ kind: "sched", dir, ti, ci: -1, mins, arrAt: sched[myIdx], delay: 0, myIdx });
+            continue;
+          }
+          let ci = 0;
+          for (let k = 0; k < sched.length - 1; k++) if (nowMin >= toMin(sched[k])) ci = k;
+          const eta = compute(dir, ti, ci);
+          if (!eta) continue;
+          list.push({ kind: "sched", dir, ti, ci, ...eta });
+        }
+      }
+    }
+
+    list.sort((a, b) => a.mins - b.mins);
+    return list.slice(0, 4);
+  }, [myStop, myDir, live, nowMin, tripsToday, isFestivalDay, postFestival]);
+
+  const autoDetect = () => {
+    if (!("geolocation" in navigator)) { setGeoStatus("unsupported"); return; }
+    setGeoStatus("pending"); setGeoNote(null);
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        let best = null, bestD = Infinity;
+        for (const s of stopOptions) {
+          if (s.lat == null) continue;
+          const d = distanceMeters({ lat: pos.coords.latitude, lng: pos.coords.longitude }, s);
+          if (d < bestD) { bestD = d; best = s; }
+        }
+        if (best && bestD < 500) {
+          setMyStop(best.name); persist(best.name);
+          setGeoNote({ matchedName: best.name, distance: Math.round(bestD) });
+          setGeoStatus("matched");
+          setPickerOpen(false);
+        } else {
+          setGeoStatus("far");
+          setGeoNote(best ? { matchedName: best.name, distance: Math.round(bestD) } : null);
+        }
+      },
+      () => setGeoStatus("denied"),
+      { enableHighAccuracy: true, timeout: 8000, maximumAge: 300000 }
+    );
+  };
+
+  if (postFestival) return null;
+
+  // 공통: 정류장 picker 모달
+  const Picker = !pickerOpen ? null : (
+    <div role="dialog" aria-modal="true" aria-label="내 정류장 선택"
+      style={{ position: "fixed", inset: 0, zIndex: 1200, background: "rgba(15,15,18,0.72)",
+        display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}
+      onClick={() => setPickerOpen(false)}>
+      <div style={{ background: "#fff", width: "100%", maxWidth: 360,
+        border: isFlat ? "1px solid " + FT.mute + "88" : "2.5px solid " + FT.ink,
+        borderRadius: 14, boxShadow: isFlat ? "0 8px 24px rgba(0,0,0,0.16)" : "4px 4px 0 " + FT.ink,
+        padding: 14, maxHeight: "85vh", overflowY: "auto" }}
+        onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between" style={{ marginBottom: 10 }}>
+          <div style={{ fontSize: 14, color: FT.ink, fontFamily: "'Jua', sans-serif", fontWeight: 700 }}>📍 내 정류장 선택</div>
+          <button onClick={() => setPickerOpen(false)} aria-label="닫기"
+            style={{ background: "transparent", border: "none", fontSize: 18, color: FT.mute, cursor: "pointer", lineHeight: 1 }}>×</button>
+        </div>
+        <button onClick={autoDetect} disabled={geoStatus === "pending"}
+          style={{ width: "100%", background: FT.teal, color: "#fff", border: "none",
+            padding: "10px 12px", borderRadius: 8, fontSize: 13, fontFamily: "'Jua', sans-serif",
+            fontWeight: 700, cursor: geoStatus === "pending" ? "wait" : "pointer", marginBottom: 8,
+            opacity: geoStatus === "pending" ? 0.7 : 1 }}>
+          📡 {geoStatus === "pending" ? "위치 확인 중…" : "내 위치로 가까운 정류장 찾기"}
+        </button>
+        {geoStatus === "denied" && (
+          <div style={{ fontSize: 10.5, color: "#dc2626", marginBottom: 8, fontFamily: "'Jua', sans-serif" }}>
+            위치 권한이 거부됐어요. 아래에서 직접 선택해주세요.
+          </div>
+        )}
+        {geoStatus === "unsupported" && (
+          <div style={{ fontSize: 10.5, color: FT.inkSoft, marginBottom: 8, fontFamily: "'Jua', sans-serif" }}>
+            이 브라우저는 위치 기능을 지원하지 않아요.
+          </div>
+        )}
+        {geoStatus === "far" && geoNote && (
+          <div style={{ fontSize: 10.5, color: FT.orangeDark, marginBottom: 8, fontFamily: "'Jua', sans-serif" }}>
+            현재 위치가 행사장과 멀어요(가장 가까운 정류장 「{geoNote.matchedName}」 약 {geoNote.distance}m). 직접 선택해주세요.
+          </div>
+        )}
+        <div style={{ fontSize: 9.5, color: FT.mute, fontFamily: "'IBM Plex Mono', 'Jua', monospace",
+          letterSpacing: 1, marginBottom: 4, padding: "0 2px" }}>
+          또는 직접 선택
+        </div>
+        <div className="space-y-1">
+          {stopOptions.map((s) => {
+            const selected = s.name === myStop;
+            return (
+              <button key={s.name}
+                onClick={() => { setMyStop(s.name); persist(s.name); setGeoStatus(null); setGeoNote(null); setPickerOpen(false); }}
+                style={{ width: "100%", textAlign: "left",
+                  background: selected ? FT.tealSoft : "#fff",
+                  border: "1px solid " + (selected ? FT.tealDark : FT.mute + "55"),
+                  padding: "9px 12px", borderRadius: 8, cursor: "pointer",
+                  fontSize: 13, color: FT.ink, fontFamily: "'Jua', sans-serif", fontWeight: 700,
+                  display: "flex", alignItems: "center", gap: 8 }}>
+                <span style={{ fontSize: 14 }}>{selected ? "✓" : "·"}</span>
+                <span>{s.name}</span>
+              </button>
+            );
+          })}
+        </div>
+        {myStop && (
+          <button onClick={() => { setMyStop(""); persist(""); setGeoStatus(null); setGeoNote(null); }}
+            style={{ width: "100%", marginTop: 8, background: "transparent",
+              border: "1px dashed " + FT.mute, padding: "7px 10px", borderRadius: 8,
+              fontSize: 11, color: FT.inkSoft, fontFamily: "'Jua', sans-serif", cursor: "pointer" }}>
+            내 정류장 해제
+          </button>
+        )}
+      </div>
+    </div>
+  );
+
+  // 미선택 — onboarding CTA
+  if (!myStop) {
+    return (
+      <React.Fragment>
+        <div style={{ background: "#fff",
+          border: isFlat ? "1px dashed " + FT.teal + "88" : "2px dashed " + FT.tealDark,
+          borderRadius: 12, padding: "9px 11px",
+          display: "flex", alignItems: "center", gap: 10 }}>
+          <span style={{ fontSize: 22 }} aria-hidden>📍</span>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: 12.5, color: FT.ink, fontFamily: "'Jua', sans-serif", fontWeight: 700, lineHeight: 1.2 }}>
+              내 정류장을 선택하세요
+            </div>
+            <div style={{ fontSize: 10.5, color: FT.inkSoft, fontFamily: "'Jua', sans-serif", marginTop: 2, lineHeight: 1.25 }}>
+              축제장행 다음 버스 도착 시각을 정류장 기준으로 보여드려요
+            </div>
+          </div>
+          <button onClick={() => setPickerOpen(true)}
+            style={{ background: FT.teal, color: "#fff", border: "none",
+              padding: "7px 11px", borderRadius: 7, fontSize: 11.5,
+              fontFamily: "'Jua', sans-serif", fontWeight: 700, cursor: "pointer", flexShrink: 0 }}>
+            선택
+          </button>
+        </div>
+        {Picker}
+      </React.Fragment>
+    );
+  }
+
+  // 선택 상태 — chip + 도착 리스트
+  return (
+    <React.Fragment>
+      <div style={{ background: "#fff",
+        border: isFlat ? "1px solid " + FT.tealDark + "55" : "2px solid " + FT.ink,
+        borderRadius: 12, padding: "9px 11px",
+        boxShadow: isFlat ? "none" : "2.5px 2.5px 0 " + FT.ink }}>
+        <div className="flex items-center gap-2" style={{ marginBottom: 4 }}>
+          <span style={{ fontSize: 16 }} aria-hidden>📍</span>
+          <span style={{ fontSize: 10, color: FT.mute, fontFamily: "'IBM Plex Mono', 'Jua', monospace", letterSpacing: 1 }}>
+            내 정류장
+          </span>
+          <button onClick={() => setPickerOpen(true)}
+            style={{ flex: 1, background: FT.tealSoft, color: FT.ink,
+              border: "1px solid " + FT.tealDark + "55",
+              padding: "5px 10px", borderRadius: 6, fontSize: 13.5,
+              fontFamily: "'Jua', sans-serif", fontWeight: 700, cursor: "pointer",
+              display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+            <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{myStop}</span>
+            <span style={{ fontSize: 10, color: FT.tealDark, marginLeft: 6 }}>변경 ▾</span>
+          </button>
+        </div>
+        <div style={{ fontSize: 9.5, color: myDir === "outbound" ? FT.orangeDark : FT.tealDark,
+          fontFamily: "'IBM Plex Mono', 'Jua', monospace",
+          letterSpacing: 1, padding: "0 2px", marginBottom: arrivals.length > 0 ? 6 : 0,
+          display: "flex", alignItems: "center", gap: 4 }}>
+          <span aria-hidden style={{ fontSize: 8 }}>{myDir === "outbound" ? "▶" : "◀"}</span>
+          {myDir === "outbound" ? "축제장행 다음 버스" : "민주광장행 다음 버스"}
+        </div>
+        {arrivals.length === 0 ? (
+          <div style={{ padding: "10px 4px 2px", textAlign: "center",
+            fontSize: 11.5, color: FT.inkSoft, fontFamily: "'Jua', sans-serif" }}>
+            {preFestival ? "행사 전 — 시간표는 위 카드에서 확인해주세요"
+              : !isFestivalDay ? "오늘은 운행하지 않습니다"
+              : myDir === "outbound" ? "이 정류장으로 향하는 남은 축제장행 운행이 없어요"
+              : "이 정류장에서 출발하는 남은 민주광장행 운행이 없어요"}
+          </div>
+        ) : (
+          <div className="space-y-1.5">
+            {arrivals.map((a, i) => {
+              const route = ROUTES[a.dir];
+              const dirC = a.dir === "outbound" ? FT.orange : FT.teal;
+              const dirCD = a.dir === "outbound" ? FT.orangeDark : FT.tealDark;
+              const dirCS = a.dir === "outbound" ? FT.orangeSoft : FT.tealSoft;
+              const minsLabel = a.mins <= 0 ? "잠시 후" : `약 ${a.mins}분 후`;
+              return (
+                <div key={`${a.kind}|${a.dir}|${a.ti}|${i}`}
+                  style={{ background: dirCS, border: "1px solid " + dirCD + "55",
+                    borderLeft: "3px solid " + dirC, borderRadius: 7,
+                    padding: "7px 9px",
+                    display: "flex", alignItems: "center", gap: 8 }}>
+                  <span style={{ flexShrink: 0, fontSize: 14 }} aria-hidden>🚌</span>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 13.5, color: FT.ink,
+                      fontFamily: "'Jua', sans-serif", fontWeight: 700, lineHeight: 1.15 }}>
+                      {minsLabel}
+                      {a.delay > 0 && <span style={{ fontSize: 10, color: "#dc2626", marginLeft: 6, fontWeight: 700 }}>
+                        +{a.delay}분 지연
+                      </span>}
+                    </div>
+                    <div style={{ fontSize: 10, color: dirCD,
+                      fontFamily: "'Jua', sans-serif", fontWeight: 700, marginTop: 1, lineHeight: 1.2,
+                      display: "flex", alignItems: "center", gap: 4 }}>
+                      <span aria-hidden style={{ fontSize: 8 }}>{a.dir === "outbound" ? "▶" : "◀"}</span>
+                      <span>{route.label}</span>
+                      <span style={{ color: FT.mute }}>· {a.ti + 1}회차</span>
+                      {a.kind === "live" && (
+                        <span style={{ display: "inline-flex", alignItems: "center", gap: 2,
+                          fontSize: 8.5, color: FT.tealDark, marginLeft: 2 }}>
+                          <span className="animate-pulse" style={{ width: 5, height: 5, borderRadius: "50%", background: FT.teal }} />
+                          LIVE
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  <div style={{ flexShrink: 0, fontSize: 11, color: dirCD,
+                    fontFamily: "'IBM Plex Mono', 'Jua', monospace", fontWeight: 700 }}>
+                    {a.arrAt}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+      {Picker}
+    </React.Fragment>
+  );
+}
+
 /* 승객 기본 화면 — 실시간 버스 목록(버스안내판 스타일) + 지도 탭. 제목 7번 탭하면 운영자(히든) 진입 */
 function PassengerView({ dbUrl, onAdmin, initialTab = "list", theme = "default" }) {
   const [buses, setBuses] = useState({});
@@ -7513,6 +7995,10 @@ function PassengerView({ dbUrl, onAdmin, initialTab = "list", theme = "default" 
                 라이브 신호 없음 · 시간표 기준 운행 중
               </div>
             )}
+            {/* 내 정류장 chip — 사용자가 자기 정류장 기준 「다음 버스 도착 시각」 직접 확인 (라이브+시간표 통합) */}
+            <MyStopChip live={live} nowMin={nowMin} tripsToday={tripsToday}
+              isFestivalDay={isFestivalDay} preFestival={preFestival} postFestival={postFestival}
+              isFlat={isFlat} />
             {/* 통합 다음 출발 카드 — 라이브 유무 무관 항상 노출. 2방향 동일 패턴.
                 (D-X 안내는 아래 풀폭 그라데이션 배너에서 통합 처리 — 중복 제거) */}
             <div className="grid grid-cols-2 gap-2">
@@ -8227,6 +8713,9 @@ function App() {
   const lastShareRef = useRef(0);
   // P1-a: arrived 히스테리시스 (진입<30m, 해제>50m, 속도 느릴 때만 진입 확정)
   const arrivedStateRef = useRef(false);
+  // 운전자 수동 정류장 선택 시각 — 이후 10초간 자동 advance 일시 정지.
+  // 운전자가 「곧 갈 정류장」 미리 선택 후 GPS 가 인접 정류장 가까울 때 즉시 advance 되던 문제 차단.
+  const manualOverrideAtRef = useRef(0);
   // P2-a: 이탈 명시 — arrived TRUE→FALSE 전환 시 정류장명/시각 기록(90초 유지)
   const departedFromRef = useRef(null);
   const departureSpokenRef = useRef(0); // 출발 TTS 마지막 재생 시각 — 60초 쿨다운
@@ -8252,6 +8741,8 @@ function App() {
   const utterRef = useRef(null);
   const audioCtxRef = useRef(null);
   const audioElRef = useRef(null);
+  const chimeWavRef = useRef(null);  // chime WAV data URI cache (b499 폴백)
+  const chimeAudioRef = useRef(null); // HTMLAudio 인스턴스 재사용
   const legSwitchArmedRef = useRef(false);
   const legDepartCountRef = useRef(0);     // 종점 이탈 연속 카운트 (자동 전환 히스테리시스)
   const resetStopRef = useRef(null);       // 레그 변경 시 currentIdx를 0이 아닌 특정 정류장으로 설정(GPS 스냅)
@@ -8600,12 +9091,13 @@ function App() {
   /* 긴 문장은 브라우저가 ~15초에서 끊으므로 문장·쉼표 단위로 짧게 분할 */
   const chunkText = (text) => {
     const out = [];
+    // chunk 한도 200자로 상향 (b505) — 대부분 멘트가 single utterance 로 발화돼 chunk 경계 잘림 회피.
     (text.match(/[^.!?。]+[.!?。]?/g) || [text]).forEach(s => {
       let seg = s.trim(); if (!seg) return;
-      if (seg.length <= 110) { out.push(seg); return; }
+      if (seg.length <= 200) { out.push(seg); return; }
       let buf = "";
       seg.split(/,\s*/).forEach(part => {
-        if (buf && (buf + ", " + part).length > 110) { out.push(buf); buf = part; }
+        if (buf && (buf + ", " + part).length > 200) { out.push(buf); buf = part; }
         else buf = buf ? buf + ", " + part : part;
       });
       if (buf) out.push(buf);
@@ -8613,33 +9105,44 @@ function App() {
     return out.length ? out : [text];
   };
 
-  const speak = (text) => {
-    if (!window.speechSynthesis) { setTtsStatus("unsupported"); return; }
+  const speak = (text, onFinish) => {
+    if (!window.speechSynthesis) { setTtsStatus("unsupported"); if (onFinish) onFinish(); return; }
     if (window.speechSynthesis.paused) window.speechSynthesis.resume();
-    window.speechSynthesis.cancel();
+    // 활성/대기 utterance 있을 때만 cancel — 불필요한 cancel 호출로 인한 routing 끊김 방지 (b505)
+    if (window.speechSynthesis.speaking || window.speechSynthesis.pending) {
+      window.speechSynthesis.cancel();
+    }
     // 모든 발화에 spokenName 정규화 강제 — '5·18' 누락 사고 방지
-    text = spokenName(text);
+    // 짧은 「. 」 prefix — TTS 엔진 warmup 동안 silent pause 가 들어가 앞 음절 잘림 방지 (b503)
+    text = ". " + spokenName(text);
     const wantURI = voiceRef.current || selectedVoiceURI;
     const chosen = voices.find(v => v.voiceURI === wantURI)
       || voices.find(v => v.lang === "ko-KR" || v.lang.startsWith("ko"));
     const parts = chunkText(text);
-    // cancel() 직후 약간의 지연을 둔 뒤 분할 발화를 순차 큐잉
-    setTimeout(() => {
-      parts.forEach((p, i) => {
-        const u = new SpeechSynthesisUtterance(p);
-        u.lang = "ko-KR"; u.rate = rateRef.current || rate; u.pitch = 1.0;
-        if (chosen) u.voice = chosen;
-        if (i === 0) u.onstart = () => setIsAnnouncing(true);
-        if (i === parts.length - 1) u.onend = () => setIsAnnouncing(false);
-        u.onerror = (e) => {
-          if (e.error && e.error !== "interrupted" && e.error !== "canceled") {
-            setIsAnnouncing(false); setTtsStatus("error");
-          }
-        };
-        utterRef.current = u;
-        window.speechSynthesis.speak(u);
-      });
-    }, 60);
+    // onend 체이닝으로 chunk 순차 발화 — 브라우저 utterance 큐가 한 번에 여러 개 받으면
+    // chunk 경계에서 잘리거나 스킵되는 버그 (특히 iOS Safari) 회피 (b505).
+    const speakChunk = (idx) => {
+      if (idx >= parts.length) { setIsAnnouncing(false); if (onFinish) onFinish(); return; }
+      const u = new SpeechSynthesisUtterance(parts[idx]);
+      u.lang = "ko-KR"; u.rate = rateRef.current || rate; u.pitch = 1.0;
+      if (chosen) u.voice = chosen;
+      if (idx === 0) u.onstart = () => setIsAnnouncing(true);
+      u.onend = () => speakChunk(idx + 1);
+      u.onerror = (e) => {
+        if (e.error && e.error !== "interrupted" && e.error !== "canceled") {
+          setIsAnnouncing(false); setTtsStatus("error");
+          if (onFinish) onFinish();
+          return;
+        }
+        // interrupted/canceled — 큐 종료 처리. 다음 chunk 진행 안 함.
+        setIsAnnouncing(false);
+        if (onFinish) onFinish();
+      };
+      utterRef.current = u;
+      window.speechSynthesis.speak(u);
+    };
+    // cancel() 직후 약간의 지연 — 모바일에서 cancel 후 즉시 speak 시 utterance 사라지는 케이스 회피
+    setTimeout(() => speakChunk(0), 120);
   };
 
   /* SpeechSynthesis가 장시간 발화 중 멈추는 크롬 버그 방지 — pause 없이 resume만 (모바일 안전) */
@@ -8663,39 +9166,82 @@ function App() {
     return () => document.removeEventListener("visibilitychange", onVis);
   }, []);
 
-  /* Bus arrival chime — two-tone "딩-동" via Web Audio, then speak */
+  /* 두-톤 「딩-동」 WAV 생성(11025Hz mono PCM) — base64 data URI 로 HTMLAudio 폴백 (b499).
+     iOS Safari 등에서 Web Audio AudioContext 가 suspended 로 묶여 chime 이 무음으로 끝나는
+     경우 대비 — HTMLAudio 는 한 번 user gesture 후 자유롭게 재생 가능. */
+  const buildChimeWav = () => {
+    const sampleRate = 11025;
+    const duration = 0.78;
+    const samples = Math.floor(sampleRate * duration);
+    const buf = new ArrayBuffer(44 + samples * 2);
+    const view = new DataView(buf);
+    const wr = (off, s) => { for (let i = 0; i < s.length; i++) view.setUint8(off + i, s.charCodeAt(i)); };
+    wr(0, "RIFF"); view.setUint32(4, 36 + samples * 2, true); wr(8, "WAVE");
+    wr(12, "fmt "); view.setUint32(16, 16, true); view.setUint16(20, 1, true); view.setUint16(22, 1, true);
+    view.setUint32(24, sampleRate, true); view.setUint32(28, sampleRate * 2, true);
+    view.setUint16(32, 2, true); view.setUint16(34, 16, true);
+    wr(36, "data"); view.setUint32(40, samples * 2, true);
+    const f1 = 988, f2 = 740;
+    for (let i = 0; i < samples; i++) {
+      const t = i / sampleRate;
+      let v = 0;
+      if (t < 0.55) { const env = Math.exp(-3.2 * t); v += Math.sin(2 * Math.PI * f1 * t) * env; }
+      if (t >= 0.22 && t < 0.78) { const t2 = t - 0.22; const env = Math.exp(-3.2 * t2); v += Math.sin(2 * Math.PI * f2 * t2) * env; }
+      const s = Math.max(-1, Math.min(1, v * 0.35)) * 0x7FFF;
+      view.setInt16(44 + i * 2, s, true);
+    }
+    const bytes = new Uint8Array(buf);
+    let bin = ""; for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
+    return "data:audio/wav;base64," + btoa(bin);
+  };
+
+  /* Bus arrival chime — HTMLAudio data URI 단일 경로. (b501)
+     Web Audio 는 자동 모드(no fresh user gesture)에서 ctx.state 가 running 으로 전이 못 해
+     무음으로 끝나는 케이스가 빈번. HTMLAudio 는 한 번이라도 user gesture(primeTTS) 가 있었으면
+     이후 자동 호출에서도 .play() 허용 — 모바일/데스크톱 공통 안정.
+     primeTTS 에서 chimeAudioRef 가 muted 상태로 prime 됨 — 본 호출에선 volume 1 로 발화. */
   const playChime = (onDone) => {
     try {
-      const Ctx = window.AudioContext || window.webkitAudioContext;
-      if (!Ctx) { onDone && onDone(); return; }
-      if (!audioCtxRef.current) audioCtxRef.current = new Ctx();
-      const ctx = audioCtxRef.current;
-      if (ctx.state === "suspended") ctx.resume();
-      const t0 = ctx.currentTime + 0.02;
-      const dur = 0.5;
-      [{ f: 988, t: 0 }, { f: 740, t: 0.22 }].forEach(({ f, t }) => {
-        const osc = ctx.createOscillator();
-        const g = ctx.createGain();
-        osc.type = "sine";
-        osc.frequency.setValueAtTime(f, t0 + t);
-        g.gain.setValueAtTime(0.0001, t0 + t);
-        g.gain.exponentialRampToValueAtTime(0.3, t0 + t + 0.015);
-        g.gain.exponentialRampToValueAtTime(0.0001, t0 + t + dur);
-        osc.connect(g); g.connect(ctx.destination);
-        osc.start(t0 + t);
-        osc.stop(t0 + t + dur + 0.05);
-      });
-      if (onDone) setTimeout(onDone, 850);
-    } catch (_) { onDone && onDone(); }
+      if (!chimeWavRef.current) chimeWavRef.current = buildChimeWav();
+      if (!chimeAudioRef.current) chimeAudioRef.current = new Audio(chimeWavRef.current);
+      const a = chimeAudioRef.current;
+      try { a.pause(); } catch (_) {}
+      a.muted = false;
+      a.volume = 1;
+      a.currentTime = 0;
+      const p = a.play();
+      if (p && typeof p.catch === "function") p.catch(() => {});
+    } catch (_) {}
+    if (onDone) setTimeout(onDone, 1050); // chime(0.78s) 끝나고 ~270ms 여유 + TTS 엔진 warmup (b503)
+  };
+
+  /* 직렬 발화 큐 — 빠르게 연속된 안내가 chime/TTS 끼리 인터럽트하지 않도록 (b504).
+     announceBusyRef 가 true 면 새 안내는 announcePendingRef 에 보관 → 이전 안내 끝나면 즉시 발화.
+     pending 은 1슬롯 — 더 새 안내가 오면 덮어씀 (가장 최신 안내 우선). */
+  const announceBusyRef = useRef(false);
+  const announcePendingRef = useRef(null);
+
+  const processPending = () => {
+    const next = announcePendingRef.current;
+    announcePendingRef.current = null;
+    if (!next) return;
+    if (next.kind === "chime") chimeThenSpeak(next.text);
+    else speakOrClip(next.text, next.audioKey);
   };
 
   const chimeThenSpeak = (text) => {
-    if (chimeEnabled) playChime(() => speak(text));
-    else speak(text);
+    if (announceBusyRef.current) { announcePendingRef.current = { kind: "chime", text }; return; }
+    announceBusyRef.current = true;
+    const finish = () => { announceBusyRef.current = false; processPending(); };
+    if (chimeEnabled) playChime(() => speak(text, finish));
+    else speak(text, finish);
   };
 
   /* mp3 우선 재생, 없거나 실패하면 기기 TTS로 폴백. audioKey 없으면 바로 TTS */
   const speakOrClip = (text, audioKey) => {
+    if (announceBusyRef.current) { announcePendingRef.current = { kind: "clip", text, audioKey }; return; }
+    announceBusyRef.current = true;
+    const finish = () => { announceBusyRef.current = false; processPending(); };
     const run = () => {
       if (useClips && audioKey) {
         try {
@@ -8703,14 +9249,14 @@ function App() {
           const a = new Audio(`audio/${audioKey}.mp3`);
           audioElRef.current = a;
           let fallen = false;
-          const fallback = () => { if (fallen) return; fallen = true; audioElRef.current = null; speak(text); };
+          const fallback = () => { if (fallen) return; fallen = true; audioElRef.current = null; speak(text, finish); };
           a.onplay = () => setIsAnnouncing(true);
-          a.onended = () => { setIsAnnouncing(false); audioElRef.current = null; };
-          a.onerror = fallback; // 파일 없으면 TTS (가드: 단 한 번만)
+          a.onended = () => { setIsAnnouncing(false); audioElRef.current = null; finish(); };
+          a.onerror = fallback;
           a.play().catch(fallback);
-        } catch (_) { speak(text); }
+        } catch (_) { speak(text, finish); }
       } else {
-        speak(text);
+        speak(text, finish);
       }
     };
     if (chimeEnabled) playChime(run); else run();
@@ -8721,7 +9267,34 @@ function App() {
       const Ctx = window.AudioContext || window.webkitAudioContext;
       if (Ctx) {
         if (!audioCtxRef.current) audioCtxRef.current = new Ctx();
-        if (audioCtxRef.current.state === "suspended") audioCtxRef.current.resume();
+        const ctx = audioCtxRef.current;
+        if (ctx.state !== "running") {
+          // resume + 즉시 silent oscillator 로 「running」 전이 강제 (iOS Safari)
+          const warm = () => {
+            try {
+              const o = ctx.createOscillator(); const g = ctx.createGain();
+              g.gain.value = 0; o.connect(g); g.connect(ctx.destination);
+              const t = ctx.currentTime; o.start(t); o.stop(t + 0.01);
+            } catch (_) {}
+          };
+          const p = ctx.resume();
+          if (p && typeof p.then === "function") p.then(warm, () => {});
+          else warm();
+        }
+      }
+    } catch (_) {}
+    // HTMLAudio chime prime — volume 0 play 로 user gesture 컨텍스트에서 autoplay 잠금 해제 (b501).
+    // muted 보다 volume=0 가 일부 브라우저(iOS Safari) 에서 더 안정.
+    try {
+      if (!chimeWavRef.current) chimeWavRef.current = buildChimeWav();
+      if (!chimeAudioRef.current) {
+        const a = new Audio(chimeWavRef.current);
+        a.volume = 0;
+        const p = a.play();
+        const reset = () => { try { a.pause(); a.currentTime = 0; a.volume = 1; } catch (_) {} };
+        if (p && typeof p.then === "function") p.then(reset).catch(reset);
+        else reset();
+        chimeAudioRef.current = a;
       }
     } catch (_) {}
     if (!window.speechSynthesis || ttsPrimed) return;
@@ -8746,7 +9319,8 @@ function App() {
       speakOrClip(ments.welcome, AUDIO_KEYS.welcome);
       return;
     }
-    // 민주광장 방향 출발지(축제장) — 하차 안내 포함
+    // 민주광장 방향 출발지(축제장) — alight 멘트 자체가 「출발 인사 + 마무리 톤」 으로 완결적이라
+    // 「이번 정류장은 축제장입니다」 prefix 는 톤 충돌(도착 인상 + 출발 인사)이라 생략 (b502).
     if (direction === "inbound" && idx === 0) {
       let t = ments.alight;
       if (nxt) t += ` 다음 정류장은 ${spokenName(nxt.name)}입니다.`;
@@ -8786,8 +9360,8 @@ function App() {
     } else {
       // Terminus — include circular connection info
       const base = direction === "outbound"
-        ? `종점, 무등생각 축제장에 도착했습니다. 함께해 주셔서 감사합니다. 즐거운 축제 되세요. 차가 완전히 멈춘 뒤 안전하게 내려주시기 바랍니다.`
-        : `이번 정류장은 ${curSay}입니다. 이번 정류장이 종점입니다. 안전하게 내려주세요.`;
+        ? `종점, 무등생각 축제장입니다. 도심에서 무등산까지, 함께 와 주셔서 감사합니다. 이제, 생각을 끄고 생각을 켜다. 무등산이 품은 인문축제의 시간이 시작됩니다. 돌아가실 때도 이 순환버스가 5·18민주광장까지 모셔다 드립니다.`
+        : `이번 정류장은 ${curSay}입니다. 이번 정류장이 종점입니다. 오늘 무등생각 축제와 함께해 주셔서 감사합니다. 안전하게 내려주시고 좋은 하루 보내세요.`;
       if (nextLegInfo) {
         // 출발 예정 시각이 이미 지났으면(지연 운행) 절대 시각 대신 '잠시 후'로 안내
         const nowMin = getNowMin();
@@ -8808,10 +9382,54 @@ function App() {
     if (window.speechSynthesis) window.speechSynthesis.cancel();
     if (audioElRef.current) { try { audioElRef.current.pause(); } catch (_) {} audioElRef.current = null; }
     setIsAnnouncing(false);
+    // 직렬 큐 리셋 — pending 안내도 폐기 (사용자 의도: 정지) (b504)
+    announceBusyRef.current = false;
+    announcePendingRef.current = null;
   };
 
-  const next = () => currentIdx < stops.length - 1 && setCurrentIdx(currentIdx + 1);
-  const prev = () => currentIdx > 0 && setCurrentIdx(currentIdx - 1);
+  /* next() — 수동 다음 정류장.
+     autoMode 가 ON 이면 단순 setCurrentIdx 만으론 자동 advance 의 다음 폴링에서
+     nearestIdx 가 GPS 위치 기준으로 재계산 → 운전자 선택이 무효화될 수 있음.
+     announcedRef 에 현재 정류장 마킹 + arrivedStateRef 리셋 → 자동 advance 가
+     동기화된 상태에서 자연 진행. */
+  const next = () => {
+    if (currentIdx >= stops.length - 1) return;
+    announcedRef.current.add(currentIdx);
+    arrivedStateRef.current = false;
+    manualOverrideAtRef.current = Date.now();
+    setCurrentIdx(currentIdx + 1);
+  };
+  /* prev() — 수동 이전 정류장.
+     autoMode 가 ON 이면 다음 폴링 사이클(~3초)에 announcedRef.has(idx) 조건이
+     자동 advance 를 다시 fire → 사용자 prev 가 즉시 무효화되던 문제(b466 fix).
+     해결: target 이상의 announcedRef / pendingPassRef 항목을 모두 제거 +
+     arrivedStateRef 리셋. 「이전」 정류장 안내가 다시 가능, 자연 진행 복원. */
+  const prev = () => {
+    if (currentIdx <= 0) return;
+    const target = currentIdx - 1;
+    try { Array.from(announcedRef.current).forEach((idx) => { if (idx >= target) announcedRef.current.delete(idx); }); } catch (_) {}
+    try { Array.from(pendingPassRef.current).forEach((idx) => { if (idx >= target) pendingPassRef.current.delete(idx); }); } catch (_) {}
+    arrivedStateRef.current = false;
+    manualOverrideAtRef.current = Date.now();
+    setCurrentIdx(target);
+  };
+  /* selectStopAt(i) — 정류장 리스트 직접 클릭 시 임의 점프 (전후 모두 처리).
+     - 뒤로(i < currentIdx): prev() 와 동일 — i 이상 ref 정리
+     - 앞으로(i > currentIdx): 건너뛴 정류장 announcedRef 마킹 (통과 처리)
+     - 같은 곳: no-op
+     autoMode 자동 advance 가 운전자 선택을 덮어쓰지 못하게 ref 동기화. */
+  const selectStopAt = (i) => {
+    if (i === currentIdx || i < 0 || i >= stops.length) return;
+    if (i < currentIdx) {
+      try { Array.from(announcedRef.current).forEach((idx) => { if (idx >= i) announcedRef.current.delete(idx); }); } catch (_) {}
+      try { Array.from(pendingPassRef.current).forEach((idx) => { if (idx >= i) pendingPassRef.current.delete(idx); }); } catch (_) {}
+    } else {
+      for (let k = currentIdx; k < i; k++) announcedRef.current.add(k);
+    }
+    arrivedStateRef.current = false;
+    manualOverrideAtRef.current = Date.now();
+    setCurrentIdx(i);
+  };
 
   const swapDirection = () => {
     setDirection(direction === "outbound" ? "inbound" : "outbound");
@@ -9168,17 +9786,27 @@ function App() {
       }
       return distanceMeters(userPos, c); // 직선 폴백(통과 후 거리 측정 가능)
     };
-    // 최대 3 정류장 앞까지만 검색 — 테스트/노이즈로 인한 큰 점프 방지
-    const searchLimit = Math.min(currentIdx + 4, stops.length);
+    // 운전자 수동 선택 10초간 자동 advance 일시 정지 — GPS 가 인접 정류장 가까울 때
+    // 운전자 의도(곧 갈 정류장 미리 선택) 가 즉시 덮어쓰이는 문제 차단.
+    const MANUAL_OVERRIDE_HOLD_MS = 10000;
+    if (Date.now() - manualOverrideAtRef.current < MANUAL_OVERRIDE_HOLD_MS) return;
+    // ⚠ 검색 범위 currentIdx + 1 (1개 앞까지) — 이전엔 +4(3개 앞) 였으나 dense downtown / GPS 노이즈로
+    // 갑작스러운 정류장 점프(예: A→A+2/3) 발생. 점프 폭을 1로 제한 + GPS accuracy 가드 + 강제 clamp.
+    const searchLimit = Math.min(currentIdx + 2, stops.length);
     let nearestIdx = -1, nearestDist = Infinity;
     for (let i = currentIdx; i < searchLimit; i++) {
       const d = measureTo(i); if (d == null) continue;
       if (d < nearestDist) { nearestDist = d; nearestIdx = i; }
     }
     if (nearestIdx === -1) return;
+    // 강제 clamp — 어떤 경로로든 한 번에 +1 칸 이상 점프 불가 (안전망)
+    if (nearestIdx > currentIdx + 1) nearestIdx = currentIdx + 1;
+    // GPS 정확도 가드 — accuracy 가 40m 초과면 currentIdx 변경 보류 (LTE 약전계 / 다중경로 노이즈 시 stuck 대신 안정)
+    const gpsAccuracy = (userPos && typeof userPos.accuracy === "number") ? userPos.accuracy : null;
+    const gpsUntrusted = gpsAccuracy != null && gpsAccuracy > 40;
     // per-stop radius: 정류장에 radius가 정의되어 있으면 우선, 없으면 글로벌 triggerRadius
     const nearStopRadius = stops[nearestIdx]?.radius || triggerRadius;
-    if (nearestDist <= nearStopRadius && !announcedRef.current.has(nearestIdx)) {
+    if (!gpsUntrusted && nearestDist <= nearStopRadius && !announcedRef.current.has(nearestIdx)) {
       // 건너뛴 앞쪽 정류장들 처리 — 통과 큐(pendingPassRef) 에 있는 stop 은 발화 후 마킹.
       // 발화 발생 시 같은 tick 에 nearestIdx 안내까지 동시 발화하지 않도록 firedInLoop 로 다음 tick 으로 미룸.
       let firedInLoop = false;
@@ -10878,6 +11506,60 @@ function App() {
               </span>
             )}
           </div>
+          {/* 지연·일찍 한눈 칩 — 이번 정류장 예정 시각 vs 현재 시각. ETA 추정도 함께. */}
+          {(() => {
+            const schedAt = trip && trip[currentIdx] ? trip[currentIdx] : null;
+            if (!schedAt) return null;
+            const now = getNow();
+            const nowSec = now.getHours() * 3600 + now.getMinutes() * 60 + now.getSeconds();
+            const [sh, sm] = schedAt.split(":").map(Number);
+            const schedSec = sh * 3600 + sm * 60;
+            const diffSec = nowSec - schedSec; // +: 지연, -: 일찍
+            const diffMin = Math.round(diffSec / 60);
+            // 색·라벨 결정 — 정시(±1분 이내) 청록 / 일찍 파랑 / 지연 분에 따라 주황·빨강
+            let tone, label, icon;
+            if (Math.abs(diffMin) <= 1) { tone = { bg: "rgba(34,214,95,0.18)", fg: "#22d65f", bd: "#22d65f55" }; label = "정시"; icon = "●"; }
+            else if (diffMin < 0) { tone = { bg: "rgba(96,165,250,0.15)", fg: "#60a5fa", bd: "#60a5fa55" }; label = `${-diffMin}분 일찍`; icon = "◀"; }
+            else if (diffMin <= 3) { tone = { bg: "rgba(251,191,36,0.18)", fg: "#fbbf24", bd: "#fbbf2466" }; label = `${diffMin}분 지연`; icon = "▶"; }
+            else if (diffMin <= 8) { tone = { bg: "rgba(251,146,60,0.22)", fg: "#fb923c", bd: "#fb923c66" }; label = `${diffMin}분 지연`; icon = "▶"; }
+            else { tone = { bg: "rgba(239,68,68,0.22)", fg: "#ef4444", bd: "#ef444466" }; label = `${diffMin}분 지연`; icon = "⚠"; }
+            // ETA — GPS 속도 있으면 「약 N분 후」, 없거나 정지면 거리 기반 도보 속도 폴백
+            let etaText = "";
+            if (distToCur != null && distToCur > 10) {
+              const spd = userPos && typeof userPos.speed === "number" && userPos.speed > 0.5 ? userPos.speed : null;
+              const useSpd = spd != null ? spd : 5; // 폴백: 차량 평균 5 m/s ≈ 18km/h (시내 + 정차 가중)
+              const etaSec = distToCur / useSpd;
+              if (etaSec < 30) etaText = "잠시 후 도착";
+              else if (etaSec < 90) etaText = `약 ${Math.round(etaSec)}초 후`;
+              else etaText = `약 ${Math.round(etaSec / 60)}분 후`;
+            }
+            return (
+              <div className="mt-2 flex items-center justify-center gap-2 flex-wrap">
+                {/* 큰 지연/일찍 칩 */}
+                <span style={{ display: "inline-flex", alignItems: "center", gap: 5,
+                  background: tone.bg, color: tone.fg, border: `1px solid ${tone.bd}`,
+                  padding: "5px 11px", borderRadius: 999, fontFamily: "'Jua', sans-serif",
+                  fontWeight: 700, fontSize: 14, lineHeight: 1.1,
+                  boxShadow: diffMin > 5 ? `0 0 14px ${tone.fg}55` : "none" }}>
+                  <span style={{ fontSize: 11 }}>{icon}</span>
+                  {label}
+                </span>
+                {/* 예정 시각 + ETA */}
+                <span style={{ display: "inline-flex", alignItems: "baseline", gap: 4,
+                  fontSize: 11, color: "#94a3b8",
+                  fontFamily: "'IBM Plex Mono', 'Jua', monospace" }}>
+                  <span style={{ color: "#e2e8f0", fontWeight: 700 }}>{schedAt}</span>
+                  <span>예정</span>
+                  {etaText && (
+                    <>
+                      <span style={{ color: "#475569" }}>·</span>
+                      <span style={{ color: tone.fg, fontWeight: 700 }}>{etaText}</span>
+                    </>
+                  )}
+                </span>
+              </div>
+            );
+          })()}
           <div className="text-center py-3">
             <div className="text-5xl font-black leading-tight break-keep"
               style={{ color: "#fbbf24", fontFamily: "'Black Han Sans', 'Jua', system-ui, sans-serif",
@@ -11107,7 +11789,7 @@ function App() {
               const dist = autoMode && userPos && c ? distanceMeters(userPos, c) : null;
               return (
                 <div key={i} className="flex items-center gap-3 py-2 cursor-pointer"
-                  onClick={() => setCurrentIdx(i)}>
+                  onClick={() => selectStopAt(i)}>
                   <div className="relative z-10 w-[15px] h-[15px] rounded-full flex items-center justify-center"
                     style={{ background: isCurrent ? "#fbbf24" : isPast ? "#475569" : "#1e2230",
                       border: `2px solid ${isCurrent ? "#fbbf24" : isPast ? "#475569" : "#3a3f54"}`,
