@@ -9,6 +9,22 @@
 
 ---
 
+## 테스트 주소
+
+GitHub Pages(`main` 브랜치)로 배포됩니다.
+
+| 화면 | 주소 |
+|---|---|
+| 승객 페이지 | <https://lanian.github.io/inmun_bus/> |
+| 승객 라이브 지도 | <https://lanian.github.io/inmun_bus/?view=map> |
+| 운영자(기사) 모드 | <https://lanian.github.io/inmun_bus/?admin=1> |
+| 운영 본부 대시보드 | <https://lanian.github.io/inmun_bus/?view=ops> |
+| 시연 모드 (6.13 13:30, 10배속) | <https://lanian.github.io/inmun_bus/?admin=1&fake=2026-06-13T13:30&fakeSpeed=10> |
+
+> 시연 모드는 브라우저(localStorage)에 남습니다. 확인이 끝나면 운영자 모드 → 자료 탭 → 「시연·테스트 모드」에서 해제하세요.
+
+---
+
 ## 주요 기능
 
 ### 승객 페이지 (기본 진입)
